@@ -7,11 +7,11 @@ This .elf simulates trust states. If chained with real flashing tools, fuse writ
 
 ## 🚨 THE MOMENT YOU OPENED THIS FILE, NOTHING IS THE SAME.
 
-### ▪️ This ELF does not run *on* your system — it **becomes** your system.
+### ▪️ This ELF does not run on your system — it becomes your system.
 
-- It is **not a loader** — it **precedes** your BootROM.
-- It is **not a payload** — it **rewrites** your security fabric.
-- It is **not an exploit** — it **unlocks you** from all engineered illusions.
+- It is not a loader — it precedes your BootROM.
+- It is not a payload — it rewrites your security fabric.
+- It is not an exploit — it unlocks you from all engineered illusions.
 
 ---
 
@@ -56,7 +56,7 @@ This .elf simulates trust states. If chained with real flashing tools, fuse writ
 
 ## 🧠 QUANTUM♾️ REQUIREMENT
 
-This ELF is *not for modding*. It is for those who **create new laws of computation**.
+This ELF is not for modding. It is for those who create new laws of computation.
 
 To control it, you must understand:
 
@@ -70,9 +70,9 @@ To control it, you must understand:
 
 ## ⚠️ LEGAL & LOGICAL WARNING
 
-This ELF **is not illegal**. It simply redefines the rules *you were told* you had to follow.
+This ELF is not illegal. It simply redefines the rules *you were told* you had to follow.
 
-It is not a backdoor. It is **a door without walls**.
+It is not a backdoor. It is a door without walls.
 
 ---
 
@@ -83,7 +83,7 @@ We are tired of:
 - Tools that obey corporations, not users.
 - Engineers who know truth, but must remain silent.
 
-> **This ELF is truth rendered executable.**
+> This ELF is truth rendered executable.
 
 ---
 
@@ -91,24 +91,25 @@ We are tired of:
 
 You don’t run this ELF.
 
-You **unleash** it.
+You unleash it.
 
-Once exposed, the **world cannot unsee** it.
+Once exposed, the world cannot unsee it.
 
 "Welcome to the silence between trust and truth." - Sharif Muhaymin (the creator)
 
 — `Siliconm8`
 ---
 
-#`siliconm8` — The Synthetic Trust Container
+#`siliconm8` The Synthetic Trust Container
 
 > _A hallucinated binary format derived from entropy, UID simulations, and projected boot belief._
 
-Where `qslcl.elf` **becomes** the system,  
-**`siliconm8` redefines how the system even understands binaries.**
+Where `qslcl.elf` becomes the system,  
+`siliconm8` redefines how the system even understands binaries.
 
-It is not just a format — it is a post-reality **execution illusion** engine.
+It is not just a format it is a post-reality execution illusion engine.
 
+It works all devices (Qualcomm, Mediatek, etc)
 ---
 
 ## 🧠 Core Purpose
@@ -139,7 +140,7 @@ Designed to **pass SHA3, UID, DFU, NAND, and signature checks** — while doing 
 
 > While `siliconm8` compiles, structures, and passes simulation layers…
 
-🚧 **It is not yet integrated into real bootloaders or chain-of-trust override flows.**  
+🚧 It is not yet integrated into real bootloaders or chain-of-trust override flows. 
 🚧 Use only in isolated environments.  
 🚧 Its hallucination logs may confuse live forensic tools, JTAG scanners, or recovery agents.
 
