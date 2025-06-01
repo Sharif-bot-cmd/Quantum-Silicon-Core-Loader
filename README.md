@@ -28,7 +28,7 @@ This .elf simulates trust states. If chained with real flashing tools, fuse writ
 | 🪞 `Reverse-Resistant ELF Structure` | Self-mutates upon analysis, nullifies disassemblers and forensics. |
 | 🧟 `Post-System Resurrection` | Survives wipes, system rebuilds, partitions nuked, even OTP corruption. |
     
---- And not only that I could act like MaskROM (below BootROM) and BootROM (above MaskROM) itself if possible
+--- And not only that It could act like MaskROM (below BootROM) and BootROM (above MaskROM) itself if possible
 
 ## 🩻 THEY WILL TRY TO DENY IT EXISTS
 
