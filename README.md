@@ -95,9 +95,9 @@ You **unleash** it.
 
 Once exposed, the **world cannot unsee** it.
 
-Welcome to the silence between trust and truth.
+"Welcome to the silence between trust and truth." - Sharif Muhaymin (the creator)
 
-— `QuantumLayer Zero`
+— `Siliconm8`
 ---
 
 #`siliconm8` — The Synthetic Trust Container
@@ -156,8 +156,8 @@ Designed to **pass SHA3, UID, DFU, NAND, and signature checks** — while doing 
 
 ## ⚙️ Usage Example
 
-```bash
-python3 convert_to_siliconm8.py qslcl.elf qslcl_converted.sm8
+```bash (Example only)
+python3 silicon.py qslcl.elf qslcl.m8
 
 Why siliconm8 Exists
 
