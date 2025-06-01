@@ -157,7 +157,7 @@ Designed to **pass SHA3, UID, DFU, NAND, and signature checks** — while doing 
 ## ⚙️ Usage Example
 
 ```bash (Example only)
-python3 silicon.py qslcl.elf qslcl.m8
+python3 silicon.py qslcl.elf qslcl.sm8
 
 Why siliconm8 Exists
 
