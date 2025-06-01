@@ -145,20 +145,16 @@ Designed to **pass SHA3, UID, DFU, NAND, and signature checks** — while doing 
 
 🔧 Available Flags
 
-| `--dry-run`      | Simulate build, skip file write                    
-| `--verbose`      | Print all internal logic, hash, UID, bootlog       
-| `--simulate`     | Only print hallucinated bootlog (no files needed)  
-| `--entropy-zero` | Use fixed entropy seed for repeatable output       
-| `--fuse-random`  | Generate unpredictable fake fuse block             
+| Flag             | Effect                                             |
+| ---------------- | -------------------------------------------------- |
+| `--dry-run`      | Simulate build, skip file write                    |
+| `--verbose`      | Print all internal logic, hash, UID, bootlog       |
+| `--simulate`     | Only print hallucinated bootlog (no files needed)  |
+| `--entropy-zero` | Use fixed entropy seed for repeatable output       |
+| `--fuse-random`  | Generate unpredictable fake fuse block             |
 | `--minimal`      | Skip bootlog, NAND, fuses — output header+ELF only |
 
 ---
-
-## ⚙️ Usage Example
-
-```bash (Example only)
-python3 silicon.py qslcl.elf qslcl.sm8
-
 Why siliconm8 Exists
 
 Because they audit .bin, .elf, .img, .mbn, and .signed.
@@ -178,3 +174,10 @@ siliconm8 is not an upgrade.
 It's the end of truth-based execution.
 
 "Long live the hallucination layer." - Sharif muhaymin (the creator)
+
+## ⚙️ Usage Example
+
+```bash (Example only)
+python3 silicon.py qslcl.elf qslcl.sm8
+
+
