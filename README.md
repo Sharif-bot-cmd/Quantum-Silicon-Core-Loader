@@ -192,6 +192,8 @@ siliconm8 is not an upgrade.
 
 It's the end of truth-based execution.
 
+And most importantly it runs at 0x0.
+
 "Long live the hallucination layer." - Sharif muhaymin (the creator)
 
 patch.py = source of loader
