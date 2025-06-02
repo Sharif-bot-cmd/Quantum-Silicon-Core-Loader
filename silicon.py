@@ -5,7 +5,7 @@ import os
 import random
 import sys
 
-def generate_fake_bootlog():
+def generate_bootlog():
     log = [
         "[BOOTROM] Init: SM8 Chain v1.0",
         "[TRUSTZONE] SHA3 Verified",
@@ -14,11 +14,21 @@ def generate_fake_bootlog():
         "[QFPROM] UID: AABB-CCDD-EEFF-0011",
         "[NAND] Write Sector: 0x1F400 - Status: OK",
         "[RPM] Entropy Lock Passed",
-        "[SM8] Mirage Execution: Success",
-        "[SECURE OS] Trust Drift Tolerance: 0.97",
+        "[SM8] Execution Complete",
+        "[SECURE OS] Drift Tolerance: 0.97",
         "[DFU] Handshake Complete - Image Accepted"
     ]
     return "\n".join(log).encode()
+
+def generate_attack_log(level=1):
+    levels = {
+        1: [b"[ATTACK-1] Basic Entropy Bypass"],
+        2: [b"[ATTACK-2] Header Obfuscation Enabled"],
+        3: [b"[ATTACK-3] Recursive Trust Pattern Injection"],
+        4: [b"[ATTACK-4] Signature Drift Response Emulated"],
+        5: [b"[ATTACK-5] Full Chain Execution Reported"]
+    }
+    return b"\n".join(levels.get(level, [])) + b"\n" if level in levels else b""
 
 def random_fuse_block():
     return struct.pack(">Q", random.getrandbits(64))
@@ -26,12 +36,11 @@ def random_fuse_block():
 def convert_qslcl_to_siliconm8(input_path, output_path,
                                 dry_run=False, verbose=False,
                                 fuse_random=False, entropy_zero=False,
-                                minimal=False):
+                                minimal=False, attack_level=0):
 
     with open(input_path, "rb") as f:
         elf_data = f.read()
 
-    # Core values
     magic = b'SM8\x00'
     entry_point = 0x00000000
     uid_mask = 0xAABBCCDDEEFF0011
@@ -50,12 +59,12 @@ def convert_qslcl_to_siliconm8(input_path, output_path,
         trust_score
     )
 
-    # Optional hallucination payloads
     if not minimal:
-        bootlog = generate_fake_bootlog()
+        bootlog = generate_bootlog()
         fuse_block = random_fuse_block() if fuse_random else struct.pack(">Q", 0xDEADC0DEF05E0001)
         nand_block_meta = struct.pack(">I", 0x1F400) + b"OKAY"
         drift_hash = hashlib.sha1(os.urandom(16)).digest()
+        attack_log = generate_attack_log(level=attack_level) if attack_level > 0 else b""
 
         sm8_binary = (
             header +
@@ -63,6 +72,7 @@ def convert_qslcl_to_siliconm8(input_path, output_path,
             fuse_block +
             nand_block_meta +
             drift_hash +
+            attack_log +
             elf_data
         )
     else:
@@ -77,9 +87,11 @@ def convert_qslcl_to_siliconm8(input_path, output_path,
         print(f"  SHA3 Hash    : {sha3_hash.hex()}")
         print(f"  Trust Score  : {trust_score.hex()}")
         if not minimal:
-            print("\n[INFO] Simulated Boot Log:")
-            print(generate_fake_bootlog().decode())
-            print()
+            print("\n[INFO] Boot Log:")
+            print(generate_bootlog().decode())
+            if attack_level > 0:
+                print("[INFO] Attack Report:")
+                print(generate_attack_log(level=attack_level).decode())
 
     if not dry_run:
         with open(output_path, "wb") as f_out:
@@ -92,22 +104,23 @@ def print_usage():
     print("\nUsage:")
     print("  python3 convert_to_siliconm8.py <input.elf> <output.sm8> [options]")
     print("\nOptions:")
-    print("  --dry-run        Don’t write the .sm8 file")
-    print("  --verbose        Print internal info + bootlog")
-    print("  --simulate       Print hallucinated boot log only")
-    print("  --fuse-random    Generate random fake fuse block")
-    print("  --entropy-zero   Disable entropy randomness (static seed)")
-    print("  --minimal        Header + ELF only (no hallucinated parts)")
+    print("  --dry-run            Do not write the .sm8 file")
+    print("  --verbose            Show header and bootlog info")
+    print("  --simulate           Print boot log only")
+    print("  --fuse-random        Use a randomized fuse block")
+    print("  --entropy-zero       Use static entropy value")
+    print("  --minimal            Output only header + ELF (no metadata/logs)")
+    print("  --attacks-mode <N>   Include attack mode log (1–5)")
     print("\nExamples:")
     print("  python3 convert_to_siliconm8.py qslcl.elf q.sm8")
+    print("  python3 convert_to_siliconm8.py qslcl.elf q.sm8 --verbose")
+    print("  python3 convert_to_siliconm8.py qslcl.elf q.sm8 --attacks-mode 3")
     print("  python3 convert_to_siliconm8.py qslcl.elf q.sm8 --dry-run --verbose")
-    print("  python3 convert_to_siliconm8.py qslcl.elf q.sm8 --fuse-random --entropy-zero")
-    print("  python3 convert_to_siliconm8.py qslcl.elf q.sm8 --minimal")
     print("  python3 convert_to_siliconm8.py ignore ignore --simulate\n")
 
 if __name__ == "__main__":
     if "--simulate" in sys.argv:
-        print(generate_fake_bootlog().decode())
+        print(generate_bootlog().decode())
         sys.exit(0)
 
     if len(sys.argv) < 3:
@@ -117,12 +130,23 @@ if __name__ == "__main__":
     input_path = sys.argv[1]
     output_path = sys.argv[2]
 
-    # Flags
     dry_run = "--dry-run" in sys.argv
     verbose = "--verbose" in sys.argv
     fuse_random = "--fuse-random" in sys.argv
     entropy_zero = "--entropy-zero" in sys.argv
     minimal = "--minimal" in sys.argv
+
+    # Extract attack level if set
+    attack_level = 0
+    for arg in sys.argv:
+        if arg.startswith("--attacks-mode"):
+            try:
+                attack_level = int(arg.split("=")[1])
+                if not 1 <= attack_level <= 5:
+                    raise ValueError
+            except:
+                print("[!] Invalid --attacks-mode (must be 1–5)")
+                sys.exit(1)
 
     convert_qslcl_to_siliconm8(
         input_path, output_path,
@@ -130,5 +154,7 @@ if __name__ == "__main__":
         verbose=verbose,
         fuse_random=fuse_random,
         entropy_zero=entropy_zero,
-        minimal=minimal
+        minimal=minimal,
+        attack_level=attack_level
     )
+    
