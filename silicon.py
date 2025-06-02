@@ -83,7 +83,7 @@ def execute_siliconm8_in_ram(input_path, verbose=False, fuse_random=False, entro
     ram.seek(0)
 
     print(f"\n[✓] ELF executed in RAM sandbox at vRAM 0x00000000.")
-    print(f"[⏳] Execution will auto-stop in {timeout} second(s)...")
+    print(f"[⏳] Execution will auto-stop/start in {timeout} second(s)...")
 
     if verbose:
         print("\n[ZERO-DAY VERBOSE MODE]")
