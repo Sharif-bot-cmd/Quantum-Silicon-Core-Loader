@@ -160,13 +160,13 @@ Designed to **pass SHA3, UID, DFU, NAND, and signature checks** — while doing 
 | Level                                                                                                                                | Feature Description                    |
 | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
 | `--attacks-mode=1`                                                                                                                   | **Entropy Bypass Emulation**           |
-| bypassing UID/fuse entropy verification by injecting a consistent seed signature.                                          |                                        |
+| Simulates bypassing UID/fuse entropy verification by injecting a consistent seed signature.                                          |                                        |
 |                                                                                                                                      |                                        |
 | `--attacks-mode=2`                                                                                                                   | **Header Obfuscation Injection**       |
 | Adds shifted binary header indicators and spoofed versioning to confuse signature validators or extractors.                          |                                        |
 |                                                                                                                                      |                                        |
 | `--attacks-mode=3`                                                                                                                   | **Recursive Trust Pattern Simulation** |
-| multi-phase trust layers being reported as complete, even if no real signature path is present.                            |                                        |
+| Simulates multi-phase trust layers being reported as complete, even if no real signature path is present.                            |                                        |
 |                                                                                                                                      |                                        |
 | `--attacks-mode=4`                                                                                                                   | **Signature Drift Emulation**          |
 | Reports a successful boot verification even when entropy shows divergence — useful to confuse secure boot logic.                     |                                        |
