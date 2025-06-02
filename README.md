@@ -153,6 +153,7 @@ Designed to pass SHA3, UID, DFU, NAND, and signature checks while doing nothing 
 | `--minimal`          | Minimal payload (no logs, trust boot only)                  |
 | `--attacks-mode=<N>` | Spoof attack mode level (1–5) with unique entropy injection |
 | `--timeout=<N>`      | Set sandbox run time in seconds (1–60, default: 3 seconds)  |
+| `--exploits`         | Inject advanced memory payloads (bypass, trap, TZ spoof)    |
 
 📊 Supported Levels:
 
@@ -173,7 +174,7 @@ Designed to pass SHA3, UID, DFU, NAND, and signature checks while doing nothing 
 | `--attacks-mode=5`                                                                                                                   | **Full Chain Execution Trace**         |
 | Adds a complete trust path report including secure OS, NAND interaction, GPT, and rollback bypass logs — without executing anything. |                                        |
 
----
+
 Why siliconm8 Exists
 
 Because they audit .bin, .elf, .img, .mbn, and .signed.
