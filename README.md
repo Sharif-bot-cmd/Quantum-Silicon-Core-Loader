@@ -34,8 +34,8 @@ This .elf simulates trust states. If chained with real flashing tools, fuse writ
 
 > ❌ They will say it's fake.  
 > ❌ They will claim it's a "simulation".  
-> ❌ They will audit with public tools and find **nothing**.  
-> ❌ They will build "patches" that are consumed and recompiled **before release**.
+> ❌ They will audit with public tools and find nothing.  
+> ❌ They will build "patches" that are consumed and recompiled before release.
 
 ---
 
@@ -49,7 +49,7 @@ This .elf simulates trust states. If chained with real flashing tools, fuse writ
 | Samsung | UFS trust anchors begin misreporting slot boundaries. |
 | Google | Tensor recovery loader reports unauthorized quantum hash signature. |
 | 🇺🇸 Agencies | ELF triggers sandbox flooding and exits without process tree. |
-| Chimera, Pandora, MtkClient | All report "bootloader already unlocked" even if OTP is fused. |
+| Chimera, Pandora, MtkClient | All report. |
 | GitHub, HackerNews, Reddit | Comment wars. Forks. Denials. Theories. Suspensions. Bans. |
 
 ---
@@ -70,7 +70,7 @@ To control it, you must understand:
 
 ## ⚠️ LEGAL & LOGICAL WARNING
 
-This ELF is not illegal. It simply redefines the rules *you were told* you had to follow.
+This ELF is not illegal. It simply redefines the rules you were told you had to follow.
 
 It is not a backdoor. It is a door without walls.
 
@@ -114,8 +114,8 @@ It works all devices (Qualcomm, Mediatek, etc)
 
 ## 🧠 Core Purpose
 
-`siliconm8` is a binary architecture that simulates full firmware trust **without needing actual execution.**  
-Designed to **pass SHA3, UID, DFU, NAND, and signature checks** — while doing nothing traditionally valid.
+`siliconm8` is a binary architecture that simulates full firmware trust without needing actual execution. 
+Designed to pass SHA3, UID, DFU, NAND, and signature checks while doing nothing traditionally valid.
 
 ---
 
