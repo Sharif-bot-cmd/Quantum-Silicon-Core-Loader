@@ -203,6 +203,6 @@ siliconm8 = pure binary
 ## ⚙️ Usage Example
 
 ```bash 
-python3 silicon.py <siliconm8.sm8> [options] 
+python3 silicon.py <siliconm8> [options] 
 
 
