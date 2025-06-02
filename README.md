@@ -198,6 +198,6 @@ It's the end of truth-based execution.
 ## ⚙️ Usage Example
 
 ```bash (Example only)
-python3 silicon.py qslcl.elf silicon.sm8
+python3 silicon.py silicon.sm8 
 
 
