@@ -144,14 +144,19 @@ def execute_siliconm8_in_ram(input_path, verbose=False, fuse_random=False, entro
     ram = mmap.mmap(-1, ram_size, access=mmap.ACCESS_WRITE)
     ram.write(payload)
     
-    # Now inject real exploits into mapped RAM (live patch)
     exploit_payloads = [
-        (0x100, b"\xDE\xC0\xAD\xDE" * 64),
-        (0x200, struct.pack("<Q", 0x4141414141414141) * 64),
-        (0x300, b"\x00" * 4096),
-        (0x400, b"SBL_AUTH_BYPASS" + b"\x00" * 4096),
-        (0x500, b"GHOST_ENTROPY" + b"\x00" * 4096),
-    ]
+         (0x100, b"\xDE\xC0\xAD\xDE" * 4),                         
+         (0x200, struct.pack("<Q", 0x4141414141414141) * 8),        
+         (0x300, b"\x00" * 64),                                     # Null pointer trigger
+         (0x400, b"SBL_AUTH_BYPASS" + b"\x00" * 32),                
+         (0x500, b"GHOST_ENTROPY" + os.urandom(16)),                
+         (0x600, b"TZ_BYPASS" + os.urandom(24)),                
+         (0x700, b"\x90" * 32 + b"\xCC" * 32),                      
+         (0x800, b"\x41\x41\x41\x41" * 16),                         
+         (0x900, b"BOOT_SKIP" + b"\x00" * 40),                      
+         (0xA00, hashlib.sha1(b"backdoor").digest()),              
+     ]
+
     for offset, data in exploit_payloads:
         ram.seek(offset)
         ram.write(data)
@@ -248,6 +253,7 @@ if __name__ == "__main__":
                 print("[!] Invalid --attacks-mode (must be 1–5)")
                 sys.exit(1)
 
+
     execute_siliconm8_in_ram(
         input_path,
         verbose=verbose,
@@ -257,5 +263,5 @@ if __name__ == "__main__":
         debug_spoof=debug_spoof,
         attack_level=attack_level,
         timeout=timeout
-    )
+        )
     
