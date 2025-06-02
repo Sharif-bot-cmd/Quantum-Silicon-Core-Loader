@@ -30,7 +30,7 @@ def generate_spoofed_keys(elf_data, attack_level):
 
 def generate_bootrom_illusion(uid, entropy):
     serial = random.randint(0x10000000, 0xFFFFFFFF)
-    oem_id = random.choice(["QUALCOMM", "MEDIATEK", "EXYNOS", "APPLE", UNISOC", "UNKNOWN"])
+    oem_id = random.choice(["QUALCOMM", "MEDIATEK", "EXYNOS", "APPLE", "UNISOC", "UNKNOWN"])
     rev = f"v{random.randint(1,9)}.{random.randint(0,9)}.{random.randint(0,99)}"
     tz = random.choice(["ENABLED", "BYPASSED", "CORRUPTED"])
     bootflag = random.choice(["VERIFIED", "FAILED", "UNSIGNED"])
