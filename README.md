@@ -198,7 +198,7 @@ And most importantly it runs at 0x0.
 
 patch.py = source of loader
 qslcl.elf = source of siliconm8
-silicon.sm8 = pure binary
+siliconm8 = pure binary
 
 ## ⚙️ Usage Example
 
