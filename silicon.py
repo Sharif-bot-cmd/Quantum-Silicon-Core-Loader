@@ -156,5 +156,5 @@ if __name__ == "__main__":
         entropy_zero=entropy_zero,
         minimal=minimal,
         attack_level=attack_level
-    )
-    
+        )
+            
