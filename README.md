@@ -145,14 +145,14 @@ Designed to **pass SHA3, UID, DFU, NAND, and signature checks** — while doing 
 
 🔧 Available Flags
 
-| Flag             | Effect                                             |
-| ---------------- | -------------------------------------------------- |
-| `--dry-run`      | Simulate build, skip file write                    |
-| `--verbose`      | Print all internal logic, hash, UID, bootlog       |
-| `--simulate`     | Only print hallucinated bootlog (no files needed)  |
-| `--entropy-zero` | Use fixed entropy seed for repeatable output       |
-| `--fuse-random`  | Generate unpredictable fake fuse block             |
-| `--minimal`      | Skip bootlog, NAND, fuses — output header+ELF only |
+| Option               | Description                                                 |
+| -------------------- | ----------------------------------------------------------- |
+| `--verbose`          | Show decoded ELF header and logs (zero-day mode)            |
+| `--fuse-random`      | Inject true hardware fuse block log (QSPI Bank 0 spoof)     |
+| `--entropy-zero`     | Zero out entropy for deterministic logic                    |
+| `--minimal`          | Minimal payload (no logs, trust boot only)                  |
+| `--attacks-mode=<N>` | Spoof attack mode level (1–5) with unique entropy injection |
+| `--timeout=<N>`      | Set sandbox run time in seconds (1–60, default: 3 seconds)  |
 
 📊 Supported Levels:
 
@@ -202,7 +202,7 @@ siliconm8 = pure binary
 
 ## ⚙️ Usage Example
 
-```bash (Example only)
-python3 silicon.py siliconm8 
+```bash 
+python3 silicon.py <siliconm8.sm8> [options] 
 
 
