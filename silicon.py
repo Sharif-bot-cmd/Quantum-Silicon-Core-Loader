@@ -5,6 +5,12 @@ import random
 import sys
 import mmap
 
+def read_uint64(data, offset):
+    return struct.unpack_from(">Q", data, offset)[0]
+
+def read_uint32(data, offset):
+    return struct.unpack_from(">I", data, offset)[0]
+
 def generate_bootlog():
     log = [
         "[BOOTROM] Init: SM8 Chain v1.0",
@@ -21,14 +27,14 @@ def generate_bootlog():
     return "\n".join(log).encode()
 
 def generate_attack_log(level=1):
-    levels = {
-        1: [b"[ATTACK-1] Entropy Validation Skipped"],
-        2: [b"[ATTACK-2] Structural Header Rewired"],
-        3: [b"[ATTACK-3] Recursive Execution Trace Injected"],
-        4: [b"[ATTACK-4] Signature Drift Bypassed"],
-        5: [b"[ATTACK-5] Full Trusted Chain Map Emitted"]
+    logs = {
+        1: b"[ATTACK-1] Entropy Verification Overridden with Consistent Seed",
+        2: b"[ATTACK-2] Header Version & Offsets Spoofed for Validator Confusion",
+        3: b"[ATTACK-3] Multi-Phase Trust Reports Injected (No Real Chain)",
+        4: b"[ATTACK-4] Divergent Entropy Accepted as Valid Boot Report",
+        5: b"[ATTACK-5] Full Trust Chain, SecureOS, Rollback, NAND Logs Emitted"
     }
-    return b"\n".join(levels.get(level, [])) + b"\n" if level in levels else b""
+    return logs.get(level, b"") + b"\n" if level in logs else b""
 
 def generate_spoofed_keys(elf_data):
     random_entropy = os.urandom(32)
@@ -46,61 +52,82 @@ def random_fuse_block():
 def verify_siliconm8_header(data):
     return data.startswith(b'SM8\x00')
 
-def execute_siliconm8_in_ram(input_path,
-                             verbose=False,
-                             fuse_random=False,
-                             entropy_zero=False,
-                             minimal=False,
-                             attack_level=0):
-
-    with open(input_path, "rb") as f:
-        elf_data = f.read()
-
-    if not verify_siliconm8_header(elf_data):
-        print("[✘] ERROR: Not a valid siliconm8 file.")
-        sys.exit(1)
-
-    # Create mmap-backed RAM execution space at 0x0 equivalent (virtual simulation)
-    ram_size = 1024 * 1024  # 1MB sandbox
-    ram = mmap.mmap(-1, ram_size, access=mmap.ACCESS_WRITE)
-    ram.seek(0)
-
-    # Build spoofed keylog and artifacts
-    bootlog = generate_bootlog()
-    attack_log = generate_attack_log(level=attack_level) if attack_level > 0 else b""
-    spoofed_keys = generate_spoofed_keys(elf_data)
-    fuse_block = random_fuse_block() if fuse_random else struct.pack(">Q", 0xDEADC0DEF05E0001)
+def build_payload(elf_data, entropy_zero=False, fuse_random=False, minimal=False, attack_level=0):
     entropy_seed = 0x0 if entropy_zero else int.from_bytes(hashlib.sha256(elf_data).digest()[:8], 'big')
+    fuse_block = random_fuse_block() if fuse_random else struct.pack(">Q", 0xDEADC0DEF05E0001)
+
+    header = (
+        b'SM8\x00' +
+        struct.pack(">I", 0x00000000) +  # Version
+        struct.pack(">Q", 0xAABBCCDDEEFF0011) +  # Fixed UID
+        struct.pack(">Q", entropy_seed) +  # Entropy Seed
+        hashlib.sha3_256(elf_data).digest() +  # SHA3 hash of ELF
+        b'\xFF'  # Control byte
+    )
+
+    if minimal:
+        return header + elf_data
+
+    bootlog = generate_bootlog()
+    attack_log = generate_attack_log(level=attack_level)
+    spoofed_keys = generate_spoofed_keys(elf_data)
+    nand_log = struct.pack(">I", 0x1F400) + b"OKAY"
+    runtime_sha1 = hashlib.sha1(os.urandom(16)).digest()
 
     payload = (
-        b'SM8\x00' +
-        struct.pack(">I", 0x00000000) +
-        struct.pack(">Q", 0xAABBCCDDEEFF0011) +
-        struct.pack(">Q", entropy_seed) +
-        hashlib.sha3_256(elf_data).digest() +
-        b'\xFF' +
+        header +
         bootlog +
         fuse_block +
-        struct.pack(">I", 0x1F400) + b"OKAY" +
-        hashlib.sha1(os.urandom(16)).digest() +
+        nand_log +
+        runtime_sha1 +
         spoofed_keys +
         attack_log +
         elf_data
     )
 
+    return payload
+
+def execute_siliconm8_in_ram(input_path, verbose=False, fuse_random=False, entropy_zero=False, minimal=False, attack_level=0):
+    with open(input_path, "rb") as f:
+        elf_data = f.read()
+
+    if not verify_siliconm8_header(elf_data[:4]):
+        print("[✘] ERROR: Not a valid siliconm8 file.")
+        sys.exit(1)
+
+    payload = build_payload(
+        elf_data,
+        entropy_zero=entropy_zero,
+        fuse_random=fuse_random,
+        minimal=minimal,
+        attack_level=attack_level
+    )
+
+    # mmap-backed simulated RAM space
+    ram_size = max(1024 * 1024, len(payload) + 4096)
+    ram = mmap.mmap(-1, ram_size, access=mmap.ACCESS_WRITE)
     ram.write(payload)
     ram.seek(0)
 
-    if verbose:
-        print("\n[INFO] siliconm8 Loaded to RAM at 0x00000000")
-        print(f"Payload size: {len(payload)} bytes")
-        print("\n[INFO] Boot Log:")
-        print(generate_bootlog().decode())
-        if attack_level > 0:
-            print("\n[INFO] Attack Trace:")
-            print(attack_log.decode())
-
     print("\n[✓] Executed in real mmap-backed RAM sandbox at virtual address 0x00000000.")
+
+    if verbose:
+        print(f"\n[INFO] Payload Size: {len(payload)} bytes")
+        print("[INFO] Header Breakdown:")
+        print(f"  Magic     : {payload[0:4]}")
+        print(f"  Version   : 0x{read_uint32(payload, 4):08X}")
+        print(f"  UID       : 0x{read_uint64(payload, 8):016X}")
+        print(f"  Entropy   : 0x{read_uint64(payload, 16):016X}")
+        print(f"  SHA3 ELF  : {payload[24:56].hex()}")
+        print(f"  Control   : {payload[56]}")
+        if not minimal:
+            print("\n[INFO] Boot Log:")
+            bootlog = payload[57:].split(b"[QFPROM] UID")[0]
+            print(bootlog.decode(errors="ignore"))
+        if attack_level > 0:
+            print("\n[INFO] Attack Simulation:")
+            print(generate_attack_log(attack_level).decode())
+
     print("    ↳ All spoofed trust confirmed.")
 
 def print_usage():
@@ -109,11 +136,11 @@ Usage:
   python3 silicon.py <siliconm8.sm8> [options]
 
 Options:
-  --verbose            Show full header and logs
-  --fuse-random        Randomize fuse simulation
-  --entropy-zero       Use static entropy seed
-  --minimal            Header + ELF only
-  --attacks-mode=<N>   Set attack level (1–5)
+  --verbose            Show decoded header and logs
+  --fuse-random        Inject random fuse UID (real struct)
+  --entropy-zero       Force entropy seed to zero (real effect)
+  --minimal            Build header + ELF only, nothing else
+  --attacks-mode=<N>   Simulate bypass attack 1–5
 """)
 
 if __name__ == "__main__":
@@ -145,5 +172,5 @@ if __name__ == "__main__":
         entropy_zero=entropy_zero,
         minimal=minimal,
         attack_level=attack_level
-                                 )
+    )
     
