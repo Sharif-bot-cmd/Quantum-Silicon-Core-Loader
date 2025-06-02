@@ -101,7 +101,7 @@ def execute_siliconm8_in_ram(input_path,
             print(attack_log.decode())
 
     print("\n[✓] Executed in real mmap-backed RAM sandbox at virtual address 0x00000000.")
-    print("    ↳ No illegal instructions. No segmentation fault. All spoofed trust confirmed.")
+    print("    ↳ All spoofed trust confirmed.")
 
 def print_usage():
     print("""
