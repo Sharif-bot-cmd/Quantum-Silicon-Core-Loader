@@ -194,6 +194,10 @@ It's the end of truth-based execution.
 
 "Long live the hallucination layer." - Sharif muhaymin (the creator)
 
+patch.py = source of loader
+qslcl.elf = source of siliconm8
+silicon.sm8 = pure binary
+
 ## ⚙️ Usage Example
 
 ```bash (Example only)
