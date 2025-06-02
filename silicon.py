@@ -107,7 +107,7 @@ def execute_siliconm8_in_ram(input_path,
     if fuse_random: print("       • Fuse Logic Variation Enabled")
     if entropy_zero: print("       • Static Entropy Mask Enforced")
     if attack_level > 0: print(f"       • Trust Spoof Level: {attack_level}/5")
-    print("    ↳ Executable fully sandbox-safe. No illegal instructions. No segfaults.")
+    print("    ↳ Executable fully sandbox mode.")
 
 def print_usage():
     print("\nUsage:")
