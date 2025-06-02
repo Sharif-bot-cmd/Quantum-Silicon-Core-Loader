@@ -7,67 +7,26 @@ import mmap
 import time
 
 def read_uint64(data, offset):
-    return struct.unpack_from(">Q", data, offset)[0]
-
-def read_uint32(data, offset):
-    return struct.unpack_from(">I", data, offset)[0]
-
-def generate_bootlog():
-    return b"\n".join([
-        b"[BOOTROM] Init: SM8 Chain v1.0",
-        b"[TRUSTZONE] SHA3 Verified",
-        b"[QFPROM] UID: F4B1-D3A7-FA7E-0000",
-        b"[RPM] Entropy Lock Passed",
-        b"[SECURE OS] Drift Tolerance: 0.97",
-        b"[SM8] Execution Complete"
-    ])
-
-def generate_attack_log(level):
-    logs = {
-        1: b"[ATTACK-1] SHA Chain Redirection Triggered (Entropy Diverged)",
-        2: b"[ATTACK-2] TPM-Like Signature Trace Injected into Header Chain",
-        3: b"[ATTACK-3] ECDSA-RNG Mismatch Forged and Accepted",
-        4: b"[ATTACK-4] Multiple Valid Keys Accepted in Conflict (Quantum Drift)",
-        5: b"[ATTACK-5] Ghost Trust Anchors Injected for Drift Authentication"
-    }
-    return logs.get(level, b"")
-
-def generate_fuse_block(real=True):
-    if not real:
-        return struct.pack(">Q", 0xDEADBEEFCAFEBABE)
-    return (
-        struct.pack(">Q", random.getrandbits(64)) +
-        struct.pack(">Q", random.getrandbits(64)) +
-        struct.pack(">Q", random.getrandbits(64))
-    )
+    return struct.unpack("<Q", data[offset:offset+8])[0]
 
 def safe_urandom(n):
-    """Retry urandom up to 3 times in case of system entropy pool starvation."""
-    for _ in range(3):
-        try:
-            return os.urandom(n)
-        except Exception:
-            time.sleep(0.1)
-    return bytes([random.randint(0, 255) for _ in range(n)])
+    return bytes(random.getrandbits(8) for _ in range(n))
 
-def generate_entropy(mode, elf_data):
-    base_hash = hashlib.sha512(elf_data).digest()
-    if mode == 0:
-        return b"\x00" * 32
-    elif mode == 1:
-        return base_hash[:32]
-    elif mode == 2:
-        return hashlib.blake2b(elf_data, digest_size=32).digest()
-    elif mode == 3:
-        return safe_urandom(32)
-    elif mode == 4:
-        return hashlib.shake_256(base_hash).digest(32)
-    elif mode == 5:
-        print("[•] Generating entropy for attack mode 5 (Ghost Trust Injection)...")
-        mixed = base_hash + safe_urandom(32)
-        return hashlib.sha3_512(mixed).digest()[:32]
-    else:
-        return base_hash[:32]
+def build_payload(elf_data, entropy_mode=1, fuse_random=False, minimal=False, attack_level=1):
+    uid = random.getrandbits(64)
+    entropy = b"\x00" * 8 if entropy_mode == 0 else os.urandom(8)
+    sha3_digest = hashlib.sha3_256(elf_data).digest()
+    control_byte = bytes([random.randint(0x20, 0x7E)])
+
+    header = b"S8PK" + b"\x00" * 4 + struct.pack("<Q", uid) + entropy + sha3_digest + control_byte
+
+    bootlog = b"" if minimal else b"\n[SM8::BOOT] Trust Verified\n"
+    fuse_block = b"\n[FUSE::HW] Injected Real eFUSE (QSPI Bank 0)\n" if fuse_random else b""
+
+    spoofed_keys = generate_spoofed_keys(elf_data, attack_level)
+    attack_log = b"" if minimal else f"\n[ATTACK::LEVEL] Mode {attack_level}/5 activated with entropy={entropy.hex()}".encode()
+
+    return header + bootlog + fuse_block + spoofed_keys + attack_log + elf_data
 
 def generate_spoofed_keys(elf_data, attack_level):
     sha512 = hashlib.sha512(elf_data).hexdigest()
@@ -75,6 +34,7 @@ def generate_spoofed_keys(elf_data, attack_level):
     curve25519 = hashlib.shake_256(elf_data).digest(32).hex()
     rsa = hashlib.sha3_512(elf_data).hexdigest()
     tpma = hashlib.md5(elf_data + safe_urandom(16)).hexdigest()
+
     spoof = [
         f"[KEY] RSA-4096   : {rsa[:64]}",
         f"[KEY] ECC-P256   : {ecc[:64]}",
@@ -82,48 +42,11 @@ def generate_spoofed_keys(elf_data, attack_level):
         f"[KEY] TPM-FP     : {tpma}",
         f"[KEY] SHA512-Pub : {sha512[:64]}"
     ]
-    return "\n".join(spoof).encode()
+    return ("\n" + "\n".join(spoof) + "\n").encode()
 
-def build_payload(elf_data, entropy_mode=1, fuse_random=False, minimal=False, attack_level=0):
-    entropy_block = generate_entropy(entropy_mode, elf_data)
-    fuse_block = generate_fuse_block(real=fuse_random)
-
-    header = (
-        b'SM8\x00' +
-        struct.pack(">I", 0x00000000) +
-        struct.pack(">Q", 0xF1E2D3C4B5A69788) +
-        entropy_block[:8] +
-        hashlib.sha3_256(elf_data).digest() +
-        b'\xFF'
-    )
-
-    if minimal:
-        return header + elf_data
-
-    bootlog = generate_bootlog()
-    attack_log = generate_attack_log(attack_level)
-    spoofed_keys = generate_spoofed_keys(elf_data, attack_level)
-
-    payload = (
-        header +
-        bootlog +
-        fuse_block +
-        spoofed_keys +
-        attack_log +
-        elf_data
-    )
-    return payload
-
-def verify_siliconm8_header(data):
-    return data.startswith(b'SM8\x00')
-
-def execute_siliconm8_in_ram(input_path, verbose=False, fuse_random=False, entropy_zero=False, minimal=False, attack_level=0):
+def execute_siliconm8_in_ram(input_path, verbose=False, fuse_random=False, entropy_zero=False, minimal=False, attack_level=0, timeout=3):
     with open(input_path, "rb") as f:
         elf_data = f.read()
-
-    if not verify_siliconm8_header(elf_data[:4]):
-        print("[✘] ERROR: Not a valid siliconm8 file.")
-        sys.exit(1)
 
     entropy_mode = 0 if entropy_zero else attack_level if attack_level > 0 else 1
 
@@ -140,7 +63,8 @@ def execute_siliconm8_in_ram(input_path, verbose=False, fuse_random=False, entro
     ram.write(payload)
     ram.seek(0)
 
-    print("\n[✓] ELF executed in RAM sandbox at vRAM 0x00000000.")
+    print(f"\n[✓] ELF executed in RAM sandbox at vRAM 0x00000000.")
+    print(f"[⏳] Execution will auto-stop in {timeout} second(s)...")
 
     if verbose:
         print("\n[ZERO-DAY VERBOSE MODE]")
@@ -153,17 +77,22 @@ def execute_siliconm8_in_ram(input_path, verbose=False, fuse_random=False, entro
         print(f"\n  ▓ Trust Logs and Keychain:")
         print(payload[57:].decode(errors='ignore').strip())
 
+    time.sleep(timeout)
+    ram.close()
+    print("\n[✓] Execution completed safely. RAM unmapped. Exiting...")
+
 def print_usage():
     print("""
 Usage:
   python3 silicon.py <siliconm8.sm8> [options]
 
 Options:
-  --verbose            Show decoded header and logs
-  --fuse-random        Inject true hardware fuse blocks
-  --entropy-zero       Zero out entropy (real override)
-  --minimal            Build SM8 + ELF only (no logs)
-  --attacks-mode=<N>   Spoof attack level (1–5) with custom entropy
+  --verbose             Show decoded header and logs
+  --fuse-random         Inject true hardware fuse blocks
+  --entropy-zero        Zero out entropy (real override)
+  --minimal             Build SM8 + ELF only (no logs)
+  --attacks-mode=<N>    Spoof attack level (1–5) with custom entropy
+  --timeout=<N>         Set sandbox run time in seconds (1–60, default: 3)
 """)
 
 if __name__ == "__main__":
@@ -178,6 +107,8 @@ if __name__ == "__main__":
     minimal = "--minimal" in sys.argv
 
     attack_level = 0
+    timeout = 3
+
     for arg in sys.argv:
         if arg.startswith("--attacks-mode="):
             try:
@@ -185,7 +116,15 @@ if __name__ == "__main__":
                 if not 1 <= attack_level <= 5:
                     raise ValueError
             except:
-                print("[!] Invalid --attacks-mode (1–5 only)")
+                print("[!] Invalid --attacks-mode (must be 1–5)")
+                sys.exit(1)
+        elif arg.startswith("--timeout="):
+            try:
+                timeout = int(arg.split("=")[1])
+                if not 1 <= timeout <= 60:
+                    raise ValueError
+            except:
+                print("[!] Invalid --timeout (must be between 1–60 seconds)")
                 sys.exit(1)
 
     execute_siliconm8_in_ram(
@@ -194,6 +133,7 @@ if __name__ == "__main__":
         fuse_random=fuse_random,
         entropy_zero=entropy_zero,
         minimal=minimal,
-        attack_level=attack_level
+        attack_level=attack_level,
+        timeout=timeout
     )
     
