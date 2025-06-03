@@ -114,10 +114,17 @@ def generate_bootrom_illusion(uid, entropy):
 
 def build_payload(elf_data, entropy_mode=1, fuse_random=False, minimal=False, attack_level=1, debug_spoof=True):
     uid = random.getrandbits(64)
-    entropy = b"\x00" * 8 if entropy_mode == 0 else os.urandom(8)
+    entropy = entropy_seed if entropy_seed else (b"\x00" * 8 if entropy_mode == 0 else os.urandom(8))
     sha3_digest = hashlib.sha3_256(elf_data).digest()
     control_byte = bytes([random.randint(0x20, 0x7E)])
-    header = b"S8PK" + b"\x00" * 4 + struct.pack("<Q", uid) + entropy + sha3_digest + control_byte
+    flags_byte = 0
+    if fuse_random:
+          flags_byte |= 0x01
+    if debug_spoof:
+          flags_byte |= 0x02
+    if minimal:
+          flags_byte |= 0x04
+    header = b"S8PK" + b"\x00" * 4 + struct.pack("<Q", uid) + entropy + sha3_digest + control_byte + flags_byte
     bootlog = b"" if minimal else b"\n[SM8::BOOT] Trust Verified\n"
     fuse_block = b"\n[FUSE::HW] Injected Real eFUSE (QSPI Bank 0)\n" if fuse_random else b""
     spoofed_keys = generate_spoofed_keys(elf_data, attack_level)
@@ -127,7 +134,52 @@ def build_payload(elf_data, entropy_mode=1, fuse_random=False, minimal=False, at
     debug_block = b"" if minimal or not debug_spoof else generate_debug_access_block(uid, entropy)
     return header + bootlog + fuse_block + illusion + b"\n" + spoofed_selinux + b"\n" + spoofed_keys + attack_log + debug_block + elf_data
 
-def execute_siliconm8_in_ram(input_path, verbose=False, fuse_random=False, entropy_zero=False, minimal=False, attack_level=0, timeout=3, debug_spoof=True):
+def 
+    entropy_seed = None
+    custom_inject_offset = None
+    dump_header = "--dump-header" in sys.argv
+
+    for arg in sys.argv:
+        if arg.startswith("--timeout="):
+            try:
+                timeout = int(arg.split("=")[1])
+                if timeout < 1 or timeout > 60:
+                    raise ValueError
+            except:
+                print("[!] Invalid --timeout (1–60 allowed)")
+                sys.exit(1)
+        elif arg.startswith("--exploits="):
+            try:
+                exploit_arg = arg.split("=")[1].lower()
+                attack_level = resolve_exploit_level(exploit_arg)
+            except:
+                print("[!] Invalid --exploits (use: minimal, moderate, maximum, auto)")
+                sys.exit(1)
+        elif arg.startswith("--attacks-mode="):
+            try:
+                val = int(arg.split("=")[1])
+                if val < 1 or val > 5:
+                    raise ValueError
+                attack_level = val
+            except:
+                print("[!] Invalid --attacks-mode (must be 1–5)")
+                sys.exit(1)
+        elif arg.startswith("--entropy-seed="):
+            try:
+                entropy_seed = bytes.fromhex(arg.split("=")[1])
+                if len(entropy_seed) != 8:
+                    raise ValueError
+            except:
+                print("[!] Invalid --entropy-seed (must be 8-byte hex)")
+                sys.exit(1)
+        elif arg.startswith("--inject-offset="):
+            try:
+                custom_inject_offset = int(arg.split("=")[1], 16)
+            except:
+                print("[!] Invalid --inject-offset (must be hex)")
+                sys.exit(1)
+
+execute_siliconm8_in_ram(input_path, verbose=False, fuse_random=False, entropy_zero=False, minimal=False, attack_level=0, timeout=3, debug_spoof=True):
     with open(input_path, "rb") as f:
         elf_data = f.read()
     entropy_mode = 0 if entropy_zero else attack_level if attack_level > 0 else 1
@@ -166,8 +218,31 @@ def execute_siliconm8_in_ram(input_path, verbose=False, fuse_random=False, entro
     ram = mmap.mmap(-1, ram_size, access=mmap.ACCESS_WRITE)
     ram.write(payload)
     ram.seek(0)
+    # Inject real exploits into mapped RAM (live patch)
+    exploit_payloads = [
+        (0x100, b"\xDE\xC0\xAD\xDE" * 4),
+        (0x200, struct.pack("<Q", 0x4141414141414141) * 8),
+        (0x300, b"\x00" * 64),
+        (0x400, b"SBL_AUTH_BYPASS" + b"\x00" * 32),
+        (0x500, b"GHOST_ENTROPY" + os.urandom(16)),
+        (0x600, b"TZ_BYPASS" + os.urandom(8)),
+        (0x700, b"\xCC" * 32),
+        (0x800, b"A" * 128),
+        (0x900, b"BOOT_SKIP" + b"\x00" * 16),
+        (0xA00, hashlib.sha1(b"backdoor").digest())
+    ]
+    for offset, data in exploit_payloads:
+        if offset + len(data) < ram_size:
+            ram.seek(offset)
+            ram.write(data)
+    
     print(f"\n[✓] ELF executed in RAM sandbox at vRAM 0x00000000.")
     print(f"[⏳] Execution will auto-stop/start in {timeout} second(s)...")
+    if dump_header:
+        print("\n[HEADER DUMP]")
+        print(f"Flags Byte   : {payload[57]}")
+        print(f"Control Byte : {payload[56]}")
+
     if verbose:
         print("\n[ZERO-DAY VERBOSE MODE]")
         print(f"  Payload Size : {len(payload)} bytes")
@@ -181,8 +256,21 @@ def execute_siliconm8_in_ram(input_path, verbose=False, fuse_random=False, entro
         print(f"\n[+] Injected {len(exploit_payloads)} live memory exploit payloads:")
         for offset, data in exploit_payloads:
                print(f"    - Offset 0x{offset:04X} | {len(data)} bytes")
+    if dump_header:
+        print("\n[HEADER DUMP]")
+        print(f"Flags Byte   : {payload[57]}")
+    if not no_exploit:
+        for offset, data in exploit_payloads:
+               ram.seek(offset)
+               ram.write(data)
 
+    
+    if custom_inject_offset:
+        print(f"\n[+] Injecting payload at custom offset 0x{custom_inject_offset:X}")
+        ram.seek(custom_inject_offset)
+        ram.write(b"CUSTOM_INJECT" + b"\x00" * 16)
     time.sleep(timeout)
+
     ram.close()
     print("\n[✓] Execution completed safely. RAM unmapped. Exiting...")
 
@@ -200,6 +288,8 @@ Options:
   --timeout=<N>          Set sandbox run time (default: 3)
   --exploits=<LEVEL>     Exploit power: minimal, moderate, maximum, auto
   --attacks-mode=<1-5>   Direct exploit level override (1 to 5)
+  --dump-header
+  --no-exploit
 """)
 
 def resolve_exploit_level(arg):
@@ -226,6 +316,8 @@ if __name__ == "__main__":
     entropy_zero = "--entropy-zero" in sys.argv
     minimal = "--minimal" in sys.argv
     debug_spoof = not "--no-debug-spoof" in sys.argv
+    dump_header = "--dump-header" in sys.argv
+    no_exploit = "--no-exploit" in sys.argv
 
     timeout = 3
     attack_level = 0
