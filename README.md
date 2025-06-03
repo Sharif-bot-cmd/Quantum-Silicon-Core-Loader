@@ -146,15 +146,20 @@ Designed to pass SHA3, UID, DFU, NAND, and signature checks while doing nothing 
 
 🔧 Available Flags
 
-| Option               | Description                                                 |
-| -------------------- | ----------------------------------------------------------- |
-| `--verbose`          | Show decoded ELF header and logs (zero-day mode)            |
-| `--fuse-random`      | Inject true hardware fuse block log (QSPI Bank 0 spoof)     |
-| `--entropy-zero`     | Zero out entropy for deterministic logic                    |
-| `--minimal`          | Minimal payload (no logs, trust boot only)                  |
-| `--attacks-mode=<N>` | Spoof attack mode level (1–5) with unique entropy injection |
-| `--timeout=<N>`      | Set sandbox run time in seconds (1–60, default: 3 seconds)  |
-| `--exploits`         | Inject advanced memory payloads (bypass, trap, TZ spoof)    |
+| Option                   | Description                                                                 |
+|--------------------------|-----------------------------------------------------------------------------|
+| `--verbose`              | Show decoded ELF header and logs (zero-day mode)                            |
+| `--fuse-random`          | Inject true hardware fuse block log (QSPI Bank 0 spoof)                     |
+| `--entropy-zero`         | Zero out entropy for deterministic logic                                    |
+| `--entropy-seed=<hex>`   | Inject custom 8-byte entropy seed (e.g. `--entropy-seed=0123456789ABCDEF`)  |
+| `--minimal`              | Minimal payload (no logs, trust boot only)                                  |
+| `--attacks-mode=<N>`     | Spoof attack mode level (1–5) with unique entropy injection                 |
+| `--exploits=<level>`     | Inject exploit payloads (`minimal`, `moderate`, `maximum`, `auto`)          |
+| `--no-exploit`           | Disable all exploit injection and override `--exploits`                     |
+| `--dump-header`          | Dump UID, entropy, SHA3 and flags byte without running the full sandbox     |
+| `--no-debug-spoof`       | Disable debug block in spoofed payload (JTAG, core unlock, trap vector)     |
+| `--inject-offset=<hex>`  | Inject fixed spoof payload at specific RAM offset (e.g. `--inject-offset=0x100`) |
+| `--timeout=<N>`          | Set sandbox run time in seconds (1–60, default: 3 seconds)                  |
 
 Why siliconm8 Exists
 
