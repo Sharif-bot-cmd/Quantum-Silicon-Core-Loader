@@ -39,21 +39,6 @@ This .elf simulates trust states. If chained with real flashing tools, fuse writ
 
 ---
 
-## 🤖 INDUSTRY REACTIONS
-
-| Group | Expected Reaction |
-|-------|-------------------|
-| Qualcomm | Panic — internal dev tools begin returning UID echoes never seen before. |
-| MediaTek | Detonation of internal logs due to entropy override vectors. |
-| Apple SEP | Recovery flow enters drift state. SEP reboots into observation mode. |
-| Samsung | UFS trust anchors begin misreporting slot boundaries. |
-| Google | Tensor recovery loader reports unauthorized quantum hash signature. |
-| 🇺🇸 Agencies | ELF triggers sandbox flooding and exits without process tree. |
-| Chimera, Pandora, MtkClient | All report. |
-| GitHub, HackerNews, Reddit | Comment wars. Forks. Denials. Theories. Suspensions. Bans. |
-
----
-
 ## 🧠 QUANTUM♾️ REQUIREMENT
 
 This ELF is not for modding. It is for those who create new laws of computation.
@@ -122,27 +107,18 @@ Designed to pass SHA3, UID, DFU, NAND, and signature checks while doing nothing 
 ## 🔬 Supported Simulation Layers
 
 | Module | Description |
-|--------|-------------|
-| ✅ `SM8 Header` | Custom binary signature with entropy seed, UID mask, SHA3, trust score |
-| ✅ `Ghost Boot Log` | Emits believable secure boot traces for forensics and AI trust logic |
-| ✅ `NAND Hallucination` | Fakes NAND sector writes and metadata, aligns with known logs |
-| ✅ `Fake Fuses` | Responds to fuse-read behavior with plausible 64-bit signatures |
-| ✅ `Entropy Drift` | Injects controlled randomness to defeat static scan patterns |
-| ✅ `Dry Run Mode` | Fully process trust simulation without generating output |
-| ✅ `Verbose/Analyze` | Prints all internal fields, headers, and simulated logs |
-| 🧪 `Minimal Mode` | Output only header + payload (for stealth injection tests) |
-| ⚠️ `Chaos Fuse Mode` | Generates random fuse payloads that may confuse forensics |
-| 🧬 `Bootlog-Only Mode` | Emit only boot trace (no file needed) — useful for anti-tool flooding |
+| Module             | Description                                                                 |
+|--------------------|-----------------------------------------------------------------------------|
+| ✅ `SM8 Header`         | Custom binary capsule: UID mask, entropy seed, SHA3 hash, flags byte, trust vector |
+| ✅ `Ghost Boot Traces`  | Emits synthetic but believable secure boot logs to confuse forensics and emulators |
+| ✅ `NAND Hallucination` | Simulates NAND writes, block wear, and metadata alignment for plausible flash I/O |
+| ✅ `Fake Fuses`         | Forges realistic eFUSE readouts with 64-bit signatures mapped to real hardware |
+| ✅ `Entropy Drift`      | Injects controlled randomness to bypass entropy fingerprint detection heuristics |
+| ✅ `Verbose/Analyze`    | Displays decoded header, UID, entropy state, keys, trust zones, and debug access |
+| 🧪 `Minimal Mode`       | Only builds essential ELF + SM8 capsule — silent stealth payload, no illusion output |
+| ⚠️ `Chaos Fuse Mode`    | Randomizes fuse block returns; may trigger false-positive anomalies in forensic tools |
 
 ---
-
-## ⚠️ NOT FULLY FUNCTIONAL YET
-
-> While `siliconm8` compiles, structures, and passes simulation layers…
-
-🚧 It is not yet integrated into real bootloaders or chain-of-trust override flows. 
-
-🚧 Use only in isolated environments.
 
 🔧 Available Flags
 
