@@ -195,11 +195,9 @@ And most importantly it runs at 0x0.
 
 "Long live the hallucination layer." - Sharif muhaymin (the creator)
 
-patch.py = source of loader
+qslcl.elf = runs in COM port
 
-qslcl.elf = source of siliconm8
-
-siliconm8 = pure binary
+siliconm8 = runs in ram (terminal)
 
 ## ⚙️ Usage Example
 
