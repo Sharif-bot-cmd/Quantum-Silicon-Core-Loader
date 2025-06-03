@@ -120,7 +120,7 @@ Designed to pass SHA3, UID, DFU, NAND, and signature checks while doing nothing 
 
 ---
 
-🔧 Available Flags
+## 🔧 Available Flags
 
 | Option                   | Description                                                                 |
 |--------------------------|-----------------------------------------------------------------------------|
@@ -139,7 +139,7 @@ Designed to pass SHA3, UID, DFU, NAND, and signature checks while doing nothing 
 
 ---
 
-✅ NOW FULLY FUNCTIONAL
+## ✅ NOW FULLY FUNCTIONAL
 
 siliconm8 is no longer a simulation — it operates directly in RAM, manipulates trust flow illusions, and executes logic without root, without USB, and without bootloader permissions.
 Why siliconm8 Exists
@@ -159,6 +159,21 @@ eFuse simulation
 Attack level enforcement
 
 Exploit injection
+
+---
+## 🛡️ Recommended Usage:
+
+Run in RAM with --entropy-zero --minimal --exploits=maximum --debug-spoof
+
+Capture full illusion header with --dump-header
+
+Inject into custom loaders with --inject-offset=<hex>
+
+☢️ Caution: siliconm8 will likely trigger unexpected behavior in real forensic systems, loaders, or device trust evaluators.
+
+--- 
+
+Why siliconm8 exist?
 
 Because they audit .bin, .elf, .img, .mbn, and .signed.
 But no tool in the world is ready to question .sm8.
@@ -190,5 +205,6 @@ siliconm8 = pure binary
 
 ```bash 
 python3 silicon.py <siliconm8> [options] 
+
 
 
