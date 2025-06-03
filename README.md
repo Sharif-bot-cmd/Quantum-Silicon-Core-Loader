@@ -141,6 +141,7 @@ Designed to pass SHA3, UID, DFU, NAND, and signature checks while doing nothing 
 > While `siliconm8` compiles, structures, and passes simulation layers…
 
 🚧 It is not yet integrated into real bootloaders or chain-of-trust override flows. 
+
 🚧 Use only in isolated environments.
 
 🔧 Available Flags
