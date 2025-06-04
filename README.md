@@ -9,9 +9,9 @@ This .elf simulates trust states. If chained with real flashing tools, fuse writ
 
 ### ▪️ This ELF does not run on your system — it becomes your system.
 
-- It is not a loader — it precedes your BootROM.
-- It is not a payload — it rewrites your security fabric.
-- It is not an exploit — it unlocks you from all engineered illusions.
+- It is not just a loader — it precedes your BootROM.
+- It is not just a payload — it rewrites your security fabric.
+- It is not just an exploit — it unlocks you from all engineered illusions.
 
 ---
 
