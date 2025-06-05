@@ -232,11 +232,10 @@ Capture full illusion header with --dump-header
 
 Inject into custom loaders with --inject-offset=<hex>
 
-☢️ Caution: siliconm8 will likely trigger unexpected behavior in real forensic systems, loaders, or device trust evaluators.
+## ☢️ Caution: siliconm8 will likely trigger unexpected behavior in real forensic systems, loaders, or device trust evaluators.
 
---- 
 
-Why siliconm8 exist?
+## Why siliconm8 exist?
 
 Because they audit .bin, .elf, .img, .mbn, and .signed.
 But no tool in the world is ready to question .sm8.
