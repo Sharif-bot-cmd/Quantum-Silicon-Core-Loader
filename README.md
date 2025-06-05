@@ -112,7 +112,7 @@ python3 test.py
 ✅ Print any response bytes returned.
 
 Example output (works on my device):
-
+---
 [🔄] Waiting for COM port...
 [✔] COM port detected: COM10
 [♾️] Sending ELF payload to COM10...
