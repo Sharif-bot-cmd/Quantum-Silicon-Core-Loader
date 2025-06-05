@@ -139,8 +139,6 @@ The device interprets the ELF if the loader is positioned at 0x0 and accepted by
 
 ⚠️ Some devices will reboot or panic after spoof injection this is expected if trust flow is disrupted.
 
-⚠️ And most importantly it may not work for some tools that requires signed due to restrictions so use my script i provide for testing.
-
 ## 🫥 FINAL WORDS
 
 You don’t run this ELF.
