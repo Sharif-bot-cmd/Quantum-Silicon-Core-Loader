@@ -1,6 +1,6 @@
 🔐 Sharif Sovereign Quantum Execution License v1.1 (SSQEL)
 
-Copyright (c) 2025Sharif-bot-cmd
+Copyright (c) 2025 Sharif-bot-cmd
 
 ⚖️ Permissions
 
