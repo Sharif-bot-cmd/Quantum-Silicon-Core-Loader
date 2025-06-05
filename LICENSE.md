@@ -44,7 +44,7 @@ Rebrand
 
 Strip
 
-Obfuscateany logic pattern, entropy vector, or .elf execution chainthat originates from qslcl.elf or patch.py.
+Obfuscate any logic pattern, entropy vector, or .elf execution chainthat originates from qslcl.elf or patch.py.
 
 Execution-Level Identity Protection. Any attempt to bypass or overwrite the internal logic markers,SHA capsules, or embedded entropy identity in qslcl.elf constitutes a violation of license sovereignty.
 
