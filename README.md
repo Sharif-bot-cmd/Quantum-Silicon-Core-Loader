@@ -91,9 +91,9 @@ pip install pyserial
 
 ## 🔌 Step 3: Connect Your Device
 
-For Qualcomm: Boot into EDL Mode (use test point or ADB reboot edl or use volume up and down and power button)
+For Qualcomm: Boot into EDL Mode (use test point, ADB reboot edl or use volume up and down and power button)
 
-For MTK: Boot into BROM Mode (usually Volume+ then plug USB)
+For MTK: Boot into BROM Mode (usually Volume+ then plug USB or through test points)
 
 For other SoCs: Connect when your system exposes a serial COM device
 
