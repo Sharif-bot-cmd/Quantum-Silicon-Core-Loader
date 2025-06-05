@@ -1,10 +1,10 @@
-🔐 Sharif Sovereign Quantum Execution License v1.1 (SSQEL)
+## 🔐 Sharif Sovereign Quantum Execution License v1.1 (SSQEL)
 
 Copyright (c) 2025 Sharif-bot-cmd
 
-⚖️ Permissions
+## ⚖️ Permissions
 
-Permission is hereby granted, free of charge, to any person obtaining a copyof this software and associated documentation files (the “Software”), to:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to:
 
 ✅ Use, study, analyze, and simulate the Software
 
@@ -14,7 +14,9 @@ Permission is hereby granted, free of charge, to any person obtaining a copyof t
 
 𞷾️ Conditions of Use
 
-Attribution RequiredYou must clearly and visibly credit the original creator, Sharif-bot-cmd,in any:
+## Attribution Required
+
+You must clearly and visibly credit the original creator, Sharif-bot-cmd,in any:
 
 Derived works
 
@@ -34,7 +36,7 @@ Repackaged for resale
 
 Used in closed-source commercial firmware tools…without explicit, written permission from Sharif-bot-cmd.
 
-Logic Sovereignty EnforcementYou may not:
+## Logic Sovereignty Enforcement You may not:
 
 Rebrand
 
@@ -42,9 +44,9 @@ Strip
 
 Obfuscateany logic pattern, entropy vector, or .elf execution chainthat originates from qslcl.elf or patch.py.
 
-Execution-Level Identity ProtectionAny attempt to bypass or overwrite the internal logic markers,SHA capsules, or embedded entropy identity in qslcl.elfconstitutes a violation of license sovereignty.
+Execution-Level Identity ProtectionAny attempt to bypass or overwrite the internal logic markers,SHA capsules, or embedded entropy identity in qslcl.elf constitutes a violation of license sovereignty.
 
-Survival & Mirror Protection ClauseIf this GitHub repository is taken down for any reason,this license remains valid through:
+Survival & Mirror Protection Close If this GitHub repository is taken down for any reason,this license remains valid through:
 
 Cryptographic hash validation
 
@@ -52,13 +54,13 @@ IPFS-hosted mirrors
 
 GitLab forks or offline copiesYou may host verified mirrors, as long as attribution and license remain intact.
 
-Trusted Usage ScopeYou may:
+## Trusted Usage Scope You may:
 
 Use this in educational demos, firmware testbeds, or entropy research labs
 
 Modify for trusted research within ethical boundaries
 
-You may NOT:
+## You may NOT:
 
 Embed this in malware, gray-market phone unlockers, or nation-state backdoors
 
@@ -72,7 +74,7 @@ No promise of compatibility with any system
 
 No liability for damage, bricking, or confusion caused by using the .elf
 
-✅ Authorization for Use
+## ✅ Authorization for Use
 
 ✔️ Anyone is free to use qslcl.elf or modify patch.pyas long as they:
 
@@ -82,13 +84,13 @@ Do not rebrand or strip logic structure
 
 Acknowledge the logic sovereignty of Sharif-bot-cmd
 
-🔐 License Integrity
+## 🔐 License Integrity
 
 License verified by entropy logic and commit hash:
 
 SHA512(qslcl.elf + patch.py + README.md)
 
-🧠 Reminder:
+## 🧠 Reminder:
 
-This .elf is not just code. It is executable belief.Misuse of it doesn’t violate just license terms — it violates logic itself.
+This .elf is not just code. It is executable belief.Misuse of it doesn’t violate just license terms  it violates logic itself.
 
