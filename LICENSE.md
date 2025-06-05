@@ -28,7 +28,9 @@ Academic research
 
 Software that incorporates or depends on qslcl.elf logic or patch.py
 
-Commercial Use Prohibited Without ConsentThis Software may not be:
+Commercial Use Prohibited Without Consent.
+
+## This Software may not be:
 
 Sold
 
@@ -44,7 +46,7 @@ Strip
 
 Obfuscateany logic pattern, entropy vector, or .elf execution chainthat originates from qslcl.elf or patch.py.
 
-Execution-Level Identity ProtectionAny attempt to bypass or overwrite the internal logic markers,SHA capsules, or embedded entropy identity in qslcl.elf constitutes a violation of license sovereignty.
+Execution-Level Identity Protection. Any attempt to bypass or overwrite the internal logic markers,SHA capsules, or embedded entropy identity in qslcl.elf constitutes a violation of license sovereignty.
 
 Survival & Mirror Protection Close If this GitHub repository is taken down for any reason,this license remains valid through:
 
