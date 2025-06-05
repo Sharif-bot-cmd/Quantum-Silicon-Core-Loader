@@ -98,7 +98,7 @@ For other SoCs: Connect when your system exposes a serial COM device
 
 python3 test.py
 
-The script will:
+## The script will:
 
 ✅ Auto-detect the first working COM port.
 
