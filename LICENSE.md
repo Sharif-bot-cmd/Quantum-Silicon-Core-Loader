@@ -12,7 +12,7 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 
 ✅ Build compatible loaders or entropy models that respect attribution and structure
 
-𞷾️ Conditions of Use
+## Conditions of Use
 
 ## Attribution Required
 
@@ -36,7 +36,7 @@ Sold
 
 Repackaged for resale
 
-Used in closed-source commercial firmware tools…without explicit, written permission from Sharif-bot-cmd.
+Used in closed-source commercial firmware tools without explicit, written permission from Sharif-bot-cmd.
 
 ## Logic Sovereignty Enforcement You may not:
 
@@ -44,7 +44,7 @@ Rebrand
 
 Strip
 
-Obfuscate any logic pattern, entropy vector, or .elf execution chainthat originates from qslcl.elf or patch.py.
+Obfuscate any logic pattern, entropy vector, or .elf execution chain that originates from qslcl.elf or patch.py.
 
 Execution-Level Identity Protection. Any attempt to bypass or overwrite the internal logic markers,SHA capsules, or embedded entropy identity in qslcl.elf constitutes a violation of license sovereignty.
 
