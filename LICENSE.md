@@ -54,7 +54,7 @@ Cryptographic hash validation
 
 IPFS-hosted mirrors
 
-GitLab forks or offline copiesYou may host verified mirrors, as long as attribution and license remain intact.
+GitLab forks or offline copies.You may host verified mirrors, as long as attribution and license remain intact.
 
 ## Trusted Usage Scope You may:
 
@@ -68,7 +68,8 @@ Embed this in malware, gray-market phone unlockers, or nation-state backdoors
 
 Use this logic capsule to spoof trust in unauthorized surveillance applications
 
-No Warranty | No LiabilityThe Software is provided “as is”, with:
+No Warranty | No Liability.
+The Software is provided “as is”, with:
 
 No guarantees of functionality
 
@@ -78,7 +79,7 @@ No liability for damage, bricking, or confusion caused by using the .elf
 
 ## ✅ Authorization for Use
 
-✔️ Anyone is free to use qslcl.elf or modify patch.pyas long as they:
+✔️ Anyone is free to use qslcl.elf or modify patch.py as long as they:
 
 Respect the attribution
 
@@ -94,5 +95,5 @@ SHA512(qslcl.elf + patch.py + README.md)
 
 ## 🧠 Reminder:
 
-This .elf is not just code. It is executable belief.Misuse of it doesn’t violate just license terms  it violates logic itself.
+This .elf is not just code. It is executable belief.Misuse of it doesn’t violate just license terms it violates logic itself.
 
