@@ -226,7 +226,7 @@ Exploit injection
 ---
 ## 🛡️ Recommended Usage:
 
-Run in RAM with --entropy-zero --minimal --exploits=maximum --debug-spoof
+Run in RAM with --entropy-zero --minimal --exploits=maximum --no-debug-spoof
 
 Capture full illusion header with --dump-header
 
