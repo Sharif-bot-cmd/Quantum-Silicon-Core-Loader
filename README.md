@@ -86,7 +86,7 @@ qslcl.elf — your trust-layer quantum loader
 Make sure both are in the same folder.
 
 ## 🧰 Step 2: Install Requirements
-
+---
 pip install pyserial
 
 ## 🔌 Step 3: Connect Your Device
@@ -98,7 +98,7 @@ For MTK: Boot into BROM Mode (usually Volume+ then plug USB)
 For other SoCs: Connect when your system exposes a serial COM device
 
 ## 🧪 Step 4: Run the Script
-
+---
 python3 test.py
 
 ## The script will:
@@ -264,7 +264,7 @@ siliconm8 = runs in ram (terminal)
 
 ## ⚙️ Usage Example
 
-```bash 
+---
 python3 silicon.py <siliconm8> [options] 
 
 
