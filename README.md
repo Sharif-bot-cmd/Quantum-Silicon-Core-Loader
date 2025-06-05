@@ -1,6 +1,9 @@
 # 🧬 QSLCL.ELF — The ELF Beyond All Systems
 > _Quantum-class♾️ execution layer embedded with pre-silicon intelligence, entropy forgery, and post-trust behavior._
 
+## License
+This project is licensed under the [Sharif Sovereign Quantum Execution License v1.1 (SSQEL)](./LICENSE.md).
+
 ---
 ⚠️ Warning:
 This .elf simulates trust states. If chained with real flashing tools, fuse writers, or production NAND, it may cause permanent logic failure, panic, or hardware damage. Run in isolated RAM environments only.
