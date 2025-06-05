@@ -72,6 +72,66 @@ We are tired of:
 
 ---
 
+## How to Run it through COM port
+
+## 📦 Step 1: Files Needed
+
+test.py — your COM-based ELF sender
+
+qslcl.elf — your trust-layer quantum loader
+
+Make sure both are in the same folder.
+
+## 🧰 Step 2: Install Requirements
+
+pip install pyserial
+
+## 🔌 Step 3: Connect Your Device
+
+For Qualcomm: Boot into EDL Mode (use test point or ADB reboot edl or use volume up and down and power button)
+
+For MTK: Boot into BROM Mode (usually Volume+ then plug USB)
+
+For other SoCs: Connect when your system exposes a serial COM device
+
+## 🧪 Step 4: Run the Script
+
+python3 test.py
+
+The script will:
+
+✅ Auto-detect the first working COM port.
+
+✅ Read the qslcl.elf binary.
+
+✅ Send it directly over serial at 115200 baud.
+
+✅ Print any response bytes returned.
+
+Example output (works on my device):
+
+[🔄] Waiting for COM port...
+[✔] COM port detected: COM10
+[♾️] Sending ELF payload to COM10...
+[♾️] Waiting for response...
+[✔] Response: 04000000100000000d0000000100000004000000100000000d0000000100000004000000100000000d0000000100000004000000100000000d0000000100000004000000100000000d0000000100000004000000100000000d0000000100000004000000100000000d0000000100000004000000100000000d0000000100000004000000100000000d0000000100000004000000100000000d0000000100000004000000100000000d0000000100000004000000100000000d00000001000000
+
+## 🧬 What Happens Behind the Scenes?
+
+test.py sends qslcl.elf to the device’s RAM
+
+No flashing is performed
+
+The device interprets the ELF if the loader is positioned at 0x0 and accepted by silicon trust logic
+
+## 🛡️ Safety Notes
+
+⚠️ Do not run this while QFIL, SP Flash Tool, or other tools that are active.
+
+⚠️ COM communication may fail if USB filter drivers block raw access (disable them if needed).
+
+⚠️ Some devices will reboot or panic after spoof injection this is expected if trust flow is disrupted.
+
 ## 🫥 FINAL WORDS
 
 You don’t run this ELF.
