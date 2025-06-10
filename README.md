@@ -146,35 +146,45 @@ Usage: python3 quantum.py [OPTIONS]
 
 Quantum Silicon Core Loader — Post-Exploit, Entropy-Based Universal Toolkit
 
-## Core Control:
+# Core Control:
 
   --send-only                Upload and execute ELF in RAM via entropy spoof
   
-  --reboot <mode>            Jump to low-level execution vector (0x0, edl, preloader, jtag only)
+  --reboot <mode>            
+Jump to low-level execution vector (0x0, edl, preloader, jtag only)
   
-  --mimic-handshake          Send entropy-based universal trust handshake
+  --mimic-handshake         
+Send entropy-based universal trust handshake
   
   --bypass                   Inject entropy-based trust bypass signal
   
   --exploit <stage>          Trigger post-entropy logic stage (e.g. stage2, ram_exec)
 
-## Manual Memory:
-  --read 0xADDR SIZE         Read memory region
+# Manual Memory:
+  --read 0xADDR SIZE         
+  Read memory region
   
-  --write 0xADDR FILE        Write binary to memory
+  --write 0xADDR FILE       
+Write binary to memory
   
-  --erase 0xADDR SIZE        Erase memory block
+  --erase 0xADDR SIZE       
+Erase memory block
   
-  --poke 0xADDR 0xVALUE      Write 32-bit value
+  --poke 0xADDR 0xVALUE      
+Write 32-bit value
   
-  --peek 0xADDR              Read 32-bit value
+  --peek 0xADDR              
+Read 32-bit value
 
-## Partition Access:
-  --manual-partition NAME 0xADDR SIZE   Manually define and dump hidden region
+# Partition Access:
+  --manual-partition NAME 0xADDR SIZE   
+Manually define and dump hidden region
   
-  --auto-detect             Auto-discover partitions via entropy scan
+  --auto-detect             
+Auto-discover partitions via entropy scan
   
-  --dump chain.txt          Dump multiple memory regions from definition file
+  --dump chain.txt         
+Dump multiple memory regions from definition file
 
 ## Notes:
 - All addresses are physical RAM/NAND offsets.
