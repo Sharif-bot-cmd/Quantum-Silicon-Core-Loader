@@ -148,49 +148,65 @@ Quantum Silicon Core Loader — Post-Exploit, Entropy-Based Universal Toolkit
 
 # Core Control:
 
-  --send-only                Upload and execute ELF in RAM via entropy spoof
+  --send-only  
+
+Upload and execute ELF in RAM via entropy spoof
   
-  --reboot <mode>            
+  --reboot <mode>     
+  
 Jump to low-level execution vector (0x0, edl, preloader, jtag only)
   
-  --mimic-handshake         
+  --mimic-handshake  
+  
 Send entropy-based universal trust handshake
   
-  --bypass                   Inject entropy-based trust bypass signal
+  --bypass  
   
-  --exploit <stage>          Trigger post-entropy logic stage (e.g. stage2, ram_exec)
+Inject entropy-based trust bypass signal
+  
+  --exploit <stage> 
+  
+Trigger post-entropy logic stage (e.g. stage2, ram_exec)
 
 # Manual Memory:
-  --read 0xADDR SIZE         
+  --read <0xADDR SIZE>
+  
   Read memory region
   
-  --write 0xADDR FILE       
+  --write <0xADDR FILE>
+  
 Write binary to memory
   
-  --erase 0xADDR SIZE       
+  --erase <0xADDR SIZE>
+  
 Erase memory block
   
-  --poke 0xADDR 0xVALUE      
+  --poke <0xADDR 0xVALUE>
+  
 Write 32-bit value
   
-  --peek 0xADDR              
+  --peek 0xADDR  
+  
 Read 32-bit value
 
 # Partition Access:
-  --manual-partition NAME 0xADDR SIZE   
+  --manual-partition <NAME 0xADDR SIZE>  
+  
 Manually define and dump hidden region
   
-  --auto-detect             
+  --auto-detect 
+  
 Auto-discover partitions via entropy scan
   
-  --dump chain.txt         
+  --dump chain.txt  
+  
 Dump multiple memory regions from definition file
 
 ## Notes:
 - All addresses are physical RAM/NAND offsets.
-- 
+  
 - Sizes can be raw bytes, or suffixed with KB, MB (e.g. 32KB, 2MB).
-- 
+ 
 - This toolkit is vendor-agnostic. No fastboot, firehose, or DA required.
 
 ## 🫥 FINAL WORDS
