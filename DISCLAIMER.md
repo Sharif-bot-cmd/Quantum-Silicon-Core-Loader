@@ -52,3 +52,20 @@ The author(s) shall not be held liable for:
 
 This repository is cryptographically verifiable:
 
+
+If this repository is ever removed from GitHub, its license remains valid through mirrors, forks, IPFS, and signed entropy chains.
+
+---
+
+## 🙏 ETHICAL USE ENCOURAGED
+
+Use this project to:
+
+- Learn
+- Teach
+- Experiment
+- Innovate within the boundary of logic, ethics, and freedom
+
+> **This ELF is not just code. It is executable belief.**  
+> — Sharif-bot-cmd, 2025
+> 
