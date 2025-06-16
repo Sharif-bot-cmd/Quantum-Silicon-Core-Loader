@@ -1,6 +1,6 @@
 # ⚠️ DISCLAIMER
 
-This repository contains critical low-level research tools, including `patch.py`, `qslcl.elf`, and `siliconm8.py`, governed under the **Sharif Sovereign Quantum Execution License v1.1 (SSQEL)**.
+This repository contains critical low-level research tools, including `patch.py`, `qslcl.elf`, and `siliconm8`, governed under the **Sharif Sovereign Quantum Execution License v1.1 (SSQEL)**.
 
 ---
 
@@ -68,4 +68,3 @@ Use this project to:
 
 > **This ELF is not just code. It is executable belief.**  
 > — Sharif-bot-cmd, 2025
-> 
