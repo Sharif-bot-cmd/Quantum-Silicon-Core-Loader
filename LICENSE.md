@@ -97,3 +97,8 @@ SHA512(qslcl.elf + patch.py + README.md)
 
 This .elf is not just code. It is executable belief.Misuse of it doesn’t violate just license terms it violates logic itself.
 
+## 🚫 No Vendor Affiliation
+
+This project is not affiliated with, endorsed by, or derived from Apple Inc., Qualcomm, MediaTek, Samsung, Google, or any OEM or silicon vendor.
+
+All vendor-simulated logic is generated purely through entropy and public metadata patterns.
