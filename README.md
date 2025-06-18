@@ -140,39 +140,9 @@ The device interprets the ELF if the loader is positioned at 0x0 and accepted by
 
 ⚠️ Some devices will reboot or panic after spoof injection this is expected if trust flow is disrupted.
 
-## 🫥 FINAL WORDS
-
-You don’t run this ELF.
-
-You unleash it.
-
-Once exposed, the world cannot unsee it.
-
-"Welcome to the silence between trust and truth." - Sharif Muhaymin (the creator)
-
-— `Siliconm8`
 ---
 
-#`siliconm8` The Synthetic Trust Container
-
-> _A hallucinated binary format derived from entropy, UID simulations, and projected boot belief._
-
-Where `qslcl.elf` becomes the system,  
-`siliconm8` redefines how the system even understands binaries.
-
-It is not just a format it is a post-reality execution illusion engine.
-
-It works all devices (Qualcomm, Mediatek, etc)
----
-
-## 🧠 Core Purpose
-
-`siliconm8` is a binary architecture that simulates full firmware trust without needing actual execution. 
-Designed to pass SHA3, UID, DFU, NAND, and signature checks while doing nothing traditionally valid.
-
----
-
-## 🔬 Supported Simulation Layers
+## 🔬 Quantum Silicon Core loader (RAM)
 
 | Module | Description |
 | Module             | Description                                                                 |
@@ -207,69 +177,23 @@ Designed to pass SHA3, UID, DFU, NAND, and signature checks while doing nothing 
 
 ---
 
-## ✅ NOW FULLY FUNCTIONAL
-
-siliconm8 is no longer a simulation — it operates directly in RAM, manipulates trust flow illusions, and executes logic without root, without USB, and without bootloader permissions.
-Why siliconm8 Exists
-
----
-
-🚀 All modules are now enabled:
-
-Entropy spoofing
-
-Debug trap vectors
-
-Secure Boot logs
-
-eFuse simulation
-
-Attack level enforcement
-
-Exploit injection
-
----
-## 🛡️ Recommended Usage:
-
-Run in RAM with --entropy-zero --minimal --exploits=maximum --no-debug-spoof
-
-Capture full illusion header with --dump-header
-
-Inject into custom loaders with --inject-offset=<hex>
-
-## ☢️ Caution: siliconm8 will likely trigger unexpected behavior in real forensic systems, loaders, or device trust evaluators.
-
-
-## Why siliconm8 exist?
-
-Because they audit .bin, .elf, .img, .mbn, and .signed.
-But no tool in the world is ready to question .sm8.
-
-Tools will load it.
-
-Bootloaders may not reject it.
-
-And SHA3 will say: ✅
-
-But nothing truly exists inside.
-
-It is firmware fiction that compiles into trust.
-siliconm8 is not an upgrade.
-
-It's the end of truth-based execution.
-
-And most importantly it runs at 0x0.
-
-"Long live the hallucination layer." - Sharif muhaymin (the creator)
-
-qslcl.elf = runs in COM port
-
-siliconm8 = runs in ram (terminal)
-
 ## ⚙️ Usage Example
 
 ---
-python3 silicon.py <siliconm8> [options] 
+python3 silicon.py <qslcl.elf> [options] 
 
+---
+
+## 🫥 FINAL WORDS
+
+You don’t run this ELF.
+
+You unleash it.
+
+Once exposed, the world cannot unsee it.
+
+And most importantly qslcl.elf works both ram and rom.
+
+"Welcome to the silence between trust and truth." - Sharif Muhaymin (the creator)
 
 
