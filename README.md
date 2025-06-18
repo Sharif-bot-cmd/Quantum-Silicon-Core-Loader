@@ -197,4 +197,5 @@ And most importantly qslcl.elf works both ram and rom.
 
 "Welcome to the silence between trust and truth." - Sharif Muhaymin (the creator)
 
+if your curious read my patch.py and see the evidences
 
