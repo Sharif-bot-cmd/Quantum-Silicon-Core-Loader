@@ -1,6 +1,6 @@
 # 🧬 Quantum Silicon Core Loader (qslcl.elf) – Post-Exploit Entropy Execution Toolkit
 
-> A raw hardware toolkit for bypassing Secure Boot, dumping, flashing, and so on. It execute the memory via entropy-based logic no exploits, no vendor dependencies, and others
+> A raw hardware toolkit for bypassing Secure Boot, dumping, flashing, and so on. It execute the memory via ram and rom no exploits, no vendor dependencies, and others
 
 ## License
 This project is licensed under the [Sharif Sovereign Quantum Execution License v1.1 (SSQEL)](./LICENSE.md).
@@ -16,7 +16,8 @@ This .elf simulates trust states. If chained with real flashing tools, fuse writ
 - It is not just a loader — it precedes your BootROM.
 - It is not just a payload — it rewrites your security fabric.
 - It is not just an exploit — it unlocks you from all engineered illusions.
-
+- And most importantly its universal works on all SOC even undefined if possible
+  
 ---
 
 ## 💡 Key Abilities
