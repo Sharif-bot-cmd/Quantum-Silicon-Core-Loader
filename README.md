@@ -1,3 +1,14 @@
+## ♾️ qslcl.elf v1.1 — Beyond Quantum-Class Update (Future-SoC + Forensics Veil)
+
+> 🚀 New Features Injected (June 2025):
+- ✅ Future SoC Support (Undefined, Ghost, Post-BootROM Architectures)
+- ✅ Forensics Shadow Veil (Evades Static/Dynamic Binary Analysis)
+- ✅ 0x0 Sovereign Execution Vector Improved
+- ✅ Full Trustless Loader Mode Compatible with Unknown Tokens/Headers
+- ✅ Survives NAND Wipe, Secure Boot, and Cold Reset
+
+---
+
 # 🧬 Quantum Silicon Core Loader (qslcl.elf) – Post-Exploit Entropy Execution Toolkit
 
 > A raw hardware toolkit for bypassing Secure Boot, dumping, flashing, and so on. It execute the memory via ram and rom no exploits, no vendor dependencies, and others
