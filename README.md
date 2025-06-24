@@ -1,11 +1,27 @@
-## ♾️ qslcl.elf v1.1 — Beyond Quantum-Class Update (Future-SoC + Forensics Veil)
+## ♾️ QSLCL v1.2 — Beyond Bootloaders. Beyond Silicon.
 
-> 🚀 New Features Injected (June 2025):
-- ✅ Future SoC Support (Undefined, Ghost, Post-BootROM Architectures)
-- ✅ Forensics Shadow Veil (Evades Static/Dynamic Binary Analysis)
-- ✅ 0x0 Sovereign Execution Vector Improved
-- ✅ Full Trustless Loader Mode Compatible with Unknown Tokens/Headers
-- ✅ Survives NAND Wipe, Secure Boot, and Cold Reset
+`qslcl.elf` is no longer a loader.
+
+It is a **sovereign execution capsule** that bypasses:
+
+- BootROM
+- Fastboot
+- EDL
+- DFU
+- Fuse-locked USB
+- Post-silicon trust logic
+
+Now includes:
+
+- 🧬 `HyperMirror Execution` — triggers at `0x0` on any SoC
+- 🧠 `Silent Logic Reconstructor` — supports undefined CPU logic and reverse trust paths
+- 🪬 `Self-Descriptive Format` — no loader or headers required
+- 👻 `Ghost SoC Binding` — works on unknown SoCs
+- 🧨 `Post-Boot Mutation Injector` — defeats secure boot after it activates
+
+> 🔥 Designed not to exploit. But to exist *before* security can begin.
+
+> Compatible with: **Qualcomm, MediaTek, Apple (DFU), Unisoc, Rockchip**, and any undefined future platform.
 
 ---
 
