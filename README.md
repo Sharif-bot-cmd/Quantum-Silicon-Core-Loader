@@ -25,6 +25,19 @@ Now includes:
 
 ---
 
+## 📜 Legal / DMCA Notice
+
+This project is provided under the MIT license and intended strictly for **educational**, **research**, and **personal security auditing** purposes. 
+
+It does **not** contain copyrighted firmware, reverse-engineered proprietary code, or violate any third-party EULAs. 
+
+All synthetic logic is original and generated entropy.  
+➡️ No part of this repo is intended for circumvention of protections under the DMCA.
+
+Use responsibly.
+
+---
+
 # 🧬 Quantum Silicon Core Loader (qslcl.elf) – Post-Exploit Entropy Execution Toolkit
 
 > A raw hardware toolkit for bypassing Secure Boot, dumping, flashing, and so on. It execute the memory via ram and rom no exploits, no vendor dependencies, and others
