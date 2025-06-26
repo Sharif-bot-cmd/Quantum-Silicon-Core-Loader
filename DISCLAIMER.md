@@ -1,6 +1,6 @@
 # ⚠️ DISCLAIMER
 
-This repository contains advanced low-level research tools — including `patch.py`, `qslcl.elf` governed under the **Sharif Sovereign Quantum Execution License v1.1 (SSQEL)**.
+This repository contains advanced low-level research tools — including `patch.py`, `qslcl.elf` governed under the creator **Sharif Muhaymin**.
 
 ---
 
