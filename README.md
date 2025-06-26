@@ -29,9 +29,6 @@ Now includes:
 
 > A raw hardware toolkit for bypassing Secure Boot, dumping, flashing, and so on. It execute the memory via ram and rom no exploits, no vendor dependencies, and others
 
-## License
-This project is licensed under the [Sharif Sovereign Quantum Execution License v1.1 (SSQEL)](./LICENSE.md).
-
 ---
 ⚠️ Warning:
 This .elf simulates trust states. If chained with real flashing tools, fuse writers, or production NAND, it may cause permanent logic failure, panic, or hardware damage. Run in isolated RAM environments only.
