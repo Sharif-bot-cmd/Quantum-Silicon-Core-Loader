@@ -185,7 +185,6 @@ The device interprets the ELF if the loader is positioned at 0x0 and accepted by
 | Module | Description |
 | Module             | Description                                                                 |
 |--------------------|-----------------------------------------------------------------------------|
-| ✅ `SM8 Header`         | Custom binary capsule: UID mask, entropy seed, SHA3 hash, flags byte, trust vector |
 | ✅ `Ghost Boot Traces`  | Emits synthetic but believable secure boot logs to confuse forensics and emulators |
 | ✅ `NAND Hallucination` | Simulates NAND writes, block wear, and metadata alignment for plausible flash I/O |
 | ✅ `Fake Fuses`         | Forges realistic eFUSE readouts with 64-bit signatures mapped to real hardware |
