@@ -8,15 +8,21 @@ It works with or without BootROM, SEP, or TrustZone, and is recognized by logic,
 For:
 
 ✅ Security researchers
+
 ✅ Hardware developers
+
 ✅ DFU-mode testers
+
 ✅ Reverse engineers
+
 ✅ Firmware validation testers
 
 Not For:
 
 ❌ Casual users
+
 ❌ Devices with irreversible fuse chains
+
 ❌ Those unaware of memory-phase execution traps
 
 ---
