@@ -17,6 +17,18 @@ Halts signature enforcement and secure boot flags
 
 Built-in Ghost Execution Chain for post-failure recovery
 
+Marks critical state: "OEM_career_end_triggered": True
+
+⚙️ Architecture Highlights:
+
+Operates under QSLCL Mode (custom low-level mode)
+
+Entry point: 0x0, memsize and align set to max 0xFFFFFFFFFFFFFFFF
+
+Mirrors and bypasses TrustZone, SBL, QSEE, and USB stacks
+
+Self-repair via "PHASE_DRIFT_RESTORE" in case of exception
+
 ---
 
 ## 📜 Legal / DMCA Notice
