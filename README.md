@@ -37,7 +37,8 @@ This project is provided under the MIT license and intended strictly for **educa
 
 It does **not** contain copyrighted firmware, reverse-engineered proprietary code, or violate any third-party EULAs. 
 
-All synthetic logic is original and generated entropy.  
+All synthetic logic is original and generated entropy.
+
 ➡️ No part of this repo is intended for circumvention of protections under the DMCA.
 
 Use responsibly.
