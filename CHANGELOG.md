@@ -79,3 +79,26 @@ Marks critical state: "OEM_career_end_triggered": True
 | 🧬 Capsule Injection via `buffer.write()`    | All payloads injected into RAM at `0x4000`, protected by entropy noise and fake TLVs                                                         |
 | 🧿 Future-Proof Prediction Engine            | Preemptively bypasses **future IMG4 formats**, **TrustZone pre-lock**, and **entropy trust chains**                                          |
 
+
+## [v1.6] – 2025-06-28
+
+### ✨ Added
+- Future-ready trust capsule injection (`inject_beyond_checkm8_entropy_capsule`)
+- Self-mutable runtime identity layer (`inject_runtime_mutable_identity`)
+- IMG4-compatible ELF wrapper system with spoofed SEP metadata
+- Universal DFU VID/PID autodetection and payload uplink
+
+### 🔧 Improved
+- Capsule injection now phase-aligned at 0xFFFFFFFFFFFFFFFF for unrestricted compute range
+- Trust heuristic spoofing enhanced with entropy capsule masking
+- Simulated BootROM bridge compatibility for unknown SOCs
+- Anchor alignment logic stabilized under TLV entropy shroud
+
+### 🧪 Experimental
+
+- Deferred entropy revalidation fallback
+- Future image structure adaptation: `SHA512TLV+ANCHOR+SEPOSIM`
+- SEP mirror integrity chain tested on mock DFU emulators
+
+---
+
