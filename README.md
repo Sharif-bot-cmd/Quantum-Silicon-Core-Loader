@@ -1,29 +1,27 @@
-## 🧬 Quantum Silicon Core Loader (QSLCL) — v1.5 Update
+## 🔥 Quantum Silicon Core Loader v1.6 – Now Future-Resilient
 
-QSLCL v1.5 has now crossed beyond exploit-class tools like checkm8 and ipwndfu.
-This version uses no known CVE — it is based purely on quantum entropy alignment, memory camouflage, and logic-layer spoofing.
-It works with or without BootROM, SEP, or TrustZone, and is recognized by logic, not signature.
+QSLCL (Quantum Silicon Core Loader) is an entropy-aware ELF execution capsule designed to operate natively across known and unknown platforms, including strict DFU trust models, hardened SecureROM, and advanced firmware handoff environments.
 
-📢 Recommendations
-For:
+### 🌌 What's New in v1.6?
 
-✅ Security researchers
+- 🧠 **Adaptive Entropy Mirror Execution** – Enhanced injection strategy now leverages quantum-phase spoofing with fully dynamic TLV masking.
+- 🛡 **Runtime Mutable Identity** – Each ELF is now seeded with a unique self-mutating signature to ensure decentralized validation and anti-traceability.
+- ⚡ **IMG4 Masked Entry Support** – IMG4 encapsulation is now handled internally using simulated SEP metadata and deep-trust bypass structures.
+- 🧬 **Universal DFU Autodetection** – No manual VID/PID setup needed; DFU mode entry prompts automatically with signal recognition.
+- 🛰 **Infinity-Class SOC Compatibility** – From legacy ARMv7 to future ARMv9+ SoCs, QSLCL adapts using entropy-handshake simulation and logic-state override.
+- 🔄 **Execution Address Expansion** – Now supports `0xFFFFFFFFFFFFFFFF` alignment to bypass standard execution maps and engage abstract compute layers.
+- 💎 **Phase Mirror Trust Alignment** – Ensures execution validation even under redesigned boot heuristics or phase-aligned trust logic (i.e., future hardware).
+- 🔒 **Resilient Entropic Fallback** – Supports delayed activation, phased re-entry, and flexible integrity realignment if challenged.
 
-✅ Hardware developers
+> No vulnerabilities used. No exploits required. This is logic-based, entropy-driven capsule deployment.
 
-✅ DFU-mode testers
+---
 
-✅ Reverse engineers
+## 📦 Usage
 
-✅ Firmware validation testers
-
-Not For:
-
-❌ Casual users
-
-❌ Devices with irreversible fuse chains
-
-❌ Those unaware of memory-phase execution traps
+1. Launch `qslcl.elf` via supported loader in DFU mode or mapped RAM environment.
+2. Supports both physical devices and emulator abstractions.
+3. Designed for fully offline execution (no server dependency).
 
 ---
 
