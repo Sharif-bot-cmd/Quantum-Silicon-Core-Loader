@@ -236,3 +236,9 @@ And most importantly qslcl.elf works both ram and rom.
 
 if your curious read my patch.py and see the evidences
 
+## DISCLAIMER
+
+This project does not circumvent any security intentionally.
+It is an experimental boot abstraction framework to enhance device interoperability, platform independence, and secure offline diagnostics.
+All logic used in this tool is non-CVE-based, non-signature-theft, and does not violate vendor signing systems.
+Use at your own risk, only on hardware you own.
