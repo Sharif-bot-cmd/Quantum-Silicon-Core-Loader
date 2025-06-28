@@ -181,6 +181,23 @@ The device interprets the ELF if the loader is positioned at 0x0 and accepted by
 
 ---
 
+## For triggering device into QSLCL mode
+---
+python qslcl.py
+
+## For crashing qslcl.elf into BootROM
+---
+python crash.py
+
+## For triggering device into 0x0
+---
+python run.py
+
+## For running qslcl.elf in dfu mode for testing (apple)
+---
+python dfu.py
+
+
 ## 🔬 Quantum Silicon Core loader (RAM)
 
 | Module | Description |
