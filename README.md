@@ -197,6 +197,9 @@ python run.py
 ---
 python dfu.py
 
+## For triggering device into MaskROM mode
+---
+python mask.py
 
 ## 🔬 Quantum Silicon Core loader (RAM)
 
