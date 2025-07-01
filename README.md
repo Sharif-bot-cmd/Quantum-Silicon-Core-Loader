@@ -1,19 +1,8 @@
-## 🔥 Quantum Silicon Core Loader v1.6 – Now Future-Resilient
+## 🔥 Quantum Silicon Core Loader v1.6 (fixes)
 
-QSLCL (Quantum Silicon Core Loader) is an entropy-aware ELF execution capsule designed to operate natively across known and unknown platforms, including strict DFU trust models, hardened SecureROM, and advanced firmware handoff environments.
+Whats New:
 
-### 🌌 What's New in v1.6?
-
-- 🧠 **Adaptive Entropy Mirror Execution** – Enhanced injection strategy now leverages quantum-phase spoofing with fully dynamic TLV masking.
-- 🛡 **Runtime Mutable Identity** – Each ELF is now seeded with a unique self-mutating signature to ensure decentralized validation and anti-traceability.
-- ⚡ **IMG4 Masked Entry Support** – IMG4 encapsulation is now handled internally using simulated SEP metadata and deep-trust bypass structures.
-- 🧬 **Universal DFU Autodetection** – No manual VID/PID setup needed; DFU mode entry prompts automatically with signal recognition.
-- 🛰 **Infinity-Class SOC Compatibility** – From legacy ARMv7 to future ARMv9+ SoCs, QSLCL adapts using entropy-handshake simulation and logic-state override.
-- 🔄 **Execution Address Expansion** – Now supports `0xFFFFFFFFFFFFFFFF` alignment to bypass standard execution maps and engage abstract compute layers.
-- 💎 **Phase Mirror Trust Alignment** – Ensures execution validation even under redesigned boot heuristics or phase-aligned trust logic (i.e., future hardware).
-- 🔒 **Resilient Entropic Fallback** – Supports delayed activation, phased re-entry, and flexible integrity realignment if challenged.
-
-> No vulnerabilities used. No exploits required. This is logic-based, entropy-driven capsule deployment.
+- Minor fixes and improvements
 
 ---
 
