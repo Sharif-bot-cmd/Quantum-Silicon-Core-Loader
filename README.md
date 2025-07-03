@@ -1,8 +1,8 @@
-## 🔥 Quantum Silicon Core Loader v1.6 (fixes)
+## 🔥 Quantum Silicon Core Loader v1.7
 
 Whats New:
 
-- Minor fixes and improvements
+- Major improvements and logic capsule embedded 
 
 ---
 
