@@ -102,3 +102,8 @@ Marks critical state: "OEM_career_end_triggered": True
 
 ---
 
+## v1.7 - Quantum Silicon Core Loader (more improvised logic)
+
+Whats New:
+
+Major improvements and logic capsule embedded
