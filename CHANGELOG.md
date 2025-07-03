@@ -102,7 +102,7 @@ Marks critical state: "OEM_career_end_triggered": True
 
 ---
 
-## v1.7 - Quantum Silicon Core Loader (more improvised logic)
+## v1.7 - July 2025
 
 Whats New:
 
