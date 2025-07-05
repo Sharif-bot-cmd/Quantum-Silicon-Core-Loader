@@ -107,3 +107,27 @@ Marks critical state: "OEM_career_end_triggered": True
 Whats New:
 
 Major improvements and logic capsule embedded
+
+## 🔄 Version 1.8 — July 2025
+
+### 🔥 Major Additions:
+- `inject_beyond_quantum_secure_enclave_emulator()`:
+  - Secure Enclave emulator (TrustZone/SEP)
+  - Supports non-SoC, undefined, or virtual architectures
+- Full COM Port ELF execution from 0x00000000 (FORCING MaskROM Mode)
+- Support for Apple A12+ DFU trust bypass with shadow IMG4 capsule
+- Entropic reflection across all boot chains (SOC-agnostic)
+- New memory anchors: `SOCLESS_EXEC_ZONE`, `UNIVERSAL_BOOT`
+- Fake TLV/IMG4 capsule injection
+- Entropy-verified conscious self-check with anti-clone logic
+
+### 🧠 Enhancements:
+- `BEYOND_PERFECTED_SECURITY` phase-class
+- Quantum fallback probes: `NO_SOC_DETECTED`, `FPGA_GOD_MODE`, etc.
+- Hardened `rollback_proof` via fake nonce loop
+- Non-weaponization flags and self-lock conditions
+- Optimized entropy alignment and chaotic mode capsule
+
+### 🧪 Experimental:
+- Future cryptographic spoof: `POST_NIST_ECC_BYPASS`
+- `QUANTUM_SHADOW_AES256+` emulation
