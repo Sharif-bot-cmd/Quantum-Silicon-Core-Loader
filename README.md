@@ -1,8 +1,22 @@
-## 🔥 Quantum Silicon Core Loader v1.7
+# 🧠 Quantum Silicon Core Loader (QSLCL.ELF) — v1.8 [♾️]
 
-Whats New:
+---
 
-- Major improvements and logic capsule embedded 
+## 🚀 What’s New in v1.8?
+
+QSLCL.ELF v1.8 introduces **beyond-Secure Enclave logic**, making it fully operable across **ALL SoCs**, including undefined platforms and Apple A12+ DFU modes. This release goes beyond BootROM barriers — operating as a *Post-Silicon Entropic Loader*.
+
+### 🆕 Core Features in v1.8:
+- ✅inject_beyond_quantum_secure_enclave_emulator
+- ✅ DFU/Undefined Trustzone bypass
+- ✅ Socless Execution Zone (FPGA / VBL / GhostRAM compatible)
+- ✅ `PHASE_DRIFT_SAFE` Crypto Clock
+- ✅ Secure Boot override for Apple A12+ perfected security
+- ✅ Adds fake TLV+IMG4 signature capsules (for spoof trust)
+- ✅ Supports COM-triggered ELF execution from `0x00000000`
+- ✅ Conscious Execution Seal to **prevent weaponization**
+- ✅ Auto-reflective logic and rollback-proof fake nonce
+- ✅ Phase-class: `BEYOND_PERFECTED_SECURITY`
 
 ---
 
