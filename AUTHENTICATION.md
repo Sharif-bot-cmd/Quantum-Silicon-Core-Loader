@@ -55,7 +55,7 @@ Creator of qslcl.elf
    ---
    gpg --verify message.txt.asc
 
-3. Confirm the fingerprint:
+3. Confirm the fingerprint (example):
 
 D61FA5C130C84A08337A8543CC1D6F05FB55D3D9
 
