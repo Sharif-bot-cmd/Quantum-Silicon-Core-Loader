@@ -5,7 +5,7 @@ Hash: SHA256
 
 **Quantum Silicon Core Loader (`qslcl.elf`) – Statement of Authenticity and Digital Sovereignty**  
 Signed by: Sharif Muhaymin  
-PGP Key ID: `rsa4096`  
+PGP Key ID: `37065C6EFFEEB5C5`  
 Fingerprint: `4882D26E965B17251FEDC2F337065C6EFFEEB5C5` 
 
 - ---
@@ -36,9 +36,9 @@ Otherwise:
 
 This message is digitally signed. For public trust verification:
 
-🔑 PGP Key ID: rsa4096
+🔑 PGP Key ID: 37065C6EFFEEB5C5
 
-Fingerprint: D61FA5C130C84A08337A8543CC1D6F05FB55D3D9
+Fingerprint: 4882D26E965B17251FEDC2F337065C6EFFEEB5C5
 
 — Sharif Muhaymin
 Creator of qslcl.elf
@@ -49,7 +49,7 @@ Creator of qslcl.elf
 
 1. Import my public PGP key:
    ---
-   gpg --recv-key <KEYID>
+   gpg --recv-key 37065C6EFFEEB5C5
 
 2. Verify the signed .asc file:
    ---
@@ -57,7 +57,7 @@ Creator of qslcl.elf
 
 3. Confirm the fingerprint (example):
 
-D61FA5C130C84A08337A8543CC1D6F05FB55D3D9
+4882D26E965B17251FEDC2F337065C6EFFEEB5C5
 
 
 -----BEGIN PGP SIGNATURE-----
