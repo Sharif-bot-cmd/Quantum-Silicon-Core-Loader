@@ -49,7 +49,7 @@ Creator of qslcl.elf
 
 1. Import my public PGP key:
    ---
-   gpg --recv-key YOURKEYID
+   gpg --recv-key <KEYID>
 
 2. Verify the signed .asc file:
    ---
