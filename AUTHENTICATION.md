@@ -5,7 +5,7 @@ Hash: SHA256
 
 **Quantum Silicon Core Loader (`qslcl.elf`) – Statement of Authenticity and Digital Sovereignty**  
 Signed by: Sharif Muhaymin  
-PGP Key ID: `rsa4096 2025-07-06`  
+PGP Key ID: `rsa4096`  
 Fingerprint: `4882D26E965B17251FEDC2F337065C6EFFEEB5C5` 
 
 - ---
@@ -36,7 +36,7 @@ Otherwise:
 
 This message is digitally signed. For public trust verification:
 
-🔑 PGP Key ID: rsa4096 2025-07-06
+🔑 PGP Key ID: rsa4096
 
 Fingerprint: D61FA5C130C84A08337A8543CC1D6F05FB55D3D9
 
