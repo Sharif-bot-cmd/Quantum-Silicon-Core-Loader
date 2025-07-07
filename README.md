@@ -196,9 +196,9 @@ python crash.py
 ---
 python run.py
 
-## For running qslcl.elf in dfu mode for testing (apple)
+## For running qslcl.elf in hardware lockdown for testing (if possible) 
 ---
-python dfu.py
+python Universal.py qslcl.elf <options>
 
 ## For triggering device into MaskROM mode
 ---
