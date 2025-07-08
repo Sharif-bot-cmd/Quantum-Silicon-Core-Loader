@@ -196,7 +196,7 @@ python crash.py
 ---
 python run.py
 
-## For running qslcl.elf in hardware lockdown for testing (if possible) 
+## For running qslcl.elf in Apple SOC and others for testing (if possible) 
 ---
 python Universal.py qslcl.elf <options>
 
