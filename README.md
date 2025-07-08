@@ -204,9 +204,9 @@ python Universal.py qslcl.elf <options>
 ---
 python mask.py
 
-## For trigger the device into Pre-MaskROM mode 
+## For trigger the device into ShadowROM 
 ---
-python pre-mask.py
+python shadow.py
 
 ## 🔬 Quantum Silicon Core loader (RAM)
 
