@@ -131,3 +131,12 @@ Major improvements and logic capsule embedded
 ### 🧪 Experimental:
 - Future cryptographic spoof: `POST_NIST_ECC_BYPASS`
 - `QUANTUM_SHADOW_AES256+` emulation
+
+## v1.9 - July 2025
+
+✅ Fully compatible with Apple A12+++ DFU mode  
+✅ Works even on BootROM-only execution (0x0-native, bypasses iBoot/SEP)  
+✅ No jailbreak or interactive shell needed — ELF takes over directly  
+✅ New support for future, undefined SoC architectures (XPU / GHOST ISA)  
+✅ Compatible with DFU, EDL, Preloader, MaskROM, Live RAM triggers  
+✅ Portable via USB, Serial, Tunnel, even ghost memory mapping
