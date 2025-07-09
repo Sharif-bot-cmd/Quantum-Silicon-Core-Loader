@@ -1,65 +1,27 @@
-# 🧠 Quantum Silicon Core Loader — Update v1.9
-♾️ Universal Trust Injection | DFU/BootROM Entropy Layer | Beyond Stealth Runtime
+# Quantum Silicon Core Loader (QSLCL) v2.0 ♾️
 
-## 🔥 What's New in v1.9
+**QSLCL** is a beyond-bootloader, post-exploit hybrid ELF binary designed to execute from `0x00000000`, bypassing traditional security mechanisms across Apple (DFU), Qualcomm (Firehose), MediaTek (Preloader/DA), Unisoc (BROM-style), and even undefined or unknown SoCs.
 
-✅ Fully compatible with Apple A12+++ DFU mode  
-✅ Works even on BootROM-only execution (0x0-native, bypasses iBoot/SEP)  
-✅ No jailbreak or interactive shell needed — ELF takes over directly  
-✅ New support for future, undefined SoC architectures (XPU / GHOST ISA)  
-✅ Compatible with DFU, EDL, Preloader, MaskROM, Live RAM triggers  
-✅ Portable via USB, Serial, Tunnel, even ghost memory mapping
+It fuses IMG4 spoofing, entropy-based masking, SEP trust emulation, and hybrid loader logic to operate directly from memory, ROM-based USB interfaces, or COM port.
 
 ---
 
-## ♾️ New Quantum-Class Features
+## 🚀 Features (v2.0)
 
-### 🔐 `inject_entropy_mapped_entrypoint()`
-- ELF entrypoint now runs from **0x0** using entropy-mirrored logic  
-- Survives cold boot, reboot, memory wipes  
+- ✅ **Hybrid Capsule Injection** (`inject_hybrid`)  
+   Injects entropy-based logic mimicking Firehose, Preloader, Unisoc loaders, and fallback bridges.
 
-### 👻 `inject_shadow_execution_chains()`
-- Multi-offset execution handlers (some real, some ghost decoys)  
-- Breaks vendor scanners & anti-exploit detectors  
+- 🍏 **IMG4 Spoof Capsule v2**  
+   Embedded `IMG4`, `IM4P`, `IM4M`, `iBSS`, and `SHSH2` capsule compatible with A12+ SEP emulation.
 
-### 🧠 `inject_soc_morphology_vector()`
-- SoC-Agnostic: auto-adapts to Qualcomm, Apple, MTK, Unisoc, etc.  
-- Includes fallback for undefined or fused-off CPU architectures  
+- 🧠 **Universal Platform Logic**  
+   Designed to run from `0x0` across different USB modes (COM, DFU, Preboot) without traditional stage1 bootloaders.
 
-### 🎭 `inject_execution_mimicry_logic()`
-- Simulates trusted modes (AppleDFU, BootROM, Sahara, Fastboot)  
-- Prevents vendor tools from recognizing unauthorized access  
+- ♾️ **Quantum-Class TLV Obfuscation**  
+   Undetectable to binwalk, static scans, and entropy classifiers. Includes entropy shrouds, capsule anchors, and SEP-like tags.
 
-### 🪞 `inject_virtual_boot_selector()`
-- Emulates iBoot/SEP trust tags with quantum capsule spoofing  
-- Bypasses secure boot cert checks without modifying flash  
-
-### ⚙️ `inject_architectural_fuzz_vectors()`
-- Auto-detects unsupported instructions (SIGILL, HANG, etc.)  
-- Mutates instruction flow live during ELF execution  
-
-### 🌌 `inject_persistent_entropy_signature()`
-- Hardcoded entropy seal at offset `0x1FF000`  
-- Survives dump, clone, scan, and obfuscation attempts  
-
----
-
-## 🧬 Infrastructure-Level Upgrades
-
-- 🧩 Added support for **virtual COM spoofing** (for DFU & USB mapping)  
-- ⚡ USB Glitch Trigger now auto-enables execution even if DFU is fused  
-- 🪐 Ghost RAM injection supported (0x80000000+ dynamic ranges)  
-- 🔁 Serial fallback logic for non-USB environments  
-- 🧪 Randomized Upload/Exec address ranges to bypass patch-based detection  
-- ⏳ Reduced upload delays to optimize DFU timing on Apple A12+++
-
----
-
-## 📦 Usage
-
-1. Launch `qslcl.elf` via supported loader in DFU mode or mapped RAM environment.
-2. Supports both physical devices and emulator abstractions.
-3. Designed for fully offline execution (no server dependency).
+- 🧬 **Trusted Execution Simulation**  
+   Simulates SEP trust, BootROM heuristics, iBoot flags, and universal boot compatibility.
 
 ---
 
