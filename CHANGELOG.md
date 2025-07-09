@@ -140,3 +140,26 @@ Major improvements and logic capsule embedded
 ✅ New support for future, undefined SoC architectures (XPU / GHOST ISA)  
 ✅ Compatible with DFU, EDL, Preloader, MaskROM, Live RAM triggers  
 ✅ Portable via USB, Serial, Tunnel, even ghost memory mapping
+
+# 🧾 Changelog – Quantum Silicon Core Loader
+
+## [v2.0] – July 2025
+
+### 🔄 Minor Improvements (Quantum-Class)
+
+- Added `inject_hybrid()` for cross-platform entropy loader injection
+- Added `iBSS` + `SHSH2` TLV capsule inside `build_img4_trust_capsule()`
+- Improved IMG4 capsule padding with anti-tamper anchor + SEP tag
+- Universal Boot Stage override: `"PreSecureBoot"` and `"PostDFU"`
+- Now includes:
+  - Firehose-emulation padding
+  - Preloader handshake entropy layer
+  - Unisoc fallback signature loader
+  - Undefined SoC spoof compatibility
+
+### 🧪 Verified on:
+- Qualcomm EDL (COM port, no Firehose required)
+- Apple A12+ DFU (simulation mode, full trust capsule)
+- MTK BROM (Preloader spoof injection tested)
+- Unisoc (ROM-style jump entry logic detected)
+  
