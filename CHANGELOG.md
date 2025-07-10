@@ -163,3 +163,13 @@ Major improvements and logic capsule embedded
 - MTK BROM (Preloader spoof injection tested)
 - Unisoc (ROM-style jump entry logic detected)
   
+## [2.1] - July 2025
+
+### Minor Improvements
+
+- ✅ Added Intel TXE/ME low-level address in base map: `0x00003000`
+- 🔁 Improved capsule obfuscation with randomized XOR masking
+- 🧩 UniversalMemoryMap now includes better detection coverage
+- 🧬 SEP trust spoof now includes `SEPApNonceHash` + `QuantumSEPEnabled`
+- ⚡️ D+ pulsing enhanced for USB DFU-mode triggering
+- 🐛 Minor bug fixes and injection entropy balancing
