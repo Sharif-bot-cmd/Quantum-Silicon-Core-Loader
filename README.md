@@ -1,27 +1,21 @@
-# Quantum Silicon Core Loader (QSLCL) v2.0 ♾️
+# Quantum Silicon Core Loader (QSLCL) - v2.1
 
-**QSLCL** is a beyond-bootloader, post-exploit hybrid ELF binary designed to execute from `0x00000000`, bypassing traditional security mechanisms across Apple (DFU), Qualcomm (Firehose), MediaTek (Preloader/DA), Unisoc (BROM-style), and even undefined or unknown SoCs.
+`qslcl.elf` is a next-generation universal boot override ELF crafted for executing at address `0x00000000`. It bypasses traditional trust chains, performs MaskROM-stage execution, and injects forged IMG4 capsules with full entropy camouflage.
 
-It fuses IMG4 spoofing, entropy-based masking, SEP trust emulation, and hybrid loader logic to operate directly from memory, ROM-based USB interfaces, or COM port.
+> 🚀 Designed for Qualcomm, MediaTek, Samsung, Apple, Intel, and more.
+> 
+> 🧬 Runs even on locked, non-rooted, and DFU-mode-only devices.
 
 ---
 
-## 🚀 Features (v2.0)
+## 🛠 Features (v2.1)
 
-- ✅ **Hybrid Capsule Injection** (`inject_hybrid`)  
-   Injects entropy-based logic mimicking Firehose, Preloader, Unisoc loaders, and fallback bridges.
-
-- 🍏 **IMG4 Spoof Capsule v2**  
-   Embedded `IMG4`, `IM4P`, `IM4M`, `iBSS`, and `SHSH2` capsule compatible with A12+ SEP emulation.
-
-- 🧠 **Universal Platform Logic**  
-   Designed to run from `0x0` across different USB modes (COM, DFU, Preboot) without traditional stage1 bootloaders.
-
-- ♾️ **Quantum-Class TLV Obfuscation**  
-   Undetectable to binwalk, static scans, and entropy classifiers. Includes entropy shrouds, capsule anchors, and SEP-like tags.
-
-- 🧬 **Trusted Execution Simulation**  
-   Simulates SEP trust, BootROM heuristics, iBoot flags, and universal boot compatibility.
+- 🔐 IMG4 Trust Capsule generator inproved  (`build_img4_trust_capsule`)
+- 🔄 Dynamic injection of SEP spoof + MMIO region tags
+- 🎯 Multi-SoC memory detection with universal entropy signature
+- 💥 USB COM/DFU loader with 0x0 execution support
+- 🧠 Phantom Trust Emulation for SEP/iBoot bypass
+- 🛰️ Platform compatibility: Android, iOS (DFU), Intel ME-based, and so on
 
 ---
 
