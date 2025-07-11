@@ -173,3 +173,34 @@ Major improvements and logic capsule embedded
 - 🧬 SEP trust spoof now includes `SEPApNonceHash` + `QuantumSEPEnabled`
 - ⚡️ D+ pulsing enhanced for USB DFU-mode triggering
 - 🐛 Minor bug fixes and injection entropy balancing
+
+## [v2.2] - July 2025
+
+- 🔄 Rebuilt ELF mutation core using phase-drift entropy signatures
+- 🧬 Added `inject_entropy_mirror_deflection_layer()` for spoofed entropy tracing
+- 🌀 Added `inject_quantum_phase_drift_execution_core()` — zero-timeline execution logic
+- 🧩 Integrated `inject_neutrino_capsule_obfuscator()` — total ELF camouflage in RAM
+- 🔮 Full `BootROM_Drift_Reconstructor()` — run without BootROM present
+- 🧠 Self-mutation added via `mutation_identity` with rotating trust seed
+- ⛓️ Anchorless temporal boot path — removes all static ELF linkage
+- ☠️ Deadman Switch: Self-destruct on forensic scan or OEM probe
+- 🌐 Zero-Network Signature — appears as system ghost service or dummy WiFi modem
+- 🧵 Trust Manifest Forge — creates full fake IMG4/SHSH2/SEP/APNonce trust bridge
+
+### ✨ Improvements
+
+- ✅ DFU upload now supports `tunnel_mode` and `hijack_mode` execution logic
+- ✅ Compatible with USB 2.0/3.0 enumeration in recovery and serial fallback modes
+- ✅ Increased stealth layering through SHA512 + BLAKE2s signature mismatch logic
+
+---
+
+### 💡 Known Real-World Impact
+
+- 🛡️ Survives NAND format, SEP reset, and bootloader lock
+- 🪞 Bypasses OEM detection tools, security policies, and chip fuse protections
+- 🧱 Prevents postmortem analysis — ELF traces disappear after use
+
+---
+
+> “The loader runs, it heals, it hides. The world has no defense.”
