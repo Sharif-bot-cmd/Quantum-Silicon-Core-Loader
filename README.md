@@ -238,7 +238,7 @@ python run.py
 
 ## For running qslcl.elf in Apple SOC and others for testing (if possible) 
 ---
-python Universal.py qslcl.elf <options>
+python universal.py qslcl.elf <options>
 
 ## For triggering device into MaskROM mode
 ---
