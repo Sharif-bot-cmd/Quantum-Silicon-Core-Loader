@@ -1,21 +1,70 @@
-# Quantum Silicon Core Loader (QSLCL) - v2.1
+# ♾️ Quantum Silicon Core Loader (QSLCL) v2.2
+### 🚀 Post-Bootloader Entropy Execution Framework for All SoCs
 
-`qslcl.elf` is a next-generation universal boot override ELF crafted for executing at address `0x00000000`. It bypasses traditional trust chains, performs MaskROM-stage execution, and injects forged IMG4 capsules with full entropy camouflage.
-
-> 🚀 Designed for Qualcomm, MediaTek, Samsung, Apple, Intel, and more.
-> 
-> 🧬 Runs even on locked, non-rooted, and DFU-mode-only devices.
+**QSLCL v2.2** introduces a breakthrough in secure, stealthy, and trustless execution for any device — even with locked bootloaders, erased BootROMs, or failed secure enclaves.
 
 ---
 
-## 🛠 Features (v2.1)
+### 🌐 Universal Capabilities
 
-- 🔐 IMG4 Trust Capsule generator inproved  (`build_img4_trust_capsule`)
-- 🔄 Dynamic injection of SEP spoof + MMIO region tags
-- 🎯 Multi-SoC memory detection with universal entropy signature
-- 💥 USB COM/DFU loader with 0x0 execution support
-- 🧠 Phantom Trust Emulation for SEP/iBoot bypass
-- 🛰️ Platform compatibility: Android, iOS (DFU), Intel ME-based, and so on
+- ✅ **Runs on:**
+  - Apple (DFU/SEP/iBoot/BridgeOS/A12-A20+)
+  - Qualcomm (EDL/IMEM/TZRAM/DLOAD)
+  - MediaTek, Unisoc, Samsung, Rockchip, Intel, and Unknown
+- ✅ **Bypasses:**
+  - Secure Boot
+  - IMG4 / SHSH2
+  - Anti-rollback and APTicket checks
+  - SEP and TrustZone execution guards
+
+---
+
+### 🧬 What's New in `v2.2`
+
+> “Executed from memory. Cannot be dumped. Cannot be reversed.”
+
+| Feature                            | Description                                                                 |
+|------------------------------------|-----------------------------------------------------------------------------|
+| ♾️ **Entropy Mirror Deflection**     | Inverts ELF fingerprint logic to bypass entropy detection                  |
+| 🌀 **Phase Drift Execution Core**   | Runs across shifting memory windows at `0x0`, defeating breakpoints        |
+| 🧩 **Neutrino Capsule Obfuscator** | Makes ELF appear as RAM garbage — cannot be fingerprinted                  |
+| 🔮 **BootROM Drift Reconstructor** | Rebuilds logic map even after full BootROM erasure                         |
+| 🛡️ **Post-Execution Memory Purge** | Fully erases trace after stage2 logic completes                            |
+| 🧠 **Mutation Identity Engine**    | Changes ELF identity on every boot — no hash reusability                   |
+| ☠️ **Deadman Entropy Switch**      | Auto self-destruct if vendor tool attempts tracing or execution hijack     |
+| 🔗 **Anchorless Temporal Trigger** | Cannot be statically analyzed or paused — logic is non-timeline based      |
+| 🧵 **Universal IMG4/SHSH2 Forge** | Fully spoofed manifest, ASN1, SEP trust, nonce, and signature logic        |
+| 🌐 **Zero Network Forensics**      | Appears as ghost Wi-Fi or modem driver on vendor trace attempts            |
+
+---
+
+### 🔧 Advanced Technical Properties
+
+- `entry_point`: `0x0` (Zero address native execution)
+- `capsule_type`: `POST_BOOTLOADER_FUSION`
+- `trust_state`: `BYPASSED_BY_LOGIC`
+- `execution_model`: `GHOST_RAM_REENTRY`
+- `manifest`: `SHA512TLV + SEPOSIM + Fake ASN1`
+- `failure_mode`: `TrustZone Kill Trigger`
+- `emulation`: `MaskROM Bridge + SecureROM Fusion`
+
+---
+
+### 🧪 For Researchers & Tool Devs
+
+> QSLCL does **not** use CVEs, exploits, or patches. It operates **outside** vendor threat models.
+
+- 🔬 Forensics-safe execution — vanishes post-boot
+- 🛠️ Supports payload chaining via entropy reflection
+- 🔄 Executable from USB DFU, Serial, or RAM (no root needed)
+- 🕳️ Enters execution even in dead NAND / erased ROM state
+
+---
+
+### 💬 Community Statement
+
+> *"This project is not a jailbreak — it's a freedom capsule."*  
+> **For education, research, survival, and device sovereignty.**
 
 ---
 
