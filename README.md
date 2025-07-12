@@ -1,70 +1,37 @@
-# ♾️ Quantum Silicon Core Loader (QSLCL) v2.2
-### 🚀 Post-Bootloader Entropy Execution Framework for All SoCs
+# ♾️ Quantum Silicon Core Loader (QSLCL) v2.3
+**Hardware-native entropy execution loader with raw silicon fusion logic.**
 
-**QSLCL v2.2** introduces a breakthrough in secure, stealthy, and trustless execution for any device — even with locked bootloaders, erased BootROMs, or failed secure enclaves.
-
----
-
-### 🌐 Universal Capabilities
-
-- ✅ **Runs on:**
-  - Apple (DFU/SEP/iBoot/BridgeOS/A12-A20+)
-  - Qualcomm (EDL/IMEM/TZRAM/DLOAD)
-  - MediaTek, Unisoc, Samsung, Rockchip, Intel, and Unknown
-- ✅ **Bypasses:**
-  - Secure Boot
-  - IMG4 / SHSH2
-  - Anti-rollback and APTicket checks
-  - SEP and TrustZone execution guards
+> QSLCL isn't an exploit — it's a trustless loader. It bypasses all CVEs and prebuilt firmware expectations by launching directly from memory at address `0x00000000`.
 
 ---
 
-### 🧬 What's New in `v2.2`
+## 🚀 What's New in v2.3
 
-> “Executed from memory. Cannot be dumped. Cannot be reversed.”
-
-| Feature                            | Description                                                                 |
-|------------------------------------|-----------------------------------------------------------------------------|
-| ♾️ **Entropy Mirror Deflection**     | Inverts ELF fingerprint logic to bypass entropy detection                  |
-| 🌀 **Phase Drift Execution Core**   | Runs across shifting memory windows at `0x0`, defeating breakpoints        |
-| 🧩 **Neutrino Capsule Obfuscator** | Makes ELF appear as RAM garbage — cannot be fingerprinted                  |
-| 🔮 **BootROM Drift Reconstructor** | Rebuilds logic map even after full BootROM erasure                         |
-| 🛡️ **Post-Execution Memory Purge** | Fully erases trace after stage2 logic completes                            |
-| 🧠 **Mutation Identity Engine**    | Changes ELF identity on every boot — no hash reusability                   |
-| ☠️ **Deadman Entropy Switch**      | Auto self-destruct if vendor tool attempts tracing or execution hijack     |
-| 🔗 **Anchorless Temporal Trigger** | Cannot be statically analyzed or paused — logic is non-timeline based      |
-| 🧵 **Universal IMG4/SHSH2 Forge** | Fully spoofed manifest, ASN1, SEP trust, nonce, and signature logic        |
-| 🌐 **Zero Network Forensics**      | Appears as ghost Wi-Fi or modem driver on vendor trace attempts            |
+### 💠 Quantum Execution Affinity Bridge (QEAB)
+- Introduced a **universal silicon affinity layer** to align raw ELF execution with platform-specific MMIO, BootROM, and SecureContext trust regions.
+- Works on all known and undefined SoCs (including Apple A7–A18+++, ARMv9+, BridgeOS, and SecureROM NextGen).
+- Enables **SoC signature mirroring** and **entropy-aligned launch context**, even on locked devices.
 
 ---
 
-### 🔧 Advanced Technical Properties
+## 🧠 Purpose
 
-- `entry_point`: `0x0` (Zero address native execution)
-- `capsule_type`: `POST_BOOTLOADER_FUSION`
-- `trust_state`: `BYPASSED_BY_LOGIC`
-- `execution_model`: `GHOST_RAM_REENTRY`
-- `manifest`: `SHA512TLV + SEPOSIM + Fake ASN1`
-- `failure_mode`: `TrustZone Kill Trigger`
-- `emulation`: `MaskROM Bridge + SecureROM Fusion`
+QSLCL is a raw ELF launcher built to:
+- Operate at address `0x0` without BootROM, BL, or SEP interaction.
+- Bypass security logic without exploiting vulnerabilities.
+- Autodetect silicon class and trigger entropy-native execution logic.
 
 ---
 
-### 🧪 For Researchers & Tool Devs
+## 🛡️ Supported Targets
 
-> QSLCL does **not** use CVEs, exploits, or patches. It operates **outside** vendor threat models.
-
-- 🔬 Forensics-safe execution — vanishes post-boot
-- 🛠️ Supports payload chaining via entropy reflection
-- 🔄 Executable from USB DFU, Serial, or RAM (no root needed)
-- 🕳️ Enters execution even in dead NAND / erased ROM state
-
----
-
-### 💬 Community Statement
-
-> *"This project is not a jailbreak — it's a freedom capsule."*  
-> **For education, research, survival, and device sovereignty.**
+| Platform     | Status |
+|--------------|--------|
+| Apple A7–A18+++ | ✅ |
+| Qualcomm EDL     | ✅ |
+| MediaTek Preloader/BROM | ✅ |
+| Unisoc, Rockchip, Samsung | ✅ |
+| Unknown / Undefined SoCs  | ✅ |
 
 ---
 
