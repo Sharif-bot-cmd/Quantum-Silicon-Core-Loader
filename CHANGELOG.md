@@ -195,6 +195,16 @@ Major improvements and logic capsule embedded
 
 ---
 
+## [2.3] — July 2025
+
+### Added
+- 💠 **Quantum Execution Affinity Bridge (QEAB)**:
+  - Enables raw ELF logic alignment with MMIO and platform trust patterns.
+  - SoC-agnostic launch compatibility layer (Apple A18+++, ARMv9, SecureROM NextGen).
+  - Eliminates dependency on signature-based offsets or exploit heuristics.
+
+QSLCL 2.3 enters a new tier of post-CVE entropy-native execution. Focused. Silent. Beyond exploits.
+
 ### 💡 Known Real-World Impact
 
 - 🛡️ Survives NAND format, SEP reset, and bootloader lock
