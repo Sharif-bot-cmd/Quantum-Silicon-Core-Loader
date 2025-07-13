@@ -159,7 +159,7 @@ def main():
     hijack_mode = "--hijack" in sys.argv
     serial_mode = "--serial" in sys.argv
     virtual_usb = "--virtual=usb" in sys.argv
-    virtual_com = "--virtual=com" in sys.argv
+    virtual_com = "--virtual=serial" in sys.argv
     port_override = None
 
     for arg in sys.argv:
