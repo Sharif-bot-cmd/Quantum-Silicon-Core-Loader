@@ -231,3 +231,28 @@ QSLCL 2.3 enters a new tier of post-CVE entropy-native execution. Focused. Silen
 ### ⚠️ Notes
 - No known vulnerabilities used.
 - Trust hijack is logic-based, memory-persistent, and executes without jailbreak or bootloader interaction.
+
+## [v2.5] – July 2025
+
+### 🔧 Minor Improvements
+
+- Refined `inject_runtime_mutable_identity()`:
+  - Added: Dual entropy chain (Blake2b + SHA3 + SHA512)
+  - Added: `.fakeauth` ELF header spoofing
+  - Added: UID fallback via `REGISTER_MAP` registration
+  - Enforced: 512-byte padding alignment
+
+- Upgraded `inject_super_capsule()`:
+  - Added: Spoofed `TRUSTMASK`, IMG4 masking, fake SEP injection
+  - Added: Opcode drift + runtime opcode shift map
+  - Added: Cloak region + entropy anchor
+  - Metadata: `BuildMutationUID`, `SOC_Compatibility`, `OpcodeShiftHash`
+
+### 🛡️ Security/Trust Enhancements
+
+- Hardened capsule against:
+  - Static analysis (binwalk, readelf, objdump)
+  - Blacklist-based hash denial (unique per build)
+  - Signature-based trust systems (fake SEP + TRST blocks)
+
+🔐 *Builds signed with dynamic UID entropy chain for reproducibility and audit.*
