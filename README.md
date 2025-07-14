@@ -1,37 +1,23 @@
-# ♾️ Quantum Silicon Core Loader (QSLCL) v2.3
-**Hardware-native entropy execution loader with raw silicon fusion logic.**
+## 🔥 v2.4 - Entropy Logic Minor Update (Beyond Checkm8 & Rootstate Override)
 
-> QSLCL isn't an exploit — it's a trustless loader. It bypasses all CVEs and prebuilt firmware expectations by launching directly from memory at address `0x00000000`.
+This version introduces minor but essential enhancements to two core injection systems:
 
----
+### ♾️ Beyond Checkm8 Capsule (Improved)
+- Refined entropy chain and anchor generation.
+- Expanded platform spoofing with adaptive DFU heuristics.
+- Optimized SEP trust mirroring logic for stealth execution.
 
-## 🚀 What's New in v2.3
+### ♾️ Quantum Rootstate Override (v2.4)
+- Hardened capsule payload structure with enhanced SHA512 TLV masking.
+- Increased compatibility with A14–M3+ devices via ghostram execution vector.
+- Improved BootROM shadow redirection and IMG4 pre-validation spoofing.
 
-### 💠 Quantum Execution Affinity Bridge (QEAB)
-- Introduced a **universal silicon affinity layer** to align raw ELF execution with platform-specific MMIO, BootROM, and SecureContext trust regions.
-- Works on all known and undefined SoCs (including Apple A7–A18+++, ARMv9+, BridgeOS, and SecureROM NextGen).
-- Enables **SoC signature mirroring** and **entropy-aligned launch context**, even on locked devices.
+Both capsules now support:
+- **Post-A12 Secure Boot Hijacking** without exploits.
+- **Universal DFU execution** at address `0x0` via entropy mirror capsule.
+- **CVE-less bootloader bypassing** using TLV-simulated trust anchors.
 
----
-
-## 🧠 Purpose
-
-QSLCL is a raw ELF launcher built to:
-- Operate at address `0x0` without BootROM, BL, or SEP interaction.
-- Bypass security logic without exploiting vulnerabilities.
-- Autodetect silicon class and trigger entropy-native execution logic.
-
----
-
-## 🛡️ Supported Targets
-
-| Platform     | Status |
-|--------------|--------|
-| Apple A7–A18+++ | ✅ |
-| Qualcomm EDL     | ✅ |
-| MediaTek Preloader/BROM | ✅ |
-| Unisoc, Rockchip, Samsung | ✅ |
-| Unknown / Undefined SoCs  | ✅ |
+> 🧠 These updates solidify `qslcl.elf` as a beyond-bootloader quantum-class execution entity.
 
 ---
 
