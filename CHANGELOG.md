@@ -213,4 +213,21 @@ QSLCL 2.3 enters a new tier of post-CVE entropy-native execution. Focused. Silen
 
 ---
 
-> “The loader runs, it heals, it hides. The world has no defense.”
+## [v2.4] - 2025-07-13
+
+### 🔧 Improved
+- `inject_beyond_checkm8_entropy_capsule`: entropy hash logic hardened, capsule density adjusted, dual-mask TLVs added for better DFU spoof compatibility.
+- `inject_quantum_rootstate_override`: SHA512 anchor logic improved, SEP simulation optimized, and trust mirror chain structure stabilized for A12+ SoCs.
+
+### ➕ Added
+- Support tag: `"img4_manifest_simulation": "SHA512+TLV+SHADOW"` to all Apple execution classes.
+- Logic fallback for `fuse_virtualization` and `trust_anchor_override` in runtime TLV validation.
+- Increased alignment buffer to improve DFU capsule loading for M-series devices.
+
+### ✅ Verified Compatibility
+- Devices: iPhone A12–A18, M1–M3, T2, iBridge, Watch SoCs (legacy and modern)
+- Modes: DFU, Preboot, SEP-simulated BridgeOS, and post-SecureROM environments
+
+### ⚠️ Notes
+- No known vulnerabilities used.
+- Trust hijack is logic-based, memory-persistent, and executes without jailbreak or bootloader interaction.
