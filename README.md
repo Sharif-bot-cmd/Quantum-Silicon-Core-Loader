@@ -1,23 +1,32 @@
-## 🔥 v2.4 - Entropy Logic Minor Update (Beyond Checkm8 & Rootstate Override)
+## 🔄 Quantum Silicon Core Loader v2.5 – Minor Improvements
 
-This version introduces minor but essential enhancements to two core injection systems:
+> Released: 2025-07-14  
+> Tag: `v2.5`  
+> Stability: 🔒 Hardened | ⚙️ Mutation-Aware | ♾️ All-SoC Compatible
 
-### ♾️ Beyond Checkm8 Capsule (Improved)
-- Refined entropy chain and anchor generation.
-- Expanded platform spoofing with adaptive DFU heuristics.
-- Optimized SEP trust mirroring logic for stealth execution.
+### ✨ What's New in v2.5
 
-### ♾️ Quantum Rootstate Override (v2.4)
-- Hardened capsule payload structure with enhanced SHA512 TLV masking.
-- Increased compatibility with A14–M3+ devices via ghostram execution vector.
-- Improved BootROM shadow redirection and IMG4 pre-validation spoofing.
+- ✅ **Runtime Identity Mutation 100% Coverage**
+  - `inject_runtime_mutable_identity()` now includes full entropy chain, UID registration fallback, ELF spoof headers, and fake offset markers.
+  - Improves stealth against blacklists, static scanners, and signature-based denial systems.
 
-Both capsules now support:
-- **Post-A12 Secure Boot Hijacking** without exploits.
-- **Universal DFU execution** at address `0x0` via entropy mirror capsule.
-- **CVE-less bootloader bypassing** using TLV-simulated trust anchors.
+- ✅ **Super Capsule Injection Reached Total Integrity**
+  - `inject_super_capsule()` now fully simulates SEP trust, IMG4 spoofing, opcode drift, trustmask and anchor entropy with precise 512-byte alignment.
+  - New capsule metadata includes SHA3 entropy hash, opcode shift hash, and full `.ELF` cloaking.
 
-> 🧠 These updates solidify `qslcl.elf` as a beyond-bootloader quantum-class execution entity.
+- ♾️ **Registered Metadata**
+  - All capsules now inject `REGISTER_MAP` entries for trust emulation, mutation UID, entropy verification, and spoofed offsets.
+  - Enables post-execution integrity validation and capsule fingerprinting.
+
+- 🔐 **Anti-Blacklist & Static Bypass Enhanced**
+  - ELF headers are now randomized per build and include `.mutant`, `.fakeauth`, and cloak spoof headers with entropy wrapping.
+
+- 🧠 **Universal SoC Compatibility Maintained**
+  - Capsule now explicitly lists `"SOC_Compatibility": "ALL/UNKNOWN"` for unblocked RAM-based launch across Apple (A7–M3), Qualcomm, MediaTek, Unisoc, Samsung, Rockchip, Intel, and undefined platforms.
+
+---
+
+**Note**: All capsule logic supports DFU, EDL, USB COM, and entropy-masked injections via offset (default: `0x3000`, `0x4000`).
 
 ---
 
