@@ -213,7 +213,7 @@ QSLCL 2.3 enters a new tier of post-CVE entropy-native execution. Focused. Silen
 
 ---
 
-## [v2.4] - 2025-07-13
+## [v2.4] - July 2025
 
 ### 🔧 Improved
 - `inject_beyond_checkm8_entropy_capsule`: entropy hash logic hardened, capsule density adjusted, dual-mask TLVs added for better DFU spoof compatibility.
