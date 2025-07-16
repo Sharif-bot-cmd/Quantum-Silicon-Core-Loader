@@ -6,6 +6,7 @@ import sys
 import os
 import hashlib
 import argparse
+import random
 
 QSLCL_ELF_PATH = "qslcl.elf"
 CHUNK_SIZE = 0x800
@@ -19,15 +20,16 @@ APPLE_DFU_PIDS = [
     0x8101, 0x8102
 ]
 
-UPLOAD_ADDRS = [
+RAM_PROBE_RANGE = [
+    0x60000000,
     0x80000000,
+    0x100000000,
     0x180000000,
     0x200000000,
     0x210000000,
     0x218000000,
-    0x60000000,
-    0x100000000,
-    0x23B6F0000
+    0x23B000000,
+    0x23B6F0000,
 ]
 
 def find_dfu_device():
@@ -49,6 +51,26 @@ def detach_kernel(dev):
 
 def send_control(dev, bmRequestType, bRequest, wValue, wIndex, data, timeout=1000):
     return dev.ctrl_transfer(bmRequestType, bRequest, wValue, wIndex, data, timeout)
+
+def test_address(dev, address):
+    try:
+        marker = b"M" + struct.pack("<I", address) + b"entropy_test"
+        send_control(dev, 0x21, 1, 0, DFU_INTERFACE, marker)
+        time.sleep(0.002)
+        return True
+    except Exception:
+        return False
+
+def auto_detect_upload_address(dev):
+    print("[🤖] Probing RAM regions for write access...")
+    for addr in RAM_PROBE_RANGE:
+        print(f"  └─ Trying 0x{addr:X}...", end="")
+        if test_address(dev, addr):
+            print(" ✅ Valid RAM region found.")
+            return addr
+        else:
+            print(" ❌")
+    raise RuntimeError("[💥] No writable DFU RAM region detected.")
 
 def send_payload(dev, payload, address):
     print(f"[📤] Uploading qslcl.elf to 0x{address:X} ({len(payload)} bytes)...")
@@ -85,7 +107,7 @@ def analyze_elf(elf_data):
         "Entropy Anchor": b"1337ANCHOR",
         "XOR Capsule": b"xor_entropy",
         "BootFlags": b"BootFlags",
-        "JumpTo0": b"\x00\x00\x00\x00"  # execution vector (indirect indicator)
+        "JumpTo0": b"\x00\x00\x00\x00"
     }
 
     found = []
@@ -119,18 +141,16 @@ def main():
     dev = find_dfu_device()
     detach_kernel(dev)
 
-    uploaded = False
-    for addr in UPLOAD_ADDRS:
-        if send_payload(dev, elf_data, addr):
-            uploaded = True
-            break
-
-    if not uploaded:
-        print("[💥] Upload failed at all known RAM regions.")
-        return
-
-    time.sleep(0.5)
-    execute_payload(dev)
+    try:
+        upload_addr = auto_detect_upload_address(dev)
+        if send_payload(dev, elf_data, upload_addr):
+            time.sleep(0.5)
+            execute_payload(dev)
+        else:
+            print("[💥] Upload failed at detected address.")
+    except Exception as e:
+        print(f"[✘] DFU upload error: {e}")
 
 if __name__ == "__main__":
     main()
+                                     
