@@ -1,38 +1,24 @@
-## 🔄 Quantum Silicon Core Loader v2.5 – Minor Improvements
+# Quantum Silicon Core Loader (qslcl.elf) — v2.6 ♾️
 
-> Released: 2025-07-14  
-> Tag: `v2.5`  
-> Stability: 🔒 Hardened | ⚙️ Mutation-Aware | ♾️ All-SoC Compatible
+> The first post-BootROM, post-IMG4, post-exploit Quantum-Class Loader that executes directly from `0x0` across all SoCs — Apple A12+++, Qualcomm, MTK, and even undefined or future architectures.
 
-### ✨ What's New in v2.5
+## 🔥 What’s New in v2.6?
 
-- ✅ **Runtime Identity Mutation 100% Coverage**
-  - `inject_runtime_mutable_identity()` now includes full entropy chain, UID registration fallback, ELF spoof headers, and fake offset markers.
-  - Improves stealth against blacklists, static scanners, and signature-based denial systems.
+- ✅ **Phase-Shifted Entropy Resonance Capsule**
+  - Injected logic capsule for hardware redesign resilience
+  - Encoded with chaotic XOR and folding hash from runtime entropy
+  - Includes timestamp anchor, wildcard architecture flags, and resonance header
 
-- ✅ **Super Capsule Injection Reached Total Integrity**
-  - `inject_super_capsule()` now fully simulates SEP trust, IMG4 spoofing, opcode drift, trustmask and anchor entropy with precise 512-byte alignment.
-  - New capsule metadata includes SHA3 entropy hash, opcode shift hash, and full `.ELF` cloaking.
+- ♾️ **Universal SOC Support**
+  - New injection logic uses wildcard entropy mask (`\xFF\xFF`) to ensure cross-architecture compatibility
+  - Self-aligning offset range: now adapts for undefined RAM maps and future SoCs
 
-- ♾️ **Registered Metadata**
-  - All capsules now inject `REGISTER_MAP` entries for trust emulation, mutation UID, entropy verification, and spoofed offsets.
-  - Enables post-execution integrity validation and capsule fingerprinting.
-
-- 🔐 **Anti-Blacklist & Static Bypass Enhanced**
-  - ELF headers are now randomized per build and include `.mutant`, `.fakeauth`, and cloak spoof headers with entropy wrapping.
-
-- 🧠 **Universal SoC Compatibility Maintained**
-  - Capsule now explicitly lists `"SOC_Compatibility": "ALL/UNKNOWN"` for unblocked RAM-based launch across Apple (A7–M3), Qualcomm, MediaTek, Unisoc, Samsung, Rockchip, Intel, and undefined platforms.
-
----
-
-**Note**: All capsule logic supports DFU, EDL, USB COM, and entropy-masked injections via offset (default: `0x3000`, `0x4000`).
 
 ---
 
 ## 📜 Legal / DMCA Notice
 
-This project is provided under the MIT license and intended strictly for **educational**, **research**, and **personal security auditing** purposes. 
+This project is provided under the MIT license and intended strictly for **educational**, **research**, **personal security auditing**, and **freedom on their devices**. 
 
 It does **not** contain copyrighted firmware, reverse-engineered proprietary code, or violate any third-party EULAs. 
 
