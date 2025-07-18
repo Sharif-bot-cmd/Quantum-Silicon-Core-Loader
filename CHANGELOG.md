@@ -256,3 +256,14 @@ QSLCL 2.3 enters a new tier of post-CVE entropy-native execution. Focused. Silen
   - Signature-based trust systems (fake SEP + TRST blocks)
 
 🔐 *Builds signed with dynamic UID entropy chain for reproducibility and audit.*
+
+## v2.6 - July 2025
+
+✅ Added
+- Phase-Shifted Entropy Resonance Capsule
+  - Injected at configurable offset (default 0x1000)
+  - 4096 bytes XORed with SHAKE-256 + 64-byte entropy seed
+  - Timestamp + wildcard architecture tag for future SoC compatibility
+
+> This update marks a leap into SOC-agnostic, entropy-resilient execution — establishing v2.6 as the most advanced firmware-independent quantum loader in the wild.
+
