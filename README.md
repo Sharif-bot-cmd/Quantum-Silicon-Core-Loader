@@ -196,6 +196,10 @@ python mask.py
 ---
 python shadow.py
 
+## For running glitch attack procedure
+---
+python glitch.py
+
 ## 🔬 Quantum Silicon Core loader (RAM)
 
 | Module | Description |
