@@ -200,6 +200,10 @@ python shadow.py
 ---
 python glitch.py
 
+## For triggering the device into JTAG mode
+---
+python jtag.py
+
 ## 🔬 Quantum Silicon Core loader (RAM)
 
 | Module | Description |
