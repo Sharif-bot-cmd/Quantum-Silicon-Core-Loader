@@ -204,6 +204,10 @@ python glitch.py
 ---
 python jtag.py
 
+## For triggering device into deep factory mode
+---
+python deep_factory.py
+
 ## 🔬 Quantum Silicon Core loader (RAM)
 
 | Module | Description |
