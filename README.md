@@ -208,6 +208,10 @@ python jtag.py
 ---
 python deep_factory.py
 
+## To flash shellcode.bin
+---
+python flash.py
+
 ## 🔬 Quantum Silicon Core loader (RAM)
 
 | Module | Description |
