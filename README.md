@@ -196,9 +196,9 @@ python mask.py
 ---
 python shadow.py
 
-## For running glitch attack procedure
+## For running voltage attack procedure (improvised glitch attack)
 ---
-python glitch.py
+python voltage.py
 
 ## For triggering the device into JTAG mode
 ---
