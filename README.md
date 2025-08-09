@@ -212,6 +212,10 @@ python deep_factory.py
 ---
 python flash.py
 
+## For triggering the device into ROM Emergency mode
+---
+python rem.py
+
 ## 🔬 Quantum Silicon Core loader (RAM)
 
 | Module | Description |
