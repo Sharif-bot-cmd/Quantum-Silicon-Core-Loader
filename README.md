@@ -216,45 +216,6 @@ python flash.py
 ---
 python rem.py
 
-## 🔬 Quantum Silicon Core loader (RAM)
-
-| Module | Description |
-| Module             | Description                                                                 |
-|--------------------|-----------------------------------------------------------------------------|
-| ✅ `Ghost Boot Traces`  | Emits synthetic but believable secure boot logs to confuse forensics and emulators |
-| ✅ `NAND Hallucination` | Simulates NAND writes, block wear, and metadata alignment for plausible flash I/O |
-| ✅ `Fake Fuses`         | Forges realistic eFUSE readouts with 64-bit signatures mapped to real hardware |
-| ✅ `Entropy Drift`      | Injects controlled randomness to bypass entropy fingerprint detection heuristics |
-| ✅ `Verbose/Analyze`    | Displays decoded header, UID, entropy state, keys, trust zones, and debug access |
-| 🧪 `Minimal Mode`       | Only builds essential ELF + SM8 capsule — silent stealth payload, no illusion output |
-| ⚠️ `Chaos Fuse Mode`    | Randomizes fuse block returns; may trigger false-positive anomalies in forensic tools |
-
----
-
-## 🔧 Available Flags
-
-| Option                   | Description                                                                 |
-|--------------------------|-----------------------------------------------------------------------------|
-| `--verbose`              | Show decoded ELF header and logs (zero-day mode)                            |
-| `--fuse-random`          | Inject true hardware fuse block log (QSPI Bank 0 spoof)                     |
-| `--entropy-zero`         | Zero out entropy for deterministic logic                                    |
-| `--entropy-seed=<hex>`   | Inject custom 8-byte entropy seed (e.g. `--entropy-seed=0123456789ABCDEF`)  |
-| `--minimal`              | Minimal payload (no logs, trust boot only)                                  |
-| `--attacks-mode=<N>`     | Spoof attack mode level (1–5) with unique entropy injection                 |
-| `--exploits=<level>`     | Inject exploit payloads (`minimal`, `moderate`, `maximum`, `auto`)          |
-| `--no-exploit`           | Disable all exploit injection and override `--exploits`                     |
-| `--dump-header`          | Dump UID, entropy, SHA3 and flags byte without running the full sandbox     |
-| `--no-debug-spoof`       | Disable debug block in spoofed payload (JTAG, core unlock, trap vector)     |
-| `--inject-offset=<hex>`  | Inject fixed spoof payload at specific RAM offset (e.g. `--inject-offset=0x100`) |
-| `--timeout=<N>`          | Set sandbox run time in seconds (1–60, default: 3 seconds)                  |
-
----
-
-## ⚙️ Usage Example
-
----
-python3 silicon.py <qslcl.elf> [options] 
-
 ---
 
 ## 🫥 FINAL WORDS
