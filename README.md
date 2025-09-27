@@ -1,18 +1,10 @@
-# Quantum Silicon Core Loader (qslcl.elf) — v2.6 ♾️
+# Quantum Silicon Core Loader (qslcl.elf) — v2.7 ♾️
 
 > The first post-BootROM, post-IMG4, post-exploit Quantum-Class Loader that executes directly from `0x0` across all SoCs — Apple A12+++, Qualcomm, MTK, and even undefined or future architectures.
 
-## 🔥 What’s New in v2.6?
+## 🔥 What’s New in v2.7?
 
-- ✅ **Phase-Shifted Entropy Resonance Capsule**
-  - Injected logic capsule for hardware redesign resilience
-  - Encoded with chaotic XOR and folding hash from runtime entropy
-  - Includes timestamp anchor, wildcard architecture flags, and resonance header
-
-- ♾️ **Universal SOC Support**
-  - New injection logic uses wildcard entropy mask (`\xFF\xFF`) to ensure cross-architecture compatibility
-  - Self-aligning offset range: now adapts for undefined RAM maps and future SoCs
-
+- Minor improvement and improve stability 
 
 ---
 
