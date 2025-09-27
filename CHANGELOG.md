@@ -267,3 +267,6 @@ QSLCL 2.3 enters a new tier of post-CVE entropy-native execution. Focused. Silen
 
 > This update marks a leap into SOC-agnostic, entropy-resilient execution — establishing v2.6 as the most advanced firmware-independent quantum loader in the wild.
 
+## V2.7 Update
+
+- improve stability 
