@@ -4,7 +4,7 @@
 
 ## 🔥 What’s New in v2.7?
 
-- Now supported multiple processors (ARM, MIPS, RISC-V, x86, etc) 
+- Now supported multiple processors ISA (ARM, MIPS, RISC-V, x86, etc) 
 
 ---
 
