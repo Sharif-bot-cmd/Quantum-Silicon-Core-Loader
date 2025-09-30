@@ -270,3 +270,7 @@ QSLCL 2.3 enters a new tier of post-CVE entropy-native execution. Focused. Silen
 ## V2.7 Update
 
 - improve stability 
+
+## 2.8 Update
+
+- Support multiple processors (ARM, MIPS, RISC-V, x86, etc)
