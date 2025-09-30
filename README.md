@@ -4,7 +4,7 @@
 
 ## 🔥 What’s New in v2.8?
 
-- Now support multiple processors ISA (ARM, MIPS, RISC-V, x86, etc) 
+- Now supports multiple processors ISA (ARM, MIPS, RISC-V, x86, etc) 
 
 ---
 
