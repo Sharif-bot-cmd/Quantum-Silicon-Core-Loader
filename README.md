@@ -1,10 +1,10 @@
-# Quantum Silicon Core Loader (qslcl.elf) — v2.7 ♾️
+# Quantum Silicon Core Loader (qslcl.elf) — v2.8 ♾️
 
 > The first post-BootROM, post-IMG4, post-exploit Quantum-Class Loader that executes directly from `0x0` across all SoCs — Apple A12+++, Qualcomm, MTK, and even undefined or future architectures.
 
 ## 🔥 What’s New in v2.7?
 
-- Minor improvement and improve stability 
+- Now supported multiple processors (ARM, MIPS, RISC-V, x86, etc) 
 
 ---
 
