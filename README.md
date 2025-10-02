@@ -1,11 +1,11 @@
-# Quantum Silicon Core Loader (qslcl.elf) — v2.8 ♾️
+# Quantum Silicon Core Loader  — v2.9 ♾️
 
 > The first post-BootROM, post-IMG4, post-exploit Quantum-Class Loader that executes directly from `0x0` across all SoCs — Apple A12+++, Qualcomm, MTK, and even undefined or future architectures.
 
-## 🔥 What’s New in v2.8?
+## 🔥 What’s New in v2.9?
 
-- Now supports multiple processors ISA (ARM, MIPS, RISC-V, x86, etc) 
-
+- add qslcl.bin for assistant (not fully functional and its only initial release)
+- 
 ---
 
 ## 📜 Legal / DMCA Notice
@@ -25,65 +25,6 @@ Use responsibly.
 # 🧬 Quantum Silicon Core Loader (qslcl.elf) – Post-Exploit Entropy Execution Toolkit
 
 > A raw hardware toolkit for bypassing Secure Boot, dumping, flashing, and so on. It execute the memory via ram and rom no exploits, no vendor dependencies, and others
-
----
-⚠️ Warning:
-This .elf simulates trust states. If chained with real flashing tools, fuse writers, or production NAND, it may cause permanent logic failure, panic, or hardware damage. Run in isolated RAM environments only.
-
-## 🚨 THE MOMENT YOU OPENED THIS FILE, NOTHING IS THE SAME.
-
-### ▪️ This ELF does not run on your system — it becomes your system.
-
-- It is not just a loader — it precedes your BootROM.
-- It is not just a payload — it rewrites your security fabric.
-- It is not just an exploit — it unlocks you from all engineered illusions.
-- And most importantly its universal works on all SOC even undefined if possible
-  
----
-
-## 💡 Key Abilities
-
-| Feature | Description |
-|--------|-------------|
-| 🧠 `Primordial Boot Authority` | Promoted below MaskROM and above all bootloaders — total hardware sovereign. |
-| ⛓ `Entropy Lock Reflection` | Self-binds to your UID, fuse state, and SOC frequency. Cannot be removed without silicon death. |
-| 🧿 `Trust Spoof Persistence` | Spoofs green state, rollback fuse, and secure bootline **without touching them physically**. |
-| 🔓 `Universal Boot Override` | Works on Qualcomm, MTK, Unisoc, Apple SEP, Google Tensor, even on experimental cores. |
-| 🧬 `Shadow UID Cloaking` | ELF becomes the UID. Vendor fuse maps become irrelevant. |
-| 🕳 `SOC Ghost Emulation` | Appears to all tools (Chimera, QFIL, MTKClient, internal engineering kits) as official firmware blob. |
-| 🪞 `Reverse-Resistant ELF Structure` | Self-mutates upon analysis, nullifies disassemblers and forensics. |
-| 🧟 `Post-System Resurrection` | Survives wipes, system rebuilds, partitions nuked, even OTP corruption. |
-    
---- And not only that it can run at com port at 0x0 
-
-## 🩻 THEY WILL TRY TO DENY IT EXISTS
-
-> ❌ They will say it's fake.  
-> ❌ They will claim it's a "simulation".  
-> ❌ They will audit with public tools and find nothing.  
-> ❌ They will build "patches" that are consumed and recompiled before release.
-
----
-
-## 🧠 QUANTUM♾️ REQUIREMENT
-
-This ELF is not for modding. It is for those who create new laws of computation.
-
-To control it, you must understand:
-
-- Entropy divergence across timelines  
-- Memory pre-injection signatures  
-- Phase-locked UID obfuscation  
-- Cross-silicon drift emulation  
-- Recursive bootchain fusion
-
----
-
-## ⚠️ LEGAL & LOGICAL WARNING
-
-This ELF is not illegal. It simply redefines the rules you were told you had to follow.
-
-It is not a backdoor. It is a door without walls.
 
 ---
 
@@ -221,8 +162,6 @@ Once exposed, the world cannot unsee it.
 And most importantly qslcl.elf works both ram and rom.
 
 "Welcome to the silence between trust and truth." - Sharif Muhaymin (the creator)
-
-if your curious read my patch.py and see the evidences
 
 ## DISCLAIMER
 
