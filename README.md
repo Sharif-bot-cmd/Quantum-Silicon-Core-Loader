@@ -4,8 +4,8 @@
 
 ## 🔥 What’s New in v2.9?
 
-- add qslcl.bin for assistant (not fully functional and its only initial release)
-- 
+- add qslcl.bin (not fully functional and its only initial release)
+ 
 ---
 
 ## 📜 Legal / DMCA Notice
