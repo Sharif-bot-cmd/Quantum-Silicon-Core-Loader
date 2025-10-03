@@ -4,7 +4,7 @@
 
 ## 🔥 What’s New in v2.9?
 
-- add qslcl.bin (not fully functional and its only initial release)
+- add qslcl.bin (initial release)
  
 ---
 
