@@ -2,7 +2,7 @@
 
 > The first post-BootROM, post-IMG4, post-exploit Quantum-Class Loader that executes directly from `0x0` across all SoCs — Apple A12+++, Qualcomm, MTK, and even undefined or future architectures.
 
-## 🔥 What’s New in v2.9?
+## 🔥 What’s New in v3.0 (qslcl.bin)?
 
 🧩 Core Improvements
 
