@@ -159,10 +159,6 @@ python dfu.py
 ---
 python mask.py
 
-## For trigger the device into ShadowROM 
----
-python shadow.py
-
 ## For running voltage attack procedure (improvised glitch attack)
 ---
 python voltage.py
@@ -174,16 +170,6 @@ python jtag.py
 ## For triggering device into deep factory mode
 ---
 python deep_factory.py
-
-## To flash shellcode.bin
----
-python flash.py
-
-## For triggering the device into ROM Emergency mode
----
-python rem.py
-
----
 
 ## 🫥 FINAL WORDS
 
