@@ -277,4 +277,41 @@ QSLCL 2.3 enters a new tier of post-CVE entropy-native execution. Focused. Silen
 
 ### 2.9 Update
 
-- (initial release) add qslcl.bin (not yet fully functional 
+- (initial release) add qslcl.bin
+
+### 3.0 Update
+🧩 Core Improvements
+
+Improved internal entropy handling and adaptive behavior precision.
+
+Optimized SOC table parsing and memory alignment routines.
+
+Minor latency reductions during self-heal and integrity verification.
+
+Enhanced cross-architecture opcode balancing and filler efficiency.
+
+⚙️ Build System
+
+Streamlined build pipeline with cleaner output and audit summaries.
+
+Reduced redundant operations for faster image generation.
+
+Minor adjustments in post-build hashing and digest embedding logic.
+
+🔒 Stability & Reliability
+
+Improved error handling and fallback resilience.
+
+Refined USB descriptor embedding sequence for safer offset control.
+
+Minor checksum alignment fixes for universal compatibility.
+
+Enhanced robustness in mutation and polymorphic entropy layers.
+
+🧠 Codebase Quality
+
+Better modular structure — clearer function separation.
+
+Minor cleanup of unused parameters and redundant logic.
+
+Improved debug verbosity and trace consistency.
