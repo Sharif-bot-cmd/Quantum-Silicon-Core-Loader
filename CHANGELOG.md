@@ -315,3 +315,15 @@ Better modular structure — clearer function separation.
 Minor cleanup of unused parameters and redundant logic.
 
 Improved debug verbosity and trace consistency.
+
+### 3.1 Update
+
+⚙️ Core Changes
+- **Unified Binary Architecture:** one build covers ARM, ARM64, x86/x64, MIPS, RISC-V, and PowerPC.
+- **TRUE-Flag Enforcement:** every internal command entry now defaults to active (`0x01`), ensuring consistent response and zero idle states.
+- **Enhanced Adaptive Behavior Controller:** real-time entropy balancing for stealth, speed, or hybrid execution modes.
+- **Temporal Lock Revision:** stronger time-coupled uniqueness seed for session differentiation.
+- **Entropy Integrity Fixes:** synchronized checksum recalculation after every command generation to prevent drift.
+- **Improved Anti-Blacklist Mutation:** broader SOC coverage and resilient mutation cycles.
+- **Extended Buffer Handlers:** automatic size correction and integrity normalization during command synthesis.
+  
