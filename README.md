@@ -1,44 +1,17 @@
-# Quantum Silicon Core Loader  — v3.0 ♾️
+# Quantum Silicon Core Loader  — v3.1 ♾️
 
 > The first post-BootROM, post-IMG4, post-exploit Quantum-Class Loader that executes directly from `0x0` across all SoCs — Apple A12+++, Qualcomm, MTK, and even undefined or future architectures.
 
-## 🔥 What’s New in v3.0 (qslcl.bin)?
+## 🔥 What’s New in v3.1 (qslcl.bin)?
 
-🧩 Core Improvements
-
-- Improved internal entropy handling and adaptive behavior precision.
-
-- Optimized SOC table parsing and memory alignment routines.
-
-- Minor latency reductions during self-heal and integrity verification.
-
-- Enhanced cross-architecture opcode balancing and filler efficiency.
-
-⚙️ Build System
-
-- Streamlined build pipeline with cleaner output and audit summaries.
-
-- Reduced redundant operations for faster image generation.
-
-- Minor adjustments in post-build hashing and digest embedding logic.
-
-🔒 Stability & Reliability
-
-- Improved error handling and fallback resilience.
-
-- Refined USB descriptor embedding sequence for safer offset control.
-
-- Minor checksum alignment fixes for universal compatibility.
-
-- Enhanced robustness in mutation and polymorphic entropy layers.
-
-🧠 Codebase Quality
-
-- Better modular structure — clearer function separation.
-
-- Minor cleanup of unused parameters and redundant logic.
-
-- Improved debug verbosity and trace consistency.
+⚙️ Core Changes
+- **Unified Binary Architecture:** one build covers ARM, ARM64, x86/x64, MIPS, RISC-V, and PowerPC.
+- **TRUE-Flag Enforcement:** every internal command entry now defaults to active (`0x01`), ensuring consistent response and zero idle states.
+- **Enhanced Adaptive Behavior Controller:** real-time entropy balancing for stealth, speed, or hybrid execution modes.
+- **Temporal Lock Revision:** stronger time-coupled uniqueness seed for session differentiation.
+- **Entropy Integrity Fixes:** synchronized checksum recalculation after every command generation to prevent drift.
+- **Improved Anti-Blacklist Mutation:** broader SOC coverage and resilient mutation cycles.
+- **Extended Buffer Handlers:** automatic size correction and integrity normalization during command synthesis.
  
 ---
 
