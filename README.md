@@ -1,17 +1,32 @@
-# Quantum Silicon Core Loader  — v3.1 ♾️
+# Quantum Silicon Core Loader  — v3.2 ♾️
 
-> The first post-BootROM, post-IMG4, post-exploit Quantum-Class Loader that executes directly from `0x0` across all SoCs — Apple A12+++, Qualcomm, MTK, and even undefined or future architectures.
+**Component updated:** `qslcl.bin` (Assistant module)  
+**Primary core:** `qslcl.elf` — *unchanged*
 
-## 🔥 What’s New in v3.1 (qslcl.bin)?
+### 🧩 Summary
+This release updates the **assistant binary** `qslcl.bin`, focusing on stability, hardware abstraction improvements, and extended compatibility across SoC profiles.The main executable core `qslcl.elf` remains the same.
 
-⚙️ Core Changes
-- **Unified Binary Architecture:** one build covers ARM, ARM64, x86/x64, MIPS, RISC-V, and PowerPC.
-- **TRUE-Flag Enforcement:** every internal command entry now defaults to active (`0x01`), ensuring consistent response and zero idle states.
-- **Enhanced Adaptive Behavior Controller:** real-time entropy balancing for stealth, speed, or hybrid execution modes.
-- **Temporal Lock Revision:** stronger time-coupled uniqueness seed for session differentiation.
-- **Entropy Integrity Fixes:** synchronized checksum recalculation after every command generation to prevent drift.
-- **Improved Anti-Blacklist Mutation:** broader SOC coverage and resilient mutation cycles.
-- **Extended Buffer Handlers:** automatic size correction and integrity normalization during command synthesis.
+### 🚀 What's New
+- **Revised Section Alignment:**  
+  Optimized flash ID and flash type tables (0x100/0x10 boundaries) for consistent binary layout and cleaner inspection in hex editors.
+
+- **Enhanced Memory Map Integration:**  
+  Adaptive `universal_memory_map.json` support with clearer separation of bootloader and MMIO regions.
+
+- **Improved Build Stability:**  
+  Fixed variable initialization order in the self-healing stage to prevent undefined references.
+
+- **Integrity & Relocation:**  
+  Reorganized load order for relocation metadata, ensuring proper digest calculation before sealing.
+
+- **HAL (Hardware Abstraction Layer):**  
+  Refined USB PHY and flash initialization logic for more predictable enumeration and descriptor embedding.
+
+### 🧠 Technical Notes
+- Build process now auto-aligns data blocks to 0x10 / 0x100 boundaries.  
+- Flash type descriptors are stored sequentially with proper padding.  
+- Verified offsets for SoC metadata, handlers, and fallback regions.  
+- Persistent capsule and integrity sections confirmed non-overlapping.
  
 ---
 
