@@ -349,3 +349,15 @@ Improved debug verbosity and trace consistency.
 
 ### v3.3 Update
 - Add error handling (for accuracy)
+
+### v3.4 Update
+
+- ✅ Fully aligned binary layout for better stability and performance
+
+- ✅ Enhanced SOC, USB, and storage table placement
+
+- ✅ Dispatcher & fallback handler properly aligned to prevent runtime collisions
+
+- ✅ Optimized USB descriptors, setup packets, and bulk endpoint embedding
+
+- ✅ Minor padding and cursor adjustments for safer multi-layer self-healing
