@@ -347,8 +347,5 @@ Improved debug verbosity and trace consistency.
 - **HAL (Hardware Abstraction Layer):**  
   Refined USB PHY and flash initialization logic for more predictable enumeration and descriptor embedding.
 
-### 🧠 Technical Notes
-- Build process now auto-aligns data blocks to 0x10 / 0x100 boundaries.  
-- Flash type descriptors are stored sequentially with proper padding.  
-- Verified offsets for SoC metadata, handlers, and fallback regions.  
-- Persistent capsule and integrity sections confirmed non-overlapping.
+### v3.3 Update
+- Add error handling (for accuracy)
