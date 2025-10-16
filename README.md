@@ -1,4 +1,4 @@
-# Quantum Silicon Core Loader  — v3.3 ♾️
+# Quantum Silicon Core Loader  — v3.4 ♾️
 
 **Component updated:** `qslcl.bin` (Assistant module)  
 **Primary core:** `qslcl.elf` — *unchanged*
@@ -6,9 +6,18 @@
 ### 🧩 Summary
 This release updates the **assistant binary** `qslcl.bin`, focusing on stability, hardware abstraction improvements, and extended compatibility across SoC profiles.The main executable core `qslcl.elf` remains the same.
 
-### 🚀 What's New
-- Add error handling (for accuracy)
- 
+Key Improvements in v3.4:
+
+- ✅ Fully aligned binary layout for better stability and performance
+
+- ✅ Enhanced SOC, USB, and storage table placement
+
+- ✅ Dispatcher & fallback handler properly aligned to prevent runtime collisions
+
+- ✅ Optimized USB descriptors, setup packets, and bulk endpoint embedding
+
+- ✅ Minor padding and cursor adjustments for safer multi-layer self-healing
+
 ---
 
 ## 📜 Legal / DMCA Notice
