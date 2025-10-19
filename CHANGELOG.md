@@ -361,3 +361,7 @@ Improved debug verbosity and trace consistency.
 - ✅ Optimized USB descriptors, setup packets, and bulk endpoint embedding
 
 - ✅ Minor padding and cursor adjustments for safer multi-layer self-healing
+
+### v3.5 Update
+
+- See in Readme.md
