@@ -1,4 +1,4 @@
-# Quantum Silicon Core Loader  — v3.5 ♾️
+# Quantum Silicon Core Loader  — v3.6 ♾️
 
 **Component updated:** `qslcl.bin` (Assistant module)  
 **Primary core:** `qslcl.elf` — *unchanged*
@@ -6,10 +6,10 @@
 ### 🧩 Summary
 This release updates the **assistant binary** `qslcl.bin`, focusing on stability, hardware abstraction improvements, and extended compatibility across SoC profiles.The main executable core `qslcl.elf` remains the same.
 
-Key Improvements in v3.5:
+Key Improvements in v3.6:
 
-- Add fake_firmware_segments,  soc_mesh_comm, embed_self_healing_kernel, and nano_kernel_microservices
-- improve alignment and stability for accuracy 
+- Add missing commands like nop, chip_id_ext, and erase
+- fix blocks overwrite for accuracy 
 
 ---
 
