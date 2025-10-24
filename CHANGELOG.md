@@ -365,3 +365,7 @@ Improved debug verbosity and trace consistency.
 ### v3.5 Update
 
 - See in Readme.md
+
+### v3.6 Update
+
+- see in Readme.md
