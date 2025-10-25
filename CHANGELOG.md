@@ -369,3 +369,7 @@ Improved debug verbosity and trace consistency.
 ### v3.6 Update
 
 - see in Readme.md
+
+### v3.7 Update
+
+- set all flags into true
