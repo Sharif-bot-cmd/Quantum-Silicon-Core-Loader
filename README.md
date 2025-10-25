@@ -1,4 +1,4 @@
-# Quantum Silicon Core Loader  — v3.6 ♾️
+# Quantum Silicon Core Loader  — v3.7 ♾️
 
 **Component updated:** `qslcl.bin` (Assistant module)  
 **Primary core:** `qslcl.elf` — *unchanged*
@@ -6,10 +6,9 @@
 ### 🧩 Summary
 This release updates the **assistant binary** `qslcl.bin`, focusing on stability, hardware abstraction improvements, and extended compatibility across SoC profiles.The main executable core `qslcl.elf` remains the same.
 
-Key Improvements in v3.6:
+Key Improvements in v3.7:
 
-- Add missing commands like nop, chip_id_ext, and erase
-- fix blocks overwrite for accuracy 
+- Set all flags into true for full functionality 
 
 ---
 
