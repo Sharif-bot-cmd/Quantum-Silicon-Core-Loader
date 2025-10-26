@@ -373,3 +373,7 @@ Improved debug verbosity and trace consistency.
 ### v3.7 Update
 
 - set all flags into true
+
+### v3.8 Update
+
+- Add functional USB TX and RX micro routine
