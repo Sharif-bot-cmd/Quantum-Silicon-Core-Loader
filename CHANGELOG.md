@@ -374,9 +374,14 @@ Improved debug verbosity and trace consistency.
 
 - set all flags into true
 
-### v3.9 Update
-
-- fix nano kernel services overwrite 
 ### v3.8 Update
 
+- fix nano kernel services overwrite
+- 
+### v3.9 Update
+
 - Add functional USB TX and RX micro routine
+
+### 4.0 Update
+
+- remove irrelevant features (for accuracy and stability)
