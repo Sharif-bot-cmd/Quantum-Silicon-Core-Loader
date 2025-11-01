@@ -1,4 +1,4 @@
-# Quantum Silicon Core Loader  — v3.9 ♾️
+# Quantum Silicon Core Loader  — v4.0 ♾️
 
 **Component updated:** `qslcl.bin` (Assistant module)  
 **Primary core:** `qslcl.elf` — *unchanged*
@@ -6,10 +6,10 @@
 ### 🧩 Summary
 This release updates the **assistant binary** `qslcl.bin`, focusing on stability, hardware abstraction improvements, and extended compatibility across SoC profiles.The main executable core `qslcl.elf` remains the same.
 
-Key Improvements in v3.9:
+Key Improvements in v4.0:
 
-- fix nano kernel services overwrite 
-
+- remove irrelevant features (for accuracy and stability)
+- 
 ---
 
 ## 📜 Legal / DMCA Notice
