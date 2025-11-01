@@ -9,7 +9,7 @@ This release updates the **assistant binary** `qslcl.bin`, focusing on stability
 Key Improvements in v4.0:
 
 - remove irrelevant features (for accuracy and stability)
-- 
+
 ---
 
 ## 📜 Legal / DMCA Notice
