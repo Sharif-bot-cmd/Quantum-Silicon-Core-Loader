@@ -385,3 +385,7 @@ Improved debug verbosity and trace consistency.
 ### 4.0 Update
 
 - remove irrelevant features (for accuracy and stability)
+
+### 4.1 Update
+
+- irrelevant flat relocator has been removed to avoid overwrite and misalignment.
