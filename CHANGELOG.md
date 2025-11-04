@@ -389,3 +389,7 @@ Improved debug verbosity and trace consistency.
 ### 4.1 Update
 
 - irrelevant flat relocator has been removed to avoid overwrite and misalignment.
+
+### 4.2 Update
+
+- removing unreliable storage types for accuracy.
