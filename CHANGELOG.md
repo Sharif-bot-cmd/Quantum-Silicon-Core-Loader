@@ -393,3 +393,7 @@ Improved debug verbosity and trace consistency.
 ### 4.2 Update
 
 - removing unreliable storage types for accuracy.
+
+### 4.3 Update
+
+add embed nano kernel to improve qslcl.bin efficiency 
