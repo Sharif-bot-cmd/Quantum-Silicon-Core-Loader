@@ -6,7 +6,7 @@
 ### 🧩 Summary
 This release updates the **assistant binary** `qslcl.bin`, focusing on stability, hardware abstraction improvements, and extended compatibility across SoC profiles.The main executable core `qslcl.elf` remains the same.
 
-Key Improvements in v4.2:
+Key Improvements in v4.3:
 
 - add embed nano kernel to inprove qslcl.bin efficiency 
 
