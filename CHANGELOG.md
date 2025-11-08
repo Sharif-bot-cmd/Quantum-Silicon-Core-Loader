@@ -401,3 +401,7 @@ Improved debug verbosity and trace consistency.
 ### 4.4 Update
 
 - add usb bulk microroutine 
+
+### 4.5 Update
+
+- improve usb micro routines, nano kernel microservices, and more.
