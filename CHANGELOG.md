@@ -396,4 +396,8 @@ Improved debug verbosity and trace consistency.
 
 ### 4.3 Update
 
-add embed nano kernel to improve qslcl.bin efficiency 
+- add embed nano kernel to improve qslcl.bin efficiency 
+
+### 4.4 Update
+
+- add usb bulk microroutine 
