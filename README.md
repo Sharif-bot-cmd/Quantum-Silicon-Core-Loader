@@ -1,4 +1,4 @@
-# Quantum Silicon Core Loader  — v4.4 ♾️
+# Quantum Silicon Core Loader  — v4.5 ♾️
 
 **Component updated:** `qslcl.bin` (Assistant module)  
 **Primary core:** `qslcl.elf` — *unchanged*
@@ -6,9 +6,9 @@
 ### 🧩 Summary
 This release updates the **assistant binary** `qslcl.bin`, focusing on stability, hardware abstraction improvements, and extended compatibility across SoC profiles.The main executable core `qslcl.elf` remains the same.
 
-Key Improvements in v4.4:
+Key Improvements in v4.5:
 
-- add usb bulk microroutine 
+- improve usb micro routines, nano kernel microservices, and more.
 
 ---
 
