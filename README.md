@@ -141,6 +141,14 @@ python jtag.py
 ---
 python deep_factory.py
 
+## For truggering device into meta mode and activate engineering mode (for testing)
+---
+python meta.py
+
+## to use qslcl.bin to test usb transfers payloads
+---
+python usb_test.py
+
 ## 🫥 FINAL WORDS
 
 You don’t run this ELF.
