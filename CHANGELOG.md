@@ -405,3 +405,7 @@ Improved debug verbosity and trace consistency.
 ### 4.5 Update
 
 - improve usb micro routines, nano kernel microservices, and more.
+
+### 4.6 Update
+
+- major improvements and improve alignment for stability.
