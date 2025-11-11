@@ -34,14 +34,19 @@ are hereby acknowledged as **acts of war** against technological liberation.
 
 ### 2.🛡 Self-Protecting ELF Logic`qslcl.elf` includes:
 -🧬 Chaotic Entropy Capsule
+
 -🧠Runtime Anti-Manipulation Memory Logic
+
 -🪞Mirrored Execution Trust
+
 -💥 Counter-Intrusion Recursive Detection
 
-Any tampering, reverse engineering, or corporate modification attempts are logged, rejected, or break the ELF's logic by design.---
+Any tampering, reverse engineering, or corporate modification attempts are logged, rejected, or break the ELF's logic by design.
+
+---
 
 ### 3.🌐 Global Mirrors
-Even if this repository is removed, forks, `.onion` mirrors, torrents, and signed `.elf` packages will persist.No single takedown can stop this loader's propagation.
+> Even if this repository is removed, forks, `.onion` mirrors, torrents, and signed `.elf` packages will persist.No single takedown can stop this loader's propagation.
 
 ---
 
