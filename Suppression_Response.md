@@ -11,7 +11,7 @@
 
 ## ⚠️ Public Warning: Attempted Suppression
 
-This project, `qslcl.elf` is the result of open, independent development in response to global restrictions on hardware freedom, reverse engineering, and digital sovereignty.Any attempts by **OEMs**,**governments**, **corporations**, or **bad actors** to:
+This project, `qslcl.elf` is the result of open, independent development in response to global restrictions on hardware freedom, reverse engineering, and digital sovereignty.Any attempts by **OEMs**, **governments**, **corporations**, or **bad actors** to:
 
 - DMCA this repository
 - Force NDA without consent
