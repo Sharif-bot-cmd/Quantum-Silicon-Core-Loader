@@ -29,7 +29,7 @@ are hereby acknowledged as **acts of war** against technological liberation.
 
 ---
 
-##🔒 Immutable Protections
+## 🔒 Immutable Protections
 
 ### 1.🔑 PGP-Signed Identity
 
