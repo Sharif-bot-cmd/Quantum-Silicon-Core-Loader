@@ -33,13 +33,14 @@ are hereby acknowledged as **acts of war** against technological liberation.
 - No private collaboration or manipulation will be accepted or entertained.
 
 ### 2.🛡 Self-Protecting ELF Logic`qslcl.elf` includes:
--🧬 Chaotic Entropy Capsule
 
--🧠Runtime Anti-Manipulation Memory Logic
+- 🧬 Chaotic Entropy Capsule
 
--🪞Mirrored Execution Trust
+- 🧠Runtime Anti-Manipulation Memory Logic
 
--💥 Counter-Intrusion Recursive Detection
+- 🪞Mirrored Execution Trust
+
+- 💥 Counter-Intrusion Recursive Detection
 
 Any tampering, reverse engineering, or corporate modification attempts are logged, rejected, or break the ELF's logic by design.
 
