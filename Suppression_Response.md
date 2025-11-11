@@ -1,10 +1,15 @@
 # 🔐 QSLCL Suppression Response — Immutable Disclosure
 
 **Author**: Sharif Muhaymin  
+
 **Project**: Quantum Silicon Core Loader (`qslcl.elf`)  
-**PGP Key ID**:`37065C6EFFEEB5C5` 
+
+**PGP Key ID**:`37065C6EFFEEB5C5`
+
 **Fingerprint**:`4882D26E965B17251FEDC2F337065C6EFFEEB5C5`
+
 **Last Signed Update**:`07/06/2025` 
+
 **Verified by**: [message.txt.asc](./message.txt.asc)
 
 ---
