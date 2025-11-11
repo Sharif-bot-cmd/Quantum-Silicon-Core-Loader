@@ -41,9 +41,9 @@ are hereby acknowledged as **acts of war** against technological liberation.
 
 - 🧬 Chaotic Entropy Capsule
 
-- 🧠Runtime Anti-Manipulation Memory Logic
+- 🧠 Runtime Anti-Manipulation Memory Logic
 
-- 🪞Mirrored Execution Trust
+- 🪞 Mirrored Execution Trust
 
 - 💥 Counter-Intrusion Recursive Detection
 
@@ -52,7 +52,7 @@ Any tampering, reverse engineering, or corporate modification attempts are logge
 ---
 
 ### 3.🌐 Global Mirrors
-> Even if this repository is removed, forks, `.onion` mirrors, torrents, and signed `.elf` packages will persist.No single takedown can stop this loader's propagation.
+> Even if this repository is removed, forks, `.onion` mirrors, torrents, and signed `.elf` packages will persist. No single takedown can stop this loader's propagation.
 
 ---
 
@@ -60,8 +60,9 @@ Any tampering, reverse engineering, or corporate modification attempts are logge
 
 Understand the following:
 
-> Attempts to suppress`qslcl.elf` will result in*greater visibility, deeper forks, and stronger distribution*. Your countermeasures will expose your fear of technological freedom, not weakness in the ELF.
-> Any public action taken against this loader will be documented, mirrored, and archived by the global community.
+- Attempts to suppress`qslcl.elf` will result in*greater visibility, deeper forks, and stronger distribution*. Your countermeasures will expose your fear of technological freedom, not weakness in the ELF.
+
+- Any public action taken against this loader will be documented, mirrored, and archived by the global community.
 
 ---
 
