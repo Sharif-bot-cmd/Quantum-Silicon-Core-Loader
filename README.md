@@ -1,4 +1,4 @@
-# Quantum Silicon Core Loader  — v4.7 ♾️
+# Quantum Silicon Core Loader  — v4.8 ♾️
 
 **Component updated:** `qslcl.bin` (Assistant module)  
 **Primary core:** `qslcl.elf` — *unchanged*
@@ -8,8 +8,9 @@ This release updates the **assistant binary** `qslcl.bin`, focusing on stability
 
 Key Improvements in v4.7:
 
-- add commands OEM,ODM,UNLOCK,LOCK and so on.
-- improve alignment for stability.
+- add commands Bruteforce.
+  
+- remove unnecessary duplicated strings placeholder.
 
 ---
 
