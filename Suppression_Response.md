@@ -74,10 +74,14 @@ Understand that`qslcl.elf`is not a toy or playground. It is a powerful tool for 
 
 ## 📢 Ethical Statement
 
-I, **Sharif Muhaymin**,stand by:
+I,**Sharif Muhaymin**, stand by:
+
 -📜 Transparency in code and logic
+
 -🧩 Open research and security
+
 -🧠 Conscious entropy engineering
+
 -💡 Responsible technology liberation
 
 This project is not for malicious use—it is for**educational**,**analytical**, and **resilience-based use** in environments where OEMs abuse their position.
@@ -85,6 +89,7 @@ This project is not for malicious use—it is for**educational**,**analytical**,
 ---
 
 ## 🗿 Anti-Tamper Measures
+
 - `qslcl.elf` employs advanced anti-tamper and self-defense mechanisms to protect its integrity and functionality. Any attempt to modify, reverse engineer, or interfere with the ELF's logic will result in:
 
 1. Immediate detection and logging of the intrusion.
@@ -126,9 +131,7 @@ To verify author identity:
 ---
 gpg --recv-key 37065C6EFFEEB5C5🧬 FinalNote
 
-If you are a developer,journalist,activist, or security researcher,you may mirror this file.
-If you are an OEM,be reminded:chaos cannot be blacklisted.
-If you are an attacker,the ELF will recognize you before you recognize it.
+If you are a developer,journalist,activist, or security researcher,you may mirror this file. If you are an OEM,be reminded: chaos cannot be blacklisted. If you are an attacker,the ELF will recognize you before you recognize it.
 
 Signed,
 Sharif Muhaymin
