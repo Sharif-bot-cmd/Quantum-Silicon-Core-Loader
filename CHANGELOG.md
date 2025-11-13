@@ -413,8 +413,12 @@ Improved debug verbosity and trace consistency.
 
 - major improvements and improve alignment for stability.
 
-### 4.7 Update
+### 4.8 Update
 
 - add comamnd Bruteforce.
   
 - remove unnecessary duplicated strings placeholder.
+
+### 4.9 Update
+
+- improve alignment and consistency for stability.
