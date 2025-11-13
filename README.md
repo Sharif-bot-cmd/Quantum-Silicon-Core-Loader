@@ -1,4 +1,4 @@
-# Quantum Silicon Core Loader  — v4.8 ♾️
+# Quantum Silicon Core Loader  — v4.9 ♾️
 
 **Component updated:** `qslcl.bin` (Assistant module)  
 **Primary core:** `qslcl.elf` — *unchanged*
@@ -6,11 +6,9 @@
 ### 🧩 Summary
 This release updates the **assistant binary** `qslcl.bin`, focusing on stability, hardware abstraction improvements, and extended compatibility across SoC profiles.The main executable core `qslcl.elf` remains the same.
 
-Key Improvements in v4.7:
+Key Improvements in v4.9:
 
-- add commands Bruteforce.
-  
-- remove unnecessary duplicated strings placeholder.
+- improve alignment and consistency for stability.
 
 ---
 
