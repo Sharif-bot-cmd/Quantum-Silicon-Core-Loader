@@ -135,7 +135,7 @@ gpg --recv-key 37065C6EFFEEB5C5
 
 ## 🧬 Final Note
 
-If you are a developer,journalist,activist, or security researcher,you may mirror this file. If you are an OEM,be reminded: chaos cannot be blacklisted. If you are an attacker,the ELF will recognize you before you recognize it.
+If you are a developer, journalist, activist, or security researcher, you may mirror this file. If you are an OEM,be reminded: chaos cannot be blacklisted. If you are an attacker, the ELF will recognize you before you recognize it.
 
 Signed,
 Sharif Muhaymin
