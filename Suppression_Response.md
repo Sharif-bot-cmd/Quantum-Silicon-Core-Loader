@@ -2,7 +2,7 @@
 
 **Author**: Sharif Muhaymin  
 
-**Project**: Quantum Silicon Core Loader (`qslcl.elf`)  
+**Project**: Quantum Silicon Core Loader (`qslcl.elf/bin`)  
 
 **PGP Key ID**:`37065C6EFFEEB5C5`
 
@@ -16,7 +16,7 @@
 
 ## ⚠️ Public Warning: Attempted Suppression
 
-This project, `qslcl.elf` is the result of open, independent development in response to global restrictions on hardware freedom, reverse engineering, and digital sovereignty. Any attempts by **OEMs**, **governments**, **corporations**, or **bad actors** to:
+This project, `qslcl.elf/bin` is the result of open, independent development in response to global restrictions on hardware freedom, reverse engineering, and digital sovereignty. Any attempts by **OEMs**, **governments**, **corporations**, or **bad actors** to:
 
 - DMCA this repository
 - Force NDA without consent
@@ -34,10 +34,12 @@ are hereby acknowledged as **acts of war** against technological liberation.
 ### 1.🔑 PGP-Signed Identity
 
 - All messages, updates, and ELF variants are signed with public PGP keys.
+ 
 - Verification is open-source and verifiable.
+  
 - No private collaboration or manipulation will be accepted or entertained.
 
-### 2.🛡 Self-Protecting ELF Logic`qslcl.elf` includes:
+### 2.🛡 Self-Protecting ELF Logic includes:
 
 - 🧬 Chaotic Entropy Capsule
 
@@ -52,7 +54,7 @@ Any tampering, reverse engineering, or corporate modification attempts are logge
 ---
 
 ### 3.🌐 Global Mirrors
-> Even if this repository is removed, forks, `.onion` mirrors, torrents, and signed `.elf` packages will persist. No single takedown can stop this loader's propagation.
+> Even if this repository is removed, forks, `.onion` mirrors, torrents, and signed `.elf/.bin` packages will persist. No single takedown can stop this loader's propagation.
 
 ---
 
@@ -60,7 +62,7 @@ Any tampering, reverse engineering, or corporate modification attempts are logge
 
 Understand the following:
 
-- Attempts to suppress`qslcl.elf` will result in*greater visibility, deeper forks, and stronger distribution*. Your countermeasures will expose your fear of technological freedom, not weakness in the ELF.
+- Attempts to suppress`qslcl.elf/bin` will result in *greater visibility, deeper forks, and stronger distribution*. Your countermeasures will expose your fear of technological freedom, not weakness in the ELF.
 
 - Any public action taken against this loader will be documented, mirrored, and archived by the global community.
 
@@ -68,7 +70,7 @@ Understand the following:
 
 ## 🔁 If You Are a Hacker or Security Researcher:
 
-Understand that`qslcl.elf`is not a toy or playground. It is a powerful tool for liberation and resistance.Use it responsibly and ethically.
+Understand that `qslcl.elf/bin` is not a toy or playground. It is a powerful tool for liberation and resistance. Use it responsibly and ethically.
 
 ---
 
@@ -90,7 +92,7 @@ This project is not for malicious use—it is for**educational**,**analytical**,
 
 ## 🗿 Anti-Tamper Measures
 
-- `qslcl.elf` employs advanced anti-tamper and self-defense mechanisms to protect its integrity and functionality. Any attempt to modify, reverse engineer, or interfere with the ELF's logic will result in:
+- `qslcl.elf/bin` employs advanced anti-tamper and self-defense mechanisms to protect its integrity and functionality. Any attempt to modify, reverse engineer, or interfere with the ELF's logic will result in:
 
 1. Immediate detection and logging of the intrusion.
  
@@ -98,12 +100,12 @@ This project is not for malicious use—it is for**educational**,**analytical**,
  
 3. Permanent disabling of the compromised ELF instance.
    
-4. Broadcasting of the attack vector to the global QSLCL community for further analysis and mitigation. OEMs, corporations, or governments attempting to suppress or manipulate`qslcl.elf` should be aware that their actions will be met with swift and decisive resistance from a worldwide network of dedicated developers and enthusiasts.
+4. Broadcasting of the attack vector to the global QSLCL community for further analysis and mitigation. OEMs, corporations, or governments attempting to suppress or manipulate `qslcl.elf/bin` should be aware that their actions will be met with swift and decisive resistance from a worldwide network of dedicated developers and enthusiasts.
 
 ---
 
 ## Mirror and Distribution Network
-> `qslcl.elf` is distributed through a robust, decentralized network of mirrors and peers. Even if the primary repository is taken down, the loader will continue to propagate through:
+> `qslcl.elf/bin` is distributed through a robust, decentralized network of mirrors and peers. Even if the primary repository is taken down, the loader will continue to propagate through:
 
 - Peer-to-peer networks and torrents
 - `.onion` hidden services
@@ -117,7 +119,7 @@ The QSLCL community has pledged to ensure the loader's availability and resilien
 
 ## Legal and Ethical Considerations
 
-- While`qslcl.elf`is designed for educational, analytical, and resilience-based use, it is the user's responsibility to ensure compliance with local laws and ethical guidelines. The creators of QSLCL do not condone or encourage the use of this tool for malicious or illegal purposes.However, it is important to note that the suppression of technological freedom and digital sovereignty by corporations and governments often necessitates unconventional measures. The development and distribution of`qslcl.elf`are acts of digital civil disobedience aimed at challenging unjust restrictions on hardware freedom and user autonomy.In the face of oppressive policies and practices, the QSLCL community stands united in its commitment to preserving the right to tinker, modify, and liberate our technologies.
+- While `qslcl.elf/bin` is designed for educational, analytical, and resilience-based use, it is the user's responsibility to ensure compliance with local laws and ethical guidelines. The creators of QSLCL do not condone or encourage the use of this tool for malicious or illegal purposes.However, it is important to note that the suppression of technological freedom and digital sovereignty by corporations and governments often necessitates unconventional measures. The development and distribution of `qslcl.elf/bin` are acts of digital civil disobedience aimed at challenging unjust restrictions on hardware freedom and user autonomy. In the face of oppressive policies and practices, the QSLCL community stands united in its commitment to preserving the right to tinker, modify, and liberate our technologies.
 
 ---
 
@@ -129,7 +131,9 @@ gpg --verify message.txt.asc
 
 To verify author identity:
 ---
-gpg --recv-key 37065C6EFFEEB5C5🧬 FinalNote
+gpg --recv-key 37065C6EFFEEB5C5
+
+## 🧬 Final Note
 
 If you are a developer,journalist,activist, or security researcher,you may mirror this file. If you are an OEM,be reminded: chaos cannot be blacklisted. If you are an attacker,the ELF will recognize you before you recognize it.
 
