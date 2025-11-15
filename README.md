@@ -9,15 +9,13 @@ qslcl.bin now includes:
 
 - Command parser - QSLCLPAR —
     
-- Command blocks - QSLCLUSB — USB - TX/RX routines - QSLCLSP4 — Setup Packet
-  
-- Engine (SP4) - QSLCLNKS — Nano-Kernel Microservices
+- Command blocks - QSLCLUSB — USB - TX/RX routines - QSLCLSP4 — Setup Packet Engine (SP4) - QSLCLNKS — Nano-Kernel Microservices.
 
 qslcl.py v1.0.0 now supports: 
 
-- -–loader=qslcl.bin - QSLCLPAR parser
+- -–loader=qslcl.bin - QSLCLPAR parser.
   
-- QSLCLUSB routing (auto endpoint pick) - QSLCLSP4 setup packet handler
+- QSLCLUSB routing (auto endpoint pick) - QSLCLSP4 setup packet handler.
   
 - Nano-kernel flags (–nano) - RAWMODE selector - USB + serial unified engine - Fallback legacy encoder
 
