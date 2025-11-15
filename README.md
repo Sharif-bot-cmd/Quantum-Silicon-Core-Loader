@@ -63,5 +63,5 @@ How to Run 1. Install: pip install pyserial pyusb
 Final Words “You don’t execute QSLCL. You let silicon interpret it.”
 
 Disclaimer Use only on hardware you own. For research/testing. Not for
-exploiting or bypassing security from no reason.
+exploiting or bypassing security for no reason.
 
