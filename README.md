@@ -27,7 +27,7 @@ qslcl.py v1.0.0 now supports:
 
 - This project is MIT-licensed for research, education, diagnostics, and device freedom. 
 
-What QSLCL Is Post-bootloader, post-vendor, post-exploit execution layer: 
+## What QSLCL Is Post-bootloader, post-vendor, post-exploit execution layer: 
 
 - Runs from RAM/ROM
   
@@ -41,14 +41,15 @@ qslcl.py (v1.0.0) — Universal Tool Features:
 
 - Loader injector(--loader=qslcl.bin)
   
-- Command execution (QSLCLPAR) - USB endpoint
-handling - SP4 packet engine - Nano-kernel dispatcher (–nano)
+- Command execution (QSLCLPAR) - USB endpoint handling - SP4 packet engine - Nano-kernel dispatcher (–nano)
 
 - RAWMODE (unrestricted/meta/hyper/etc.)
   
 - Unified USB/serial - Fallback encoder
 
-How to Run 1. Install: pip install pyserial pyusb
+## How to Run 
+
+1. Install: pip install pyserial pyusb
 
 2.  Connect Device:
 
@@ -61,6 +62,6 @@ How to Run 1. Install: pip install pyserial pyusb
 
 Final Words “You don’t execute QSLCL. You let silicon interpret it.”
 
-Disclaimer Use only on hardware you own. For research/testing. Not for
+Disclaimer Use only on hardware you own for modification. For research/testing. Not for
 exploiting or bypassing security for no reason.
 
