@@ -10,16 +10,6 @@ qslcl.bin now includes:
 - Command parser - QSLCLPAR —
     
 - Command blocks - QSLCLUSB — USB - TX/RX routines - QSLCLSP4 — Setup Packet Engine (SP4) - QSLCLNKS — Nano-Kernel Microservices.
-
-qslcl.py v1.0.0 now supports: 
-
-- -–loader=qslcl.bin - QSLCLPAR parser.
-  
-- QSLCLUSB routing (auto endpoint pick) - QSLCLSP4 setup packet handler.
-  
-- Nano-kernel flags (–nano) - RAWMODE selector - USB + serial unified engine - Fallback legacy encoder
-
-- Commands like read, write, erase, bruteforce, etc.
   
 > qslcl.elf (core) Unchanged — already operating beyond vendor logic.
 
@@ -37,15 +27,9 @@ What QSLCL Is Post-bootloader, post-vendor, post-exploit execution layer:
   
 - Executes entropy logic at 0x0
 
-qslcl.py (v1.0.0) — Universal Tool Features: 
+qslcl.py (v1.0.1) — Universal Tool Features: 
 
-- Loader injector(--loader=qslcl.bin)
-  
-- Command execution (QSLCLPAR) - USB endpoint handling - SP4 packet engine - Nano-kernel dispatcher (–nano)
-
-- RAWMODE (unrestricted/meta/hyper/etc.)
-  
-- Unified USB/serial - Fallback encoder
+- add bruteforce and improve commands.
 
 ## How to Run 
 
@@ -62,6 +46,4 @@ qslcl.py (v1.0.0) — Universal Tool Features:
 
 Final Words “You don’t execute QSLCL. You let silicon interpret it.”
 
-Disclaimer: Use only on hardware you own for modification. For research/testing. Not for
-exploiting or bypassing security for no reason.
-
+Disclaimer: Use only on hardware you own for modification. For research/testing. And dont inject malware. 
