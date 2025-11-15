@@ -21,6 +21,8 @@ qslcl.py v1.0.0 now supports:
   
 - Nano-kernel flags (–nano) - RAWMODE selector - USB + serial unified engine - Fallback legacy encoder
 
+- Commands like read, write, erase, bruteforce, etc.
+  
 > qslcl.elf (core) Unchanged — already operating beyond vendor logic.
 
 Legal / DMCA Notice This project is MIT-licensed for research,
