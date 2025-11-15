@@ -23,8 +23,9 @@ qslcl.py v1.0.0 now supports:
   
 > qslcl.elf (core) Unchanged — already operating beyond vendor logic.
 
-Legal / DMCA Notice This project is MIT-licensed for research,
-education, diagnostics, and device freedom. 
+## Legal / DMCA Notice
+
+- This project is MIT-licensed for research, education, diagnostics, and device freedom. 
 
 What QSLCL Is Post-bootloader, post-vendor, post-exploit execution layer: 
 
