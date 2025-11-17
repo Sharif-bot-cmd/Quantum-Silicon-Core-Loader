@@ -1,7 +1,10 @@
 ## Quantum Silicon Core Loader v5.0 
 
-Primary Core: qslcl.elf Assistant
-Module: qslcl.bin (Universal) Controller: qslcl.py (v1.0.0)
+Primary Core: qslcl.elf 
+
+Assistant Module: qslcl.bin 
+
+(Universal) Controller: qslcl.py (v1.0.0)
 
 ## SUMMARY — What’s New in v5.0 
 
