@@ -8,6 +8,7 @@ Universal Controller: **qslcl.py (v1.0.3)**
 ## 🧬 Overview
 
 **Quantum Silicon Core Loader (QSLCL)** is a post-bootloader, post-vendor, post-exploit execution layer designed to operate directly at the silicon boundary.  
+
 It runs beyond conventional security domains, survives firmware states, and negotiates trust without requiring CVEs.
 
 QSLCL executes from RAM/ROM, attaches to any serial/USB transport, and operates in:
@@ -39,6 +40,7 @@ Core parsing and execution of universal handlers:
 - OEM / ODM / POWER / CONFIGURE  
 
 ### **🟦 QSLCLUSB — USB Transport Routines**
+
 - TX / RX low-level routines  
 - Control/Bulk handlers  
 - Enumeration helpers  
