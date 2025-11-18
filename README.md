@@ -1,7 +1,8 @@
-# Quantum Silicon Core Loader — v5.1  
+# Quantum Silicon Core Loader — v5.2 
+
 Primary Core: **qslcl.elf**  
 Assistant Module: **qslcl.bin**  
-Universal Controller: **qslcl.py (v1.0.3)**  
+Universal Controller: **qslcl.py (v1.0.4)**  
 
 ---
 
@@ -24,103 +25,17 @@ QSLCL executes from RAM/ROM, attaches to any serial/USB transport, and operates 
 
 ---
 
-# 🚀 What’s New in **v5.1**
+# 🚀 What’s New in **v5.2**
 
-## 💠 **qslcl.bin — Assistant Module Upgrades**
-QSLCL v5.1 now includes:
-
-### **🟧 QSLCLPAR — Command Parser Layer**
-Core parsing and execution of universal handlers:
-- READ / WRITE / ERASE  
-- META / ENG mode triggers  
-- RESET / REBOOT  
-- PEEK / POKE  
-- GETINFO / GETSECTOR  
-- UNLOCK / LOCK  
-- OEM / ODM / POWER / CONFIGURE  
-
-### **🟦 QSLCLUSB — USB Transport Routines**
-
-- TX / RX low-level routines  
-- Control/Bulk handlers  
-- Enumeration helpers  
-
-### **🟩 QSLCLSPT — Setup Packet Engine**
-Internal handler for custom SP4-based control packets.  
-Useful for DFU, Firehose-like protocols, and engineering transports.
-
-### **🟪 QSLCLVM5 — Nano-Kernel Microservices**
-Micro-services running from RAM providing:
-- Diagnostics  
-- Voltage ops  
-- Mini-auth steps  
-- Runtime probes  
-
-### **🟨 QSLCLIDX — Index Table (NEW in 5.1)**
-Indexed micro-entries for direct lookup:  
-- DISP dispatcher table  
-- Runtime helper blocks  
-- Command shortcuts  
-- Modular offsets for future silicon revisions  
-
-### **🟥 QSLCLDISP — Command Dispatcher (NEW)**
-A global dispatcher that normalizes all commands:
-```
-PAR → DISP → RTF → Silicon
-ENG → DISP → RTF → Silicon
-VM5 → DISP → RTF → Silicon
-```
-
-### **🟫 QSLCLRTF — Runtime Fault System (NEW)**
-Every operation now returns structured status frames:
-- SUCCESS  
-- WARNING  
-- ERROR  
-- FAULT  
-- PARTIAL  
-- EXTRA (raw data)  
-
-Supports human-readable decoding in qslcl.py.
+- add QSLCLHDR (alongside with QSLCCERT for authentication)
+  
+- remove irrelevant commands
 
 ---
 
-# 🐍 **qslcl.py — Controller v1.0.3 Upgrades**
+# 🐍 **qslcl.py — Controller v1.0.4 Upgrades**
 
-### ✔ Smart Sector Size Detection (NEW)
-Multi-layer detection using:
-- QSLCLPAR GETSECTOR  
-- GETINFO geometry  
-- HELLO extended RTF  
-- Qualcomm Firehose XML  
-- MTK BootROM  
-- Apple DFU  
-- Safe fallback  
-
-### ✔ Fully Upgraded Command Engine
-- High-safety READ/WRITE/ERASE with alignment  
-- True memory PEEK/POKE with RTF validation  
-- RAWMODE Engine (Meta/Hyper/Diagnostic/Hazard modes)  
-- GETINFO with multi-tier fallback parsing  
-- RESET/REBOOT via ENG, PAR, VM5, or fallback  
-
-### ✔ Bruteforce Engine v2
-- Multi-threaded  
-- RTF-driven hit extraction  
-- Save-found patterns  
-- Auto-RAWMODE option  
-- QSLCLIDX-aware search (if present)
-
-### ✔ Dump Engine v2
-- Full-region extraction  
-- Per-chunk validation  
-- True raw data frames  
-- Progressive percent output  
-
-### ✔ Authentication Layer `--auth`
-Verification against **QSLCCERT** header inside qslcl.bin.
-
-### ✔ Eliminated Deprecated Subcommands
-USB/SPT/VM5 now auto-trigger via dispatcher.
+- commands like footer and glitch is now functional 
 
 ---
 
@@ -163,6 +78,16 @@ python qslcl.py rawmode unrestricted --loader=qslcl.bin
 ### Dump Example
 ```
 python qslcl.py dump 0x0 0x10000 out.bin --loader=qslcl.bin
+```
+
+### Footer Example
+```
+python qslcl.py footer --hex --raw --save raw.bin --loader=qslcl.bin
+```
+
+### Glitch Example 
+```
+python qslcl.py glitch --level=2 --iter=60 --window=250 --sweep=80 --loader=qslcl.bin
 ```
 
 ---
