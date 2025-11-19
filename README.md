@@ -1,8 +1,8 @@
-# Quantum Silicon Core Loader — v5.2 
+# Quantum Silicon Core Loader — v5.3
 
 Primary Core: **qslcl.elf**  
 Assistant Module: **qslcl.bin**  
-Universal Controller: **qslcl.py (v1.0.4)**  
+Universal Controller: **qslcl.py (v1.0.5)**  
 
 ---
 
@@ -25,17 +25,15 @@ QSLCL executes from RAM/ROM, attaches to any serial/USB transport, and operates 
 
 ---
 
-# 🚀 What’s New in **v5.2**
+# 🚀 What’s New in **v5.3**
 
-- add QSLCLHDR (alongside with QSLCCERT for authentication)
-  
-- remove irrelevant commands
+- upgrading others header or marker (QSLCLRTF, QSLCLVM5, etc) to inprove paket send
 
 ---
 
-# 🐍 **qslcl.py — Controller v1.0.4 Upgrades**
+# 🐍 **qslcl.py — Controller v1.0.5 Upgrades**
 
-- commands like footer and glitch is now functional 
+- fiz some inaccuracies and errors 
 
 ---
 
