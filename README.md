@@ -27,13 +27,13 @@ QSLCL executes from RAM/ROM, attaches to any serial/USB transport, and operates 
 
 # 🚀 What’s New in **v5.3**
 
-- upgrading others header or marker (QSLCLRTF, QSLCLVM5, etc) to inprove paket send
+- upgrading others header or marker (QSLCLRTF, QSLCLVM5, etc) to inprove packet send
 
 ---
 
 # 🐍 **qslcl.py — Controller v1.0.5 Upgrades**
 
-- fiz some inaccuracies and errors 
+- fix some inaccuracies and errors 
 
 ---
 
