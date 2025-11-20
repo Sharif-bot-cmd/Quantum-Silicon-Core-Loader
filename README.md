@@ -1,8 +1,8 @@
-# Quantum Silicon Core Loader — v5.3
+# Quantum Silicon Core Loader — v5.4
 
 Primary Core: **qslcl.elf**  
 Assistant Module: **qslcl.bin**  
-Universal Controller: **qslcl.py (v1.0.6)**  
+Universal Controller: **qslcl.py (v1.0.8)**  
 
 ---
 
@@ -25,19 +25,78 @@ QSLCL executes from RAM/ROM, attaches to any serial/USB transport, and operates 
 
 ---
 
-# 🚀 What's New in **v5.3**
+# 🚀 What's New in **v5.4**
 
-- **Enhanced Protocol Headers** - Upgraded QSLCLRTF, QSLCLVM5, QSLCLUSB markers for improved packet reliability
-- **Universal Bootstrap Engine** - 100% functional cross-architecture micro-VM bytecode
-- **Advanced USB Protocol Stack** - Complete USB 2.0/3.0 specification compliance
-- **RAWMODE Privilege Escalation** - Enhanced engineering protocol negotiation
-- **Self-Healing Integrity** - Multi-layer runtime fault recovery system
+- **Advanced OEM/ODM Integration** - Full factory-level command support with intelligent SOC detection
+- **Universal Bootloader Lock/Unlock** - Auto-detection of lock regions across Qualcomm, MediaTek, Exynos, Kirin, and Unisoc platforms
+- **Enhanced Mode Switching** - Dynamic mode discovery and triggering from QSLCL loader modules
+- **Cross-Platform Calibration** - Sensor, display, and hardware calibration suite
+- **Intelligent Memory Region Scanning** - Adaptive lock flag detection without hardcoded addresses
 
 ---
 
-# 🐍 **qslcl.py — Controller v1.0.7 Upgrades**
+# 🐍 **qslcl.py — Controller v1.0.8 Upgrades**
 
-- fix parser loader bug or improve qslcl.bin parsing for accurate execution.
+## 🔓 **Advanced OEM Commands**
+
+# Universal bootloader unlock/lock with auto-detection
+```
+python qslcl.py oem unlock --loader=qslcl.bin
+python qslcl.py oem lock --loader=qslcl.bin
+```
+# SOC-agnostic lock region detection (0x00000000-0xFFFFFFFF scanning)
+
+# Supports: Qualcomm, MediaTek, Exynos, Kirin, Unisoc platforms
+
+
+## 🏭 **Factory ODM Features**
+```bash
+# Diagnostic mode control
+python qslcl.py odm enable diag --loader=qslcl.bin
+python qslcl.py odm enable meta --loader=qslcl.bin
+python qslcl.py odm enable jtag --loader=qslcl.bin
+```
+
+# Hardware testing suite
+```
+python qslcl.py odm test display --loader=qslcl.bin
+python qslcl.py odm test sensor --loader=qslcl.bin
+python qslcl.py odm test all --loader=qslcl.bin
+```
+
+# Factory calibration
+```
+python qslcl.py odm calibrate touch --loader=qslcl.bin
+python qslcl.py odm calibrate all --loader=qslcl.bin
+```
+
+# FRP and factory management
+```
+python qslcl.py odm frp --loader=qslcl.bin
+python qslcl.py odm factory_reset --loader=qslcl.bin
+```
+
+## 🔄 **Smart Mode Management**
+```bash
+# Discover available modes from your qslcl.bin
+python qslcl.py mode list --loader=qslcl.bin
+```
+
+# Check current device mode
+```
+python qslcl.py mode status --loader=qslcl.bin
+```
+
+# Trigger device modes with auto-routing
+```
+python qslcl.py mode qslcl --loader=qslcl.bin
+```
+
+## 🛠 **Technical Enhancements**
+- **Intelligent Parser Loader** - Improved QSLCL.bin module parsing with multi-phase scanning
+- **SOC-Type Auto-Detection** - Dynamic platform identification for adaptive command routing
+- **Enhanced Memory Operations** - Sector-size aware read/write with alignment handling
+- **Universal Transport Layer** - Robust USB/Serial communication with error recovery
 
 ---
 
@@ -70,8 +129,9 @@ pip install requests tqdm
 # ▶ HOW TO RUN
 
 ## 🎪 **Basic Communication**
-```bash
+
 # Device discovery and handshake
+```
 python qslcl.py hello --loader=qslcl.bin
 ```
 # Ping with latency measurement
@@ -82,13 +142,47 @@ python qslcl.py ping --loader=qslcl.bin
 ```
 python qslcl.py getinfo --loader=qslcl.bin
 ```
+## 🔓 **Bootloader Security**
+
+# Universal unlock (auto-detects SOC and lock regions)
+```
+python qslcl.py oem unlock --loader=qslcl.bin
+```
+# Re-lock bootloader
+```
+python qslcl.py oem lock --loader=qslcl.bin
+```
+# Verify lock state
+```
+python qslcl.py oem verify_lock --loader=qslcl.bin
+```
+
+## 🏭 **Factory Operations**
+
+# Enable engineering modes
+```
+python qslcl.py odm enable diag --loader=qslcl.bin
+python qslcl.py odm enable engineering --loader=qslcl.bin
+```
+
+# Comprehensive hardware testing
+```
+python qslcl.py odm test all --loader=qslcl.bin
+```
+# Sensor calibration
+```
+python qslcl.py odm calibrate gyro --loader=qslcl.bin
+python qslcl.py odm calibrate all --loader=qslcl.bin
+```
 
 ## 🔍 **Memory Operations**
-```bash
+
 # Read from partition or address
+```
 python qslcl.py read boot --loader=qslcl.bin
 python qslcl.py read 0x880000 --size=0x1000 -o dump.bin --loader=qslcl.bin
 ```
+
 # Write data to device
 ```
 python qslcl.py write boot firmware.bin --loader=qslcl.bin
@@ -104,10 +198,21 @@ python qslcl.py poke 0x880000 0x12345678 --loader=qslcl.bin
 python qslcl.py dump 0x0 0x10000 full_dump.bin --loader=qslcl.bin
 python qslcl.py erase boot --loader=qslcl.bin
 ```
+## 🔄 **Device Mode Control**
+
+# List available modes from your loader
+```
+python qslcl.py mode list --loader=qslcl.bin
+```
+# Check current mode
+```
+python qslcl.py mode status --loader=qslcl.bin
+```
 
 ## ⚡ **Advanced Features**
-```bash
+
 # Privilege escalation
+```
 python qslcl.py rawmode unrestricted --loader=qslcl.bin
 python qslcl.py rawstate --loader=qslcl.bin
 ```
@@ -127,8 +232,9 @@ python qslcl.py config-list --loader=qslcl.bin
 ```
 
 ## 🔬 **Diagnostic Commands**
-```bash
+
 # Partition discovery
+```
 python qslcl.py partitions --loader=qslcl.bin
 ```
 # Footer block analysis
@@ -151,16 +257,18 @@ for part in boot recovery system; do
 done
 ```
 
-### Configuration Management
+### Factory Testing Suite
 ```bash
-# Disable secure boot
-python qslcl.py config SECURE_BOOT 0 --loader=qslcl.bin
+# Run complete factory diagnostic
+python qslcl.py odm test all --loader=qslcl.bin
 
-# Enable debug mode
-python qslcl.py config DEBUG_LEVEL 3 --loader=qslcl.bin
+# Calibrate all sensors
+python qslcl.py odm calibrate all --loader=qslcl.bin
 
-# Set custom baud rate
-python qslcl.py config UART_SPEED 1500000 --loader=qslcl.bin
+# Enable full debugging
+python qslcl.py odm enable diag --loader=qslcl.bin
+python qslcl.py odm enable jtag --loader=qslcl.bin
+python qslcl.py rawmode unrestricted --loader=qslcl.bin
 ```
 
 ---
@@ -179,6 +287,12 @@ python qslcl.py config UART_SPEED 1500000 --loader=qslcl.bin
 - **Qualcomm EDL** - Sahara/Firehose protocol
 - **MediaTek BROM** - Preloader communication
 - **Apple DFU** - Device Firmware Update mode
+
+## New v5.4 Features
+- **Universal Lock Detection** - Cross-platform bootloader flag scanning
+- **ODM Command Suite** - Factory-level testing and calibration
+- **Smart Mode Routing** - Dynamic mode command discovery and execution
+- **Enhanced Parser** - Improved QSLCL.bin module extraction and validation
 
 ---
 
@@ -213,4 +327,4 @@ python qslcl.py config UART_SPEED 1500000 --loader=qslcl.bin
 For tutorials, demonstrations, and advanced usage:
 **https://www.youtube.com/@EntropyVector**
 
----
+if you have problem or issue when using this tool feel free to suggest.
