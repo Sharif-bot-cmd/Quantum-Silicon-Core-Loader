@@ -2,7 +2,7 @@
 
 Primary Core: **qslcl.elf**  
 Assistant Module: **qslcl.bin**  
-Universal Controller: **qslcl.py (v1.0.8)**  
+Universal Controller: **qslcl.py (v1.0.9)**  
 
 ---
 
@@ -35,21 +35,22 @@ QSLCL executes from RAM/ROM, attaches to any serial/USB transport, and operates 
 
 ---
 
-# 🐍 **qslcl.py — Controller v1.0.8 Upgrades**
+# 🐍 **qslcl.py — Controller v1.0.9 Upgrades**
 
-## 🔓 **Advanced OEM Commands**
+## 🎯 **Advanced Command Suite**
 
+### 🔓 **Enhanced OEM Commands**
+```bash
 # Universal bootloader unlock/lock with auto-detection
-```
 python qslcl.py oem unlock --loader=qslcl.bin
 python qslcl.py oem lock --loader=qslcl.bin
 ```
+
 # SOC-agnostic lock region detection (0x00000000-0xFFFFFFFF scanning)
 
 # Supports: Qualcomm, MediaTek, Exynos, Kirin, Unisoc platforms
 
-
-## 🏭 **Factory ODM Features**
+### 🏭 **Factory ODM Features**
 ```bash
 # Diagnostic mode control
 python qslcl.py odm enable diag --loader=qslcl.bin
@@ -76,7 +77,97 @@ python qslcl.py odm frp --loader=qslcl.bin
 python qslcl.py odm factory_reset --loader=qslcl.bin
 ```
 
-## 🔄 **Smart Mode Management**
+### ⚡ **Advanced System Control**
+```bash
+# Comprehensive system verification
+python qslcl.py verify integrity --loader=qslcl.bin
+python qslcl.py verify signature --loader=qslcl.bin
+python qslcl.py verify security --loader=qslcl.bin
+python qslcl.py verify comprehensive --loader=qslcl.bin
+```
+
+# Power management and control
+```
+python qslcl.py power status --loader=qslcl.bin
+python qslcl.py power on VDD_GPU --loader=qslcl.bin
+python qslcl.py power off VDD_CAMERA --loader=qslcl.bin
+python qslcl.py power monitor 60 --loader=qslcl.bin
+```
+
+# Voltage and power regulation
+```
+python qslcl.py voltage read --loader=qslcl.bin
+python qslcl.py voltage set VDD_CPU 1.2 --loader=qslcl.bin
+python qslcl.py voltage monitor 30 --loader=qslcl.bin
+```
+
+# Security bypass mechanisms
+```
+python qslcl.py bypass frp --loader=qslcl.bin
+python qslcl.py bypass secure_boot --loader=qslcl.bin
+python qslcl.py bypass scan --loader=qslcl.bin
+```
+
+### 💥 **Advanced Fault Injection**
+```bash
+# Voltage glitching
+python qslcl.py glitch voltage UNDERVOLT 3 100 VDD_CORE --loader=qslcl.bin
+```
+
+# Clock glitching 
+```
+python qslcl.py glitch clock CPU 100 50 BURST --loader=qslcl.bin
+```
+# EM glitching
+```
+python qslcl.py glitch em 4 20 100 10,15 --loader=qslcl.bin
+```
+
+# Laser fault injection
+```
+python qslcl.py glitch laser 80 10 1064 CPU_CORE --loader=qslcl.bin
+```
+
+# Automated parameter scanning
+```
+python qslcl.py glitch scan VOLTAGE 1-10 1 50 --loader=qslcl.bin
+```
+
+# Automatic glitch discovery
+```
+python qslcl.py glitch auto BYPASS 60 AGGRESSIVE --loader=qslcl.bin
+```
+
+### **System Verification & Crash Testing**
+```bash
+# System integrity verification
+python qslcl.py verify integrity --loader=qslcl.bin
+```
+
+# Digital signature validation
+```
+python qslcl.py verify signature BOOTLOADER --loader=qslcl.bin
+```
+
+# Security policy auditing
+```
+python qslcl.py verify security --loader=qslcl.bin
+```
+
+# Controlled crash testing
+```
+python qslcl.py crash test --loader=qslcl.bin
+python qslcl.py crash preloader --loader=qslcl.bin
+python qslcl.py crash kernel --loader=qslcl.bin
+```
+
+# Comprehensive verification
+```
+python qslcl.py verify comprehensive --loader=qslcl.bin
+python qslcl.py verify report --loader=qslcl.bin
+```
+
+### 🔄 **Smart Mode Management**
 ```bash
 # Discover available modes from your qslcl.bin
 python qslcl.py mode list --loader=qslcl.bin
@@ -86,17 +177,21 @@ python qslcl.py mode list --loader=qslcl.bin
 ```
 python qslcl.py mode status --loader=qslcl.bin
 ```
-
 # Trigger device modes with auto-routing
 ```
-python qslcl.py mode qslcl --loader=qslcl.bin
+python qslcl.py mode QSLCL --loader=qslcl.bin
 ```
 
-## 🛠 **Technical Enhancements**
+## 🛠 **Technical Enhancements v1.0.9**
+
 - **Intelligent Parser Loader** - Improved QSLCL.bin module parsing with multi-phase scanning
 - **SOC-Type Auto-Detection** - Dynamic platform identification for adaptive command routing
 - **Enhanced Memory Operations** - Sector-size aware read/write with alignment handling
 - **Universal Transport Layer** - Robust USB/Serial communication with error recovery
+- **Advanced Fault Injection** - Comprehensive glitching capabilities (voltage, clock, EM, laser)
+- **System Verification Suite** - Complete integrity and security validation
+- **Power Management** - Advanced voltage and power domain control
+- **Safety Features** - Confirmation prompts and validation for dangerous operations
 
 ---
 
@@ -126,153 +221,6 @@ pip install requests tqdm
 
 ---
 
-# ▶ HOW TO RUN
-
-## 🎪 **Basic Communication**
-
-# Device discovery and handshake
-```
-python qslcl.py hello --loader=qslcl.bin
-```
-# Ping with latency measurement
-```
-python qslcl.py ping --loader=qslcl.bin
-```
-# Get comprehensive device info
-```
-python qslcl.py getinfo --loader=qslcl.bin
-```
-## 🔓 **Bootloader Security**
-
-# Universal unlock (auto-detects SOC and lock regions)
-```
-python qslcl.py oem unlock --loader=qslcl.bin
-```
-# Re-lock bootloader
-```
-python qslcl.py oem lock --loader=qslcl.bin
-```
-# Verify lock state
-```
-python qslcl.py oem verify_lock --loader=qslcl.bin
-```
-
-## 🏭 **Factory Operations**
-
-# Enable engineering modes
-```
-python qslcl.py odm enable diag --loader=qslcl.bin
-python qslcl.py odm enable engineering --loader=qslcl.bin
-```
-
-# Comprehensive hardware testing
-```
-python qslcl.py odm test all --loader=qslcl.bin
-```
-# Sensor calibration
-```
-python qslcl.py odm calibrate gyro --loader=qslcl.bin
-python qslcl.py odm calibrate all --loader=qslcl.bin
-```
-
-## 🔍 **Memory Operations**
-
-# Read from partition or address
-```
-python qslcl.py read boot --loader=qslcl.bin
-python qslcl.py read 0x880000 --size=0x1000 -o dump.bin --loader=qslcl.bin
-```
-
-# Write data to device
-```
-python qslcl.py write boot firmware.bin --loader=qslcl.bin
-python qslcl.py write 0x880000 "AABBCCDD" --loader=qslcl.bin
-```
-# Direct memory access
-```
-python qslcl.py peek 0x880000 --loader=qslcl.bin
-python qslcl.py poke 0x880000 0x12345678 --loader=qslcl.bin
-```
-# Bulk memory operations
-```
-python qslcl.py dump 0x0 0x10000 full_dump.bin --loader=qslcl.bin
-python qslcl.py erase boot --loader=qslcl.bin
-```
-## 🔄 **Device Mode Control**
-
-# List available modes from your loader
-```
-python qslcl.py mode list --loader=qslcl.bin
-```
-# Check current mode
-```
-python qslcl.py mode status --loader=qslcl.bin
-```
-
-## ⚡ **Advanced Features**
-
-# Privilege escalation
-```
-python qslcl.py rawmode unrestricted --loader=qslcl.bin
-python qslcl.py rawstate --loader=qslcl.bin
-```
-# Hardware testing
-```
-python qslcl.py bruteforce 0x00-0xFF --threads=8 --output=hits.txt --loader=qslcl.bin
-python qslcl.py glitch --level=3 --iter=100 --window=200 --sweep=50 --loader=qslcl.bin
-```
-# System control
-```
-python qslcl.py reset --force-reset --loader=qslcl.bin
-```
-# Configuration management
-```
-python qslcl.py config SECURE_BOOT 0 --loader=qslcl.bin
-python qslcl.py config-list --loader=qslcl.bin
-```
-
-## 🔬 **Diagnostic Commands**
-
-# Partition discovery
-```
-python qslcl.py partitions --loader=qslcl.bin
-```
-# Footer block analysis
-```
-python qslcl.py footer --hex --raw --save footer.bin --loader=qslcl.bin
-```
-
-## 🛠 **Advanced Usage Examples**
-
-### Multi-Threaded Bruteforce
-```bash
-python qslcl.py bruteforce 0x1000-0x1FFF --threads=16 --rawmode --output=scan_results.txt --loader=qslcl.bin
-```
-
-### Automated Memory Dumping
-```bash
-# Dump multiple partitions automatically
-for part in boot recovery system; do
-    python qslcl.py read $part -o ${part}.img --loader=qslcl.bin
-done
-```
-
-### Factory Testing Suite
-```bash
-# Run complete factory diagnostic
-python qslcl.py odm test all --loader=qslcl.bin
-
-# Calibrate all sensors
-python qslcl.py odm calibrate all --loader=qslcl.bin
-
-# Enable full debugging
-python qslcl.py odm enable diag --loader=qslcl.bin
-python qslcl.py odm enable jtag --loader=qslcl.bin
-python qslcl.py rawmode unrestricted --loader=qslcl.bin
-```
-
----
-
 # 🏗 ARCHITECTURE
 
 ## Core Components
@@ -288,11 +236,14 @@ python qslcl.py rawmode unrestricted --loader=qslcl.bin
 - **MediaTek BROM** - Preloader communication
 - **Apple DFU** - Device Firmware Update mode
 
-## New v5.4 Features
-- **Universal Lock Detection** - Cross-platform bootloader flag scanning
-- **ODM Command Suite** - Factory-level testing and calibration
-- **Smart Mode Routing** - Dynamic mode command discovery and execution
-- **Enhanced Parser** - Improved QSLCL.bin module extraction and validation
+## New v1.0.9 Features
+- **Advanced Fault Injection** - Voltage, clock, EM, and laser glitching
+- **Comprehensive Verification** - System integrity and security validation
+- **Power Management** - Advanced voltage and power domain control
+- **Security Bypass** - Automated security mechanism circumvention
+- **Crash Testing** - Controlled system crash simulation
+- **Automated Scanning** - Parameter optimization and discovery
+- **Safety Systems** - Confirmation prompts and validation
 
 ---
 
@@ -304,6 +255,7 @@ python qslcl.py rawmode unrestricted --loader=qslcl.bin
 - Firmware Development & Analysis
 - Hardware Freedom & Ownership Rights
 - Academic Research & Teaching
+- Vulnerability Research & Defense
 
 ## ❌ Prohibited Uses
 - Malware Injection & Distribution
@@ -318,6 +270,19 @@ python qslcl.py rawmode unrestricted --loader=qslcl.bin
 
 ---
 
+# 🆘 SUPPORT & ISSUES
+
+If you encounter problems or have suggestions while using this tool, please:
+
+1. **Check existing issues** on GitHub
+2. **Provide detailed information** about your setup
+3. **Include error messages** and logs
+4. **Specify your device model** and SOC
+
+**I'll address issues and implement solutions as needed.**
+
+---
+
 # 🧩 Final Words
 
 > **"Quantum Silicon Core Loader doesn't just bypass security —  
@@ -327,4 +292,4 @@ python qslcl.py rawmode unrestricted --loader=qslcl.bin
 For tutorials, demonstrations, and advanced usage:
 **https://www.youtube.com/@EntropyVector**
 
-if you have problem or issue when using this tool feel free to suggest.
+if you encounter problem or issue feel free to suggest to solve it.
