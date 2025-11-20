@@ -35,27 +35,9 @@ QSLCL executes from RAM/ROM, attaches to any serial/USB transport, and operates 
 
 ---
 
-# 🐍 **qslcl.py — Controller v1.0.6 Upgrades**
+# 🐍 **qslcl.py — Controller v1.0.7 Upgrades**
 
-## 🔧 **Critical Fixes**
-- **Fixed USB/Serial Auto-Detection** - Proper endpoint discovery and device initialization
-- **Enhanced Parser Engine** - Corrected QSLCLEND/ENG, QSLCLPAR, and QSLCLRTF structure parsing
-- **Robust Loader Upload** - Lenient module requirements with graceful fallbacks
-- **Fixed Communication Protocols** - Proper bulk endpoint handling for USB devices
-- **Auto-Transport Management** - Devices automatically open communication channels
-
-## 🎯 **New Features**
-- **Universal Device Router** - Hybrid protocol adaptation for Qualcomm, MTK, Apple DFU
-- **Smart Partition Resolution** - GPT/PMT/LK table parsing with dynamic target resolution
-- **Enhanced Runtime Fault Decoder** - Comprehensive QSLCLRTF v5.1 compliance
-- **Thread-Safe Bruteforce** - Multi-threaded scanning with hit detection and logging
-- **Certificate Authentication** - QSLCLHDR block validation with HMAC verification
-
-## 📊 **Improved Diagnostics**
-- **Colorized Runtime Status** - Visual severity indicators (SUCCESS/WARNING/ERROR/CRITICAL)
-- **Module Discovery** - Automatic loader structure analysis and capability reporting
-- **Sector Size Detection** - Universal page size detection across all SOC architectures
-- **Device Information** - Comprehensive hardware capability enumeration
+- fix parser loader bug or improve qslcl.bin parsing for accurate execution.
 
 ---
 
