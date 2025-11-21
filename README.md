@@ -1,7 +1,9 @@
 # **Quantum Silicon Core Loader — v5.4**
 
 Primary Core: **qslcl.elf**
+
 Assistant Module: **qslcl.bin**
+
 Universal Controller: **qslcl.py (v1.1.0)**
 
 ---
@@ -15,9 +17,13 @@ It executes beyond traditional security models and is capable of surviving firmw
 QSLCL runs in:
 
 * **Qualcomm EDL / Firehose**
+  
 * **MediaTek BROM / Preloader**
+  
 * **Apple DFU**
+  
 * **Engineering / META / Diagnostic Modes**
+  
 * **Any USB/Serial exposed interface**
 
 > **“You don’t run QSLCL — silicon interprets it.”**
