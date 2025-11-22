@@ -117,12 +117,6 @@ The QSLCL community has pledged to ensure the loader's availability and resilien
 
 ---
 
-## Legal and Ethical Considerations
-
-- While `qslcl.elf/bin` is designed for educational, analytical, and resilience-based use, it is the user's responsibility to ensure compliance with local laws and ethical guidelines. The creators of QSLCL do not condone or encourage the use of this tool for malicious or illegal purposes. However, it is important to note that the suppression of technological freedom and digital sovereignty by corporations and governments often necessitates unconventional measures. The development and distribution of `qslcl.elf/bin` are acts of digital civil disobedience aimed at challenging unjust restrictions on hardware freedom and user autonomy. In the face of oppressive policies and practices, the QSLCL community stands united in its commitment to preserving the right to tinker, modify, and liberate our technologies.
-
----
-
 ## 🔐 Public Verification
 
 To verify authenticity of this declaration and ELF builds:
