@@ -1,6 +1,6 @@
 # 🔐 AUTHENTICATION.md
 
-**Quantum Silicon Core Loader (`qslcl.elf`) – Statement of Authenticity and Digital Sovereignty**  
+**Quantum Silicon Core Loader (`qslcl.elf/.bin`) – Statement of Authenticity and Digital Sovereignty**  
 Signed by: Sharif Muhaymin  
 PGP Key ID: `37065C6EFFEEB5C5`  
 Fingerprint: `4882D26E965B17251FEDC2F337065C6EFFEEB5C5` 
