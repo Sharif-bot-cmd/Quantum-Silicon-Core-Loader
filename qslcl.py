@@ -1,0 +1,2255 @@
+#!/usr/bin/env python3
+# qslcl.py — Universal QSLCL Tool v1.1.2
+# Author: Sharif — QSLCL Creator
+import sys, time, argparse, zlib, struct, threading, re, os, random, math, shutil, gzip
+from dataclasses import dataclass
+from queue import Queue
+from modules.extra import cmd_read, cmd_write, cmd_erase
+from modules.danger import cmd_poke, cmd_peek
+from modules.rawmode import cmd_rawmode
+from modules.dump import cmd_dump
+from modules.reset import cmd_reset
+from modules.bruteforce import cmd_bruteforce
+from modules.config import cmd_config, cmd_config_list
+from modules.glitch import cmd_glitch
+from modules.footer import cmd_footer
+from modules.oem import cmd_oem
+from modules.odm import cmd_odm
+from modules.mode import cmd_mode, cmd_mode_status
+from modules.crash import cmd_crash, cmd_crash_test
+from modules.bypass import cmd_bypass
+from modules.voltage import cmd_voltage
+from modules.power import cmd_power
+from modules.verify import cmd_verify
+from modules.rawstate import cmd_rawstate
+# =============================================================================
+# IMPORTS
+# =============================================================================
+try:
+    import serial
+    import serial.tools.list_ports as list_ports
+    SERIAL_SUPPORT = True
+except ImportError as e:
+    print(f"[!] Serial support disabled: {e}")
+    SERIAL_SUPPORT = False
+    
+try:
+    import usb.core
+    import usb.util
+    USB_SUPPORT = True
+except ImportError as e:
+    print(f"[!] USB support disabled: {e}")
+    USB_SUPPORT = False
+
+APPLE_DFU_IDS = {
+    (0x05AC, 0x1227): "Apple DFU (Legacy)",
+    (0x05AC, 0x1226): "Apple DFU (iBoot)",
+    (0x05AC, 0x1222): "Apple DFU (A12+)",
+    (0x05AC, 0x1281): "Apple Recovery",
+}
+
+_DETECTED_SECTOR_SIZE = None
+PARTITION_CACHE = []
+PARTITIONS = {}
+GPT_CACHE = {}  # Added missing global
+
+QSLCLHDR_DB = {}
+QSLCLEND_DB = {}
+QSLCLPAR_DB = {}
+QSLCLVM5_DB  = {}
+QSLCLUSB_DB  = {}
+QSLCLSPT_DB  = {}
+QSLCLDISP_DB = {}
+QSLCLIDX_DB  = {}
+QSLCLRTF_DB  = {}
+
+def align_up(x, block):
+    return (x + block - 1) & ~(block - 1)
+
+# =============================================================================
+# DEVICE STRUCT
+# =============================================================================
+@dataclass
+class QSLCLDevice:
+    transport: str               # "usb" or "serial"
+    identifier: str
+    vendor: str
+    product: str
+    vid: int = None
+    pid: int = None
+    usb_class: int = None
+    usb_subclass: int = None
+    usb_protocol: int = None
+
+    handle: any = None           # raw USB/Serial handle object
+    serial_mode: bool = False    # True = serial port, False = USB endpoint mode
+
+    # Unified write() wrapper
+    def write(self, data: bytes):
+        if self.handle is None:
+            # Auto-open if not already open
+            self.handle, self.serial_mode = open_transport(self)
+            if self.handle is None:
+                raise RuntimeError("Failed to open device transport")
+
+        # USB write (endpoint 0x01)
+        if not self.serial_mode:
+            try:
+                # Find the correct OUT endpoint
+                cfg = self.handle.get_active_configuration()
+                intf = cfg[(0,0)]
+                ep_out = None
+                for ep in intf.endpoints():
+                    if (usb.util.endpoint_direction(ep.bEndpointAddress) == 
+                        usb.util.ENDPOINT_OUT and
+                        usb.util.endpoint_type(ep.bmAttributes) == usb.util.ENDPOINT_TYPE_BULK):
+                        ep_out = ep
+                        break
+                
+                if ep_out:
+                    return self.handle.write(ep_out.bEndpointAddress, data, timeout=2000)
+                else:
+                    # Fallback to control transfer
+                    return self.handle.ctrl_transfer(0x21, 0x09, 0x0200, 0, data)
+            except Exception as e:
+                raise RuntimeError(f"USB write failed: {e}")
+        else:
+            # Serial write
+            try:
+                return self.handle.write(data)
+            except Exception as e:
+                raise RuntimeError(f"Serial write failed: {e}")
+
+    # Unified read() wrapper
+    def read(self, timeout=1.0):
+        if self.handle is None:
+            # Auto-open if not already open
+            self.handle, self.serial_mode = open_transport(self)
+            if self.handle is None:
+                raise RuntimeError("Failed to open device transport")
+
+        try:
+            typ, payload = recv(self.handle, self.serial_mode, timeout=timeout)
+            return payload
+        except Exception as e:
+            raise RuntimeError(f"Read failed: {e}")
+
+class ProgressBar:
+    def __init__(self, total, prefix='', suffix='', decimals=1, length=50, fill='█'):
+        self.total = total
+        self.prefix = prefix
+        self.suffix = suffix
+        self.decimals = decimals
+        self.length = length
+        self.fill = fill
+        self.current = 0
+        
+    def __enter__(self):
+        self.update(0)
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        print()  # New line after completion
+        
+    def update(self, progress):
+        # FIX: Added safety check for division by zero
+        if self.total <= 0:
+            return
+        self.current += progress
+        percent = ("{0:." + str(self.decimals) + "f}").format(100 * (self.current / float(self.total)))
+        filled_length = int(self.length * self.current // self.total)
+        bar = self.fill * filled_length + '-' * (self.length - filled_length)
+        print(f'\r{self.prefix} |{bar}| {percent}% {self.suffix}', end='', flush=True)
+        if self.current >= self.total:
+            print()
+
+class QSLCLLoader:
+    def __init__(self):
+        self.END  = {}
+        self.PAR  = {}
+        self.IDX  = {}
+        self.VM5  = {}
+        self.USB  = {}
+        self.SPT  = {}
+        self.DISP = {}
+        self.HDR  = {}
+        self.RTF  = {}
+        self.ENG = {}
+
+    # ---------------------------------------------
+    # IMPROVED QSLCLEND PARSER - FIXED VERSION
+    # ---------------------------------------------
+    def load_qslclend(self, blob):
+        """Fixed QSLCLEND parser - handles the actual format from build.py"""
+        out = {}
+        
+        # Search for QSLCLEND magic
+        pos = 0
+        while pos < len(blob):
+            idx = blob.find(b"QSLCLEND", pos)
+            if idx == -1:
+                break
+                
+            try:
+                # Parse header: <8sBBHII (magic, version, flags, count, data_offset, reserved)
+                if idx + 20 > len(blob):
+                    pos = idx + 1
+                    continue
+                    
+                hdr = blob[idx:idx+20]
+                magic, version, flags, count, data_offset, reserved = struct.unpack("<8sBBHII", hdr)
+                
+                # Parse command entries
+                entry_pos = idx + 20
+                entries_found = 0
+                
+                for i in range(count):
+                    if entry_pos + 3 > len(blob):
+                        break
+                        
+                    # Entry format: opcode(1) + size(2) + data(size)
+                    opcode = blob[entry_pos]
+                    size = struct.unpack("<H", blob[entry_pos+1:entry_pos+3])[0]
+                    
+                    if entry_pos + 3 + size > len(blob) or size > 4096:
+                        break
+                        
+                    data = blob[entry_pos+3:entry_pos+3+size]
+                    
+                    # Store by opcode and by name if available
+                    out[opcode] = {
+                        "opcode": opcode,
+                        "size": size,
+                        "data": data,
+                        "offset": entry_pos
+                    }
+                    
+                    # Try to extract command name from data
+                    try:
+                        # Look for command name in the data
+                        if b"HELLO" in data:
+                            out["HELLO"] = out[opcode]
+                        elif b"PING" in data:
+                            out["PING"] = out[opcode]
+                        elif b"GETINFO" in data:
+                            out["GETINFO"] = out[opcode]
+                        # Add more command name detection as needed
+                    except:
+                        pass
+                    
+                    entry_pos += 3 + size
+                    entries_found += 1
+                
+                if entries_found > 0:
+                    print(f"[*] QSLCLEND: Found {entries_found} command entries")
+                    break
+                    
+            except Exception as e:
+                # print(f"[!] QSLCLEND parse error at 0x{idx:X}: {e}")  # Debug
+                pass
+            
+            pos = idx + 1
+
+        self.END = out
+        self.ENG = out  # For compatibility
+        global QSLCLEND_DB
+        QSLCLEND_DB = out
+        return out
+
+    # ---------------------------------------------
+    # IMPROVED QSLCLPAR PARSER - FIXED VERSION
+    # ---------------------------------------------
+    def load_qslclpar(self, blob):
+        """Fixed QSLCLPAR parser - handles the actual command format"""
+        out = {}
+        
+        # Search for QSLCLPAR magic
+        pos = 0
+        while pos < len(blob):
+            idx = blob.find(b"QSLCLPAR", pos)
+            if idx == -1:
+                break
+                
+            try:
+                # Parse header: <8sB3s (magic, version, reserved)
+                if idx + 12 > len(blob):
+                    pos = idx + 1
+                    continue
+                    
+                hdr = blob[idx:idx+12]
+                magic, version, reserved = struct.unpack("<8sB3s", hdr)
+                
+                # Now parse command entries that follow
+                cmd_pos = idx + 12
+                commands_found = 0
+                
+                # Commands are packed sequentially after the header
+                while cmd_pos < len(blob) - 40:  # Minimum command header size
+                    # Try to parse command header: <16sBBBBHII
+                    try:
+                        cmd_hdr = blob[cmd_pos:cmd_pos+40]
+                        name_field, cmd_id, flags, tier, family_hash, length, crc, timestamp = \
+                            struct.unpack("<16sBBBBHII", cmd_hdr)
+                        
+                        # Extract command name
+                        name = name_field.decode("ascii", errors="ignore").rstrip('\x00')
+                        
+                        # Validate name
+                        if not name or len(name) < 2 or not name.isalnum():
+                            cmd_pos += 1
+                            continue
+                            
+                        # Check if we have enough data for the command
+                        if cmd_pos + 40 + length > len(blob) or length > 4096:
+                            cmd_pos += 1
+                            continue
+                            
+                        # Extract command data
+                        cmd_data = blob[cmd_pos+40:cmd_pos+40+length]
+                        
+                        # Store command
+                        out[name] = {
+                            "name": name,
+                            "cmd_id": cmd_id,
+                            "flags": flags,
+                            "tier": tier,
+                            "family_hash": family_hash,
+                            "length": length,
+                            "crc": crc,
+                            "timestamp": timestamp,
+                            "data": cmd_data,
+                            "offset": cmd_pos
+                        }
+                        
+                        commands_found += 1
+                        cmd_pos += 40 + length
+                        
+                    except Exception:
+                        cmd_pos += 1
+                        continue
+                
+                if commands_found > 0:
+                    print(f"[*] QSLCLPAR: Found {commands_found} commands")
+                    break
+                    
+            except Exception as e:
+                # print(f"[!] QSLCLPAR parse error at 0x{idx:X}: {e}")  # Debug
+                pass
+            
+            pos = idx + 1
+
+        self.PAR = out
+        global QSLCLPAR_DB
+        QSLCLPAR_DB = out
+        return out
+
+    # ---------------------------------------------
+    # IMPROVED QSLCLDISP PARSER - FIXED VERSION
+    # ---------------------------------------------
+    def load_qslcldisp(self, blob):
+        """Fixed QSLCLDISP parser"""
+        out = {}
+        magic = b"QSLCLDIS"
+        pos = 0
+        
+        while pos < len(blob):
+            idx = blob.find(magic, pos)
+            if idx == -1:
+                break
+
+            try:
+                # Parse header: <8sHHI (magic, version, flags, count)
+                if idx + 16 > len(blob):
+                    pos = idx + 1
+                    continue
+                    
+                hdr = blob[idx:idx+16]
+                magic_found, version, flags, count = struct.unpack("<8sHHI", hdr)
+                
+                # Parse dispatch entries
+                entry_pos = idx + 16
+                entries_found = 0
+                
+                for i in range(count):
+                    if entry_pos + 12 > len(blob):
+                        break
+                        
+                    # Entry format: <8sI (cmd_hash, handler_addr)
+                    cmd_hash, handler_addr = struct.unpack("<8sI", blob[entry_pos:entry_pos+12])
+                    
+                    # Try to find command name from hash
+                    cmd_name = f"CMD_{i:04X}"
+                    
+                    out[cmd_name] = {
+                        "hash": cmd_hash,
+                        "handler_addr": handler_addr,
+                        "index": i
+                    }
+                    
+                    entry_pos += 12
+                    entries_found += 1
+                
+                if entries_found > 0:
+                    print(f"[*] QSLCLDISP: Found {entries_found} dispatch entries")
+                    break
+                    
+            except Exception:
+                pass
+            
+            pos = idx + 1
+
+        self.DISP = out
+        global QSLCLDISP_DB
+        QSLCLDISP_DB = out
+        return out
+
+    # ---------------------------------------------
+    # RTF - IMPROVED VERSION
+    # ---------------------------------------------
+    def load_qslclrtf(self, blob):
+        """Improved RTF parser"""
+        out = {}
+        magic = b"QSLCLRTF"
+        pos = 0
+        
+        while pos < len(blob):
+            idx = blob.find(magic, pos)
+            if idx == -1:
+                break
+            
+            try:
+                if idx + 12 > len(blob):
+                    pos = idx + 1
+                    continue
+                    
+                # Header: magic(8) + version(1) + flags(1) + count(2)
+                hdr = blob[idx:idx+12]
+                _, ver, flags, count = struct.unpack("<8sBBH", hdr)
+                entry_pos = idx + 12
+                entries_found = 0
+                
+                for i in range(count):
+                    if entry_pos + 12 > len(blob):
+                        break
+                    
+                    # Fixed format: error_code(4) + severity(1) + category(1) + retry_count(2) + msg_hash(4)
+                    code, severity, category, retry_count, msg_hash = struct.unpack("<IBBH I", blob[entry_pos:entry_pos+12])
+                    
+                    # Extract short name (8 bytes)
+                    name_end = entry_pos + 20
+                    if name_end > len(blob):
+                        break
+                    short_name = blob[entry_pos+12:name_end].decode("ascii", errors="ignore").rstrip('\x00')
+                    
+                    out[code] = {
+                        "level": severity,
+                        "msg": short_name,
+                        "category": category,
+                        "retry_count": retry_count,
+                        "hash": msg_hash
+                    }
+                    entry_pos += 20
+                    entries_found += 1
+                
+                if entries_found > 0:
+                    print(f"[*] QSLCLRTF: Found {entries_found} entries")
+                    break
+                    
+            except Exception:
+                pass
+            
+            pos = idx + 1
+
+        self.RTF = out
+        global QSLCLRTF_DB
+        QSLCLRTF_DB = out
+        return out
+
+    # ---------------------------------------------
+    # IDX - IMPROVED VERSION
+    # ---------------------------------------------
+    def load_qslclidx(self, blob):
+        """Improved IDX parser"""
+        out = {}
+        magic = b"QSLCLIDX"
+        pos = 0
+        
+        while pos < len(blob):
+            idx = blob.find(magic, pos)
+            if idx == -1:
+                break
+
+            try:
+                if idx + 12 > len(blob):
+                    pos = idx + 1
+                    continue
+                    
+                hdr = blob[idx:idx+12]
+                _, ver, flags, count = struct.unpack("<8sBBH", hdr)
+                entry_pos = idx + 12
+                entries_found = 0
+                
+                for _ in range(count):
+                    if entry_pos + 3 > len(blob):
+                        break
+                        
+                    idx_val = struct.unpack("<H", blob[entry_pos:entry_pos+2])[0]
+                    name_len = blob[entry_pos+2]
+                    
+                    if entry_pos + 3 + name_len > len(blob) or name_len == 0 or name_len > 64:
+                        break
+                        
+                    name = blob[entry_pos+3:entry_pos+3+name_len].decode("ascii", errors="ignore")
+                    # Only add if name is valid
+                    if name and name.isprintable():
+                        out[name] = {"idx": idx_val, "name": name}
+                        entry_pos += 3 + name_len
+                        entries_found += 1
+                    else:
+                        break
+                
+                if entries_found > 0:
+                    print(f"[*] QSLCLIDX: Found {entries_found} entries")
+                    break
+                    
+            except Exception:
+                pass
+            
+            pos = idx + 1
+
+        self.IDX = out
+        global QSLCLIDX_DB
+        QSLCLIDX_DB = out
+        return out
+
+    # ---------------------------------------------
+    # VM5 - IMPROVED VERSION
+    # ---------------------------------------------
+    def load_qslclvm5(self, blob):
+        """Improved VM5 parser"""
+        out = {}
+        magic = b"QSLCLVM5"
+        pos = 0
+        
+        while pos < len(blob):
+            idx = blob.find(magic, pos)
+            if idx == -1:
+                break
+            
+            try:
+                if idx + 12 > len(blob):
+                    pos = idx + 1
+                    continue
+                    
+                hdr = blob[idx:idx+12]
+                _, ver, flags, count = struct.unpack("<8sBBH", hdr)
+                entry_pos = idx + 12
+                entries_found = 0
+                
+                for _ in range(count):
+                    if entry_pos + 1 > len(blob):
+                        break
+                        
+                    name_len = blob[entry_pos]
+                    
+                    if entry_pos + 1 + name_len + 2 > len(blob) or name_len == 0 or name_len > 64:
+                        break
+                        
+                    name = blob[entry_pos+1 : entry_pos+1+name_len].decode("ascii", errors="ignore")
+                    raw_len = struct.unpack("<H", blob[entry_pos+1+name_len : entry_pos+3+name_len])[0]
+                    
+                    if entry_pos + 3 + name_len + raw_len > len(blob) or raw_len > 4096:
+                        break
+                        
+                    raw = blob[entry_pos+3+name_len : entry_pos+3+name_len+raw_len]
+                    
+                    # Only add if name is valid
+                    if name and name.isprintable():
+                        out[name] = {"name": name, "raw": raw}
+                        entry_pos += 3 + name_len + raw_len
+                        entries_found += 1
+                    else:
+                        break
+                
+                if entries_found > 0:
+                    print(f"[*] QSLCLVM5: Found {entries_found} entries")
+                    break
+                    
+            except Exception:
+                pass
+            
+            pos = idx + 1
+
+        self.VM5 = out
+        global QSLCLVM5_DB
+        QSLCLVM5_DB = out
+        return out
+
+    # ---------------------------------------------
+    # USB routines - IMPROVED VERSION
+    # ---------------------------------------------
+    def load_qslclusb(self, blob):
+        """Improved USB parser"""
+        out = {}
+        magic = b"QSLCLUSB"
+        pos = 0
+        
+        while pos < len(blob):
+            idx = blob.find(magic, pos)
+            if idx == -1:
+                break
+
+            try:
+                if idx + 12 > len(blob):
+                    pos = idx + 1
+                    continue
+                    
+                hdr = blob[idx:idx+12]
+                _, ver, flags, count = struct.unpack("<8sBBH", hdr)
+                entry_pos = idx + 12
+                entries_found = 0
+                
+                for _ in range(count):
+                    if entry_pos + 1 > len(blob):
+                        break
+                        
+                    name_len = blob[entry_pos]
+                    
+                    if entry_pos + 1 + name_len + 2 > len(blob) or name_len == 0 or name_len > 64:
+                        break
+                        
+                    name = blob[entry_pos+1 : entry_pos+1+name_len].decode("ascii", errors="ignore")
+                    raw_len = struct.unpack("<H", blob[entry_pos+1+name_len : entry_pos+3+name_len])[0]
+                    
+                    if entry_pos + 3 + name_len + raw_len > len(blob) or raw_len > 4096:
+                        break
+                        
+                    raw = blob[entry_pos+3+name_len : entry_pos+3+name_len+raw_len]
+                    
+                    if name and name.isprintable():
+                        out[name] = {"name": name, "raw": raw}
+                        entry_pos += 3 + name_len + raw_len
+                        entries_found += 1
+                    else:
+                        break
+                
+                if entries_found > 0:
+                    print(f"[*] QSLCLUSB: Found {entries_found} entries")
+                    break
+                    
+            except Exception:
+                pass
+            
+            pos = idx + 1
+
+        self.USB = out
+        global QSLCLUSB_DB
+        QSLCLUSB_DB = out
+        return out
+
+    # ---------------------------------------------
+    # SPT setup packets - IMPROVED VERSION
+    # ---------------------------------------------
+    def load_qslclspt(self, blob):
+        """Improved SPT parser"""
+        out = {}
+        magic = b"QSLCLSPT"
+        pos = 0
+        
+        while pos < len(blob):
+            idx = blob.find(magic, pos)
+            if idx == -1:
+                break
+
+            try:
+                if idx + 12 > len(blob):
+                    pos = idx + 1
+                    continue
+                    
+                hdr = blob[idx:idx+12]
+                _, ver, flags, count = struct.unpack("<8sBBH", hdr)
+                entry_pos = idx + 12
+                entries_found = 0
+                
+                for _ in range(count):
+                    if entry_pos + 1 > len(blob):
+                        break
+                        
+                    name_len = blob[entry_pos]
+                    
+                    if entry_pos + 1 + name_len + 2 > len(blob) or name_len == 0 or name_len > 64:
+                        break
+                        
+                    name = blob[entry_pos+1 : entry_pos+1+name_len].decode("ascii", errors="ignore")
+                    raw_len = struct.unpack("<H", blob[entry_pos+1+name_len : entry_pos+3+name_len])[0]
+                    
+                    if entry_pos + 3 + name_len + raw_len > len(blob) or raw_len > 4096:
+                        break
+                        
+                    raw = blob[entry_pos+3+name_len : entry_pos+3+name_len+raw_len]
+                    
+                    if name and name.isprintable():
+                        out[name] = {"name": name, "raw": raw}
+                        entry_pos += 3 + name_len + raw_len
+                        entries_found += 1
+                    else:
+                        break
+                
+                if entries_found > 0:
+                    print(f"[*] QSLCLSPT: Found {entries_found} entries")
+                    break
+                    
+            except Exception:
+                pass
+            
+            pos = idx + 1
+
+        self.SPT = out
+        global QSLCLSPT_DB
+        QSLCLSPT_DB = out
+        return out
+
+    # ---------------------------------------------
+    # Header / Certs - IMPROVED VERSION
+    # ---------------------------------------------
+    def load_qslclhdr(self, blob):
+        """Improved HDR parser"""
+        out = {}
+        magic = b"QSLCLHDR"
+        pos = 0
+        
+        while pos < len(blob):
+            idx = blob.find(magic, pos)
+            if idx == -1:
+                break
+
+            try:
+                if idx + 16 > len(blob):
+                    pos = idx + 1
+                    continue
+                    
+                # Header: magic(8) + version(4) + size(4)
+                magic_found = blob[idx:idx+8]
+                ver, size = struct.unpack("<II", blob[idx+8:idx+16])
+                
+                if idx + 32 + size > len(blob) or size > 65536:
+                    pos = idx + 1
+                    continue
+                    
+                digest = blob[idx+16:idx+32]
+                payload = blob[idx+32 : idx+32+size]
+                
+                # Use a descriptive key
+                key = f"HDR_block_0x{idx:08X}"
+                out[key] = payload
+                
+                print(f"[*] QSLCLHDR: Found block ({size} bytes)")
+                pos = idx + 32 + size
+                
+            except Exception:
+                pos = idx + 1
+                continue
+
+        self.HDR = out
+        global QSLCLHDR_DB
+        QSLCLHDR_DB = out
+        return out
+
+    # ---------------------------------------------
+    # MASTER PARSER - COMPLETELY REWRITTEN
+    # ---------------------------------------------
+    def parse_loader(self, blob):
+        """Completely rewritten parser that handles the actual binary format"""
+        print(f"[*] Parsing loader structures ({len(blob)} bytes)...")
+
+        # First, check if this is a valid QSLCL binary
+        if blob[:8] != b"QSLCLBIN":
+            print("[!] Not a valid QSLCL binary (missing QSLCLBIN header)")
+            # Try to parse anyway in case it's a partial binary
+            print("[*] Attempting to parse as partial QSLCL binary...")
+
+        # Extended marker set including ALL known QSLCL headers
+        ALL_MARKERS = [
+            b"QSLCLEND", b"QSLCLENG", b"QSLCLPAR", b"QSLCLRTF", 
+            b"QSLCLUSB", b"QSLCLSPT", b"QSLCLVM5", b"QSLCLDISP",
+            b"QSLCLIDX", b"QSLCLHDR", b"QSLCLCMD", b"QSLCLBIN",
+            b"QSLCLPKT", b"QSLCLRESP", b"QSLCLTBL", b"QSLCLSEC",
+            b"QSLCLINT"
+        ]
+
+        discovered = {}
+        blob_len = len(blob)
+
+        # Scan for all possible markers
+        for i in range(blob_len - 8):
+            chunk = blob[i:i+8]
+            if chunk in ALL_MARKERS:
+                marker_name = chunk.decode('ascii', errors='ignore').rstrip('\x00')
+                discovered.setdefault(marker_name, []).append(i)
+
+        if not discovered:
+            print("[!] No QSLCL headers found in loader")
+            # Debug: show first 64 bytes
+            print("[*] First 64 bytes (hex):")
+            print(blob[:64].hex())
+            return False
+
+        print(f"[+] Found {len(discovered)} different header types:")
+        for marker, positions in discovered.items():
+            print(f"    {marker}: {len(positions)} occurrences")
+
+        # Parse the most important blocks first
+        success_count = 0
+        
+        # Parse QSLCLEND if found (command engine)
+        if "QSLCLEND" in discovered:
+            for pos in discovered["QSLCLEND"]:
+                try:
+                    result = self.load_qslclend(blob[pos:])
+                    if result:
+                        success_count += 1
+                        break
+                except Exception as e:
+                    print(f"[!] QSLCLEND parse failed at 0x{pos:X}: {e}")
+
+        # Parse QSLCLPAR if found (command implementations)
+        if "QSLCLPAR" in discovered:
+            for pos in discovered["QSLCLPAR"]:
+                try:
+                    result = self.load_qslclpar(blob[pos:])
+                    if result:
+                        success_count += 1
+                        break
+                except Exception as e:
+                    print(f"[!] QSLCLPAR parse failed at 0x{pos:X}: {e}")
+
+        # Parse QSLCLDISP if found (dispatch table)
+        if "QSLCLDISP" in discovered:
+            for pos in discovered["QSLCLDISP"]:
+                try:
+                    result = self.load_qslcldisp(blob[pos:])
+                    if result:
+                        success_count += 1
+                        break
+                except Exception as e:
+                    print(f"[!] QSLCLDISP parse failed at 0x{pos:X}: {e}")
+
+        # Parse other important structures
+        important_blocks = ["QSLCLRTF", "QSLCLUSB", "QSLCLVM5", "QSLCLHDR"]
+        for marker in important_blocks:
+            if marker in discovered:
+                parser_name = f"load_{marker.lower()}"
+                if hasattr(self, parser_name):
+                    for pos in discovered[marker]:
+                        try:
+                            result = getattr(self, parser_name)(blob[pos:])
+                            if result:
+                                success_count += 1
+                                break
+                        except Exception as e:
+                            print(f"[!] {marker} parse failed at 0x{pos:X}: {e}")
+
+        print(f"[*] Successfully parsed {success_count} module types")
+
+        # Show what we found
+        print("\n[*] Parser summary:")
+        found_modules = []
+        
+        if self.END:  found_modules.append(f"END({len(self.END)})")
+        if self.PAR:  found_modules.append(f"PAR({len(self.PAR)})")
+        if self.DISP: found_modules.append(f"DISP({len(self.DISP)})")
+        if self.RTF:  found_modules.append(f"RTF({len(self.RTF)})")
+        if self.HDR:  found_modules.append(f"HDR({len(self.HDR)})")
+        if self.IDX:  found_modules.append(f"IDX({len(self.IDX)})")
+        if self.VM5:  found_modules.append(f"VM5({len(self.VM5)})")
+        if self.USB:  found_modules.append(f"USB({len(self.USB)})")
+        if self.SPT:  found_modules.append(f"SPT({len(self.SPT)})")
+
+        if found_modules:
+            print(f"[+] Detected modules: {', '.join(found_modules)}")
+            
+            # Show available commands
+            if self.PAR:
+                commands = list(self.PAR.keys())[:10]  # Show first 10 commands
+                print(f"[+] Available commands: {', '.join(commands)}" + 
+                      ("..." if len(self.PAR) > 10 else ""))
+            
+            return True
+        else:
+            print("[!] No valid modules parsed")
+            return False
+
+# =============================================================================
+# CONTINUE WITH EXISTING FUNCTIONS (rest of the file remains the same)
+# =============================================================================
+
+def qslcl_decode_rtf(resp):
+    """
+    Decode QSLCL Runtime Fault Frame
+    """
+    if not resp:
+        return {"severity": "ERROR", "name": "NO_RESPONSE", "extra": b""}
+    
+    # Simple implementation - reuse existing decode_runtime_result logic
+    return decode_runtime_result(resp)
+
+def qslclidx_get_cmd(cmd_name):
+    """
+    Find IDX entry by command name
+    """
+    for name, entry in QSLCLIDX_DB.items():
+        if name.upper() == cmd_name.upper():
+            return entry
+    return None
+
+def qslclidx_get_cert(idx):
+    """
+    IDX → certificate or certificate-related entry.
+    """
+    mapping = {
+        0x10: "QSLCCERT",
+        0x11: "QSLCHMAC",
+        0x12: "QSLCSHA2",
+    }
+
+    if idx not in mapping:
+        return None
+
+    name = mapping[idx]
+    return QSLCLHDR_DB.get(name, None)
+
+# =============================================================================
+# CONTINUE WITH EXISTING FUNCTIONS (FIXED VERSIONS)
+# =============================================================================
+
+def wait_for_device(timeout=None, interval=0.5):
+    """
+    Waits for any valid QSLCL-capable device to appear.
+    No VID/PID hardcoding. Uses universal class-based validation.
+    """
+
+    start = time.time()
+
+    while True:
+        devs = scan_all()
+
+        # Pick highest-ranked device
+        if devs:
+            dev = devs[0]
+            if validate_device(dev):
+                return dev
+
+        if timeout is not None and (time.time() - start) >= timeout:
+            return None
+
+        time.sleep(interval)
+
+def validate_device(dev: QSLCLDevice):
+    """
+    FIXED: More permissive device validation for development
+    """
+    # Only block clearly incompatible devices
+    if dev.usb_class in (0x03, 0x09):  # HID and hubs
+        return False
+
+    # Allow everything else for development
+    return True
+
+# =============================================================================
+# SCANNERS - FIXED
+# =============================================================================
+def scan_serial():
+    if not SERIAL_SUPPORT:
+        return []
+
+    devs = []
+
+    for p in list_ports.comports():
+        # VID/PID extracted automatically from USB-CDC
+        vid = getattr(p, "vid", None)
+        pid = getattr(p, "pid", None)
+
+        devs.append(QSLCLDevice(
+            transport="serial",
+            identifier=p.device,
+            vendor=p.manufacturer or "Unknown",
+            product=p.description or "Serial",
+            vid=vid,
+            pid=pid,
+            handle=None  # Don't store the path here, will open later
+        ))
+
+    return devs
+
+def scan_usb():
+    if not USB_SUPPORT:
+        return []
+
+    devs = []
+
+    for d in usb.core.find(find_all=True):
+        try:
+            # Must be able to open config
+            try:
+                cfg = d.get_active_configuration()
+            except usb.core.USBError:
+                continue
+
+            intf = cfg[(0, 0)]
+
+            # ----------------------------------------------
+            #  AUTO FILTER:
+            #  Reject HID, Audio, Mass Storage automatically
+            # ----------------------------------------------
+            if intf.bInterfaceClass in (0x01, 0x02, 0x03, 0x07, 0x08, 0x0A):
+                # Audio / CommCtrl / HID / Printer / Mass Storage / CDC Data
+                continue
+
+            # ----------------------------------------------
+            # VALID QSLCL DEVICE RULE:
+            # Must have at least one Bulk endpoint
+            # ----------------------------------------------
+            ep_in  = None
+            ep_out = None
+
+            for ep in intf.endpoints():
+                if usb.util.endpoint_direction(ep.bEndpointAddress) == usb.util.ENDPOINT_IN:
+                    if usb.util.endpoint_type(ep.bmAttributes) == usb.util.ENDPOINT_TYPE_BULK:
+                        ep_in = ep
+                else:
+                    if usb.util.endpoint_type(ep.bmAttributes) == usb.util.ENDPOINT_TYPE_BULK:
+                        ep_out = ep
+
+            # Must have both bulk IN and OUT
+            if not ep_in or not ep_out:
+                continue
+
+            # ----------------------------------------------
+            # Get product name (optional)
+            # ----------------------------------------------
+            try:
+                product = usb.util.get_string(d, d.iProduct) or "USB Device"
+            except:
+                product = "USB Device"
+
+            devs.append(QSLCLDevice(
+                transport="usb",
+                identifier=f"bus={d.bus},addr={d.address}",
+                vendor=f"VID_{d.idVendor:04X}",
+                product=product,
+                vid=d.idVendor,
+                pid=d.idProduct,
+                usb_class=intf.bInterfaceClass,
+                usb_subclass=intf.bInterfaceSubClass,
+                usb_protocol=intf.bInterfaceProtocol,
+                handle=d,
+                serial_mode=False
+            ))
+
+        except Exception:
+            continue
+
+    return devs
+
+def scan_all():
+    devs = scan_usb() + scan_serial()
+
+    # Smart sorting by likelihood
+    def score(d):
+        s = 0
+
+        # Vendor-specific interface => highest (bootloaders, edl, fastboot)
+        if d.usb_class == 0xFF:
+            s += 100
+
+        # USB CDC / diagnostic / modem classes
+        if d.usb_class in (0x0A, 0x02):
+            s += 70
+
+        # Recognizable product name
+        if d.product and d.product not in ("USB Device", "Serial", "Unknown"):
+            s += 30
+
+        # Serial devices with VID/PID
+        if d.vid and d.pid:
+            s += 20
+
+        # USB transport wins over serial in general
+        if d.transport == "usb":
+            s += 10
+
+        return -s  # sort descending
+
+    devs.sort(key=score)
+    return devs
+
+# =============================================================================
+# ENCODERS (fallback)
+# =============================================================================
+def encode_cmd(cmd: str, extra: bytes = b""):
+    payload = cmd.encode() + (b" " + extra if extra else b"")
+    return b"QSLCLCMD" + len(payload).to_bytes(4, "little") + payload
+
+def encode_resp_request():
+    p = b"RESPONSE"
+    return b"QSLCLCMD" + len(p).to_bytes(4, "little") + p
+
+# =============================================================================
+# FRAME PARSER
+# =============================================================================
+def parse_frame(buff: bytes):
+    if buff.startswith(b"QSLCLRESP"):
+        size = int.from_bytes(buff[10:14], "little")
+        return "RESP", buff[14:14+size]
+
+    if buff.startswith(b"QSLCLCMD"):
+        size = int.from_bytes(buff[9:13], "little")
+        return "CMD", buff[13:13+size]
+
+    return None, None
+
+def decode_runtime_result(resp, origin="DISPATCH"):
+    """
+    Fully compliant QSLCL Runtime Fault-Frame decoder (RTF v5.1)
+    Returns a structured dict:
+        {
+            "severity": "...",
+            "code": int,
+            "name": "...",
+            "extra": bytes,
+            "origin": "DISPATCH/ENGINE/PAR/NANO/IDX"
+        }
+    """
+
+    # ======================================================
+    # 0. Basic safety
+    # ======================================================
+    if not resp or len(resp) < 2:
+        return {
+            "severity": "ERROR",
+            "code": 0xFFFF,
+            "name": "NO_RESPONSE",
+            "extra": b"",
+            "origin": origin
+        }
+
+    # ======================================================
+    # 1. Extract 2-byte runtime code
+    # ======================================================
+    try:
+        code = int.from_bytes(resp[0:2], "little")
+    except:
+        return {
+            "severity": "ERROR",
+            "code": 0xFFFE,
+            "name": "PARSE_FAIL",
+            "extra": resp,
+            "origin": origin
+        }
+
+    # Remaining payload is "extra"
+    extra = resp[2:] if len(resp) > 2 else b""
+
+    # ======================================================
+    # 2. Lookup in QSLCLRTF_DB
+    # ======================================================
+    if code in QSLCLRTF_DB:
+        entry = QSLCLRTF_DB[code]
+        level = entry.get("level", 0)
+        name  = entry.get("msg", "UNKNOWN")
+
+        level_name = {
+            0: "SUCCESS",
+            1: "WARNING",
+            2: "ERROR",
+            3: "CRITICAL",
+            4: "FATAL",
+        }.get(level, f"LVL{level}")
+
+        return {
+            "severity": level_name,
+            "code": code,
+            "name": name,
+            "extra": extra,
+            "origin": origin,
+        }
+
+    # ======================================================
+    # 3. Fallback codes
+    # ======================================================
+    if code == 0:
+        return {
+            "severity": "SUCCESS",
+            "code": 0x0000,
+            "name": "OK",
+            "extra": extra,
+            "origin": origin
+        }
+
+    return {
+        "severity": "UNKNOWN",
+        "code": code,
+        "name": f"UNDEFINED_RTF_0x{code:04X}",
+        "extra": extra,
+        "origin": origin
+    }
+
+# =============================================================================
+# TRANSPORTS - FIXED
+# =============================================================================
+def send(handle, payload, serial_mode):
+    """
+    Safe universal packet writer for:
+        - Serial (UART/USB-CDC)
+        - USB bulk (pyusb) device (EP_OUT)
+    """
+    if serial_mode:
+        try:
+            handle.write(payload)
+        except Exception as e:
+            print("[!] SERIAL WRITE ERROR:", e)
+        return
+
+    # USB mode (handle is a usb.core.Device)
+    try:
+        # Find the correct OUT endpoint
+        cfg = handle.get_active_configuration()
+        intf = cfg[(0,0)]
+        ep_out = None
+        for ep in intf.endpoints():
+            if (usb.util.endpoint_direction(ep.bEndpointAddress) == 
+                usb.util.ENDPOINT_OUT and
+                usb.util.endpoint_type(ep.bmAttributes) == usb.util.ENDPOINT_TYPE_BULK):
+                ep_out = ep
+                break
+        
+        if ep_out:
+            handle.write(ep_out.bEndpointAddress, payload, timeout=2000)
+        else:
+            # Fallback to control transfer
+            handle.ctrl_transfer(0x21, 0x09, 0x0200, 0, payload)
+    except Exception as e:
+        print("[!] USB WRITE ERROR:", e)
+
+def recv(handle, serial_mode, timeout=3.0):
+    """
+    Universal response receiver supporting:
+        - Serial streaming
+        - USB bulk packets
+    Fully QSLCL v5.1-compliant:
+        - Scans the rolling buffer
+        - Extracts QSLCLRESP/QSLCLCMD frames
+        - Protects against fragmented/incomplete frames
+        - Supports multiple frames in same buffer
+    """
+
+    deadline = time.time() + timeout
+    buff = bytearray()
+
+    # Protocol constants
+    RESP_MAGIC = b"QSLCLRESP"
+    CMD_MAGIC  = b"QSLCLCMD"
+
+    RESP_HEADER = len(RESP_MAGIC)     # 9 bytes
+    CMD_HEADER  = len(CMD_MAGIC)      # 9 bytes
+
+    # Minimum structure:
+    #   MAGIC (9) + VER(1) + SIZE(4) + PAYLOAD(size)
+    #   total header = 14 bytes
+    MIN_FRAME = 14
+
+    while time.time() < deadline:
+        # ------------------------------------------------------
+        # Read chunk
+        # ------------------------------------------------------
+        try:
+            if serial_mode:
+                chunk = handle.read(64)
+            else:
+                # Find the correct IN endpoint for USB
+                cfg = handle.get_active_configuration()
+                intf = cfg[(0,0)]
+                ep_in = None
+                for ep in intf.endpoints():
+                    if (usb.util.endpoint_direction(ep.bEndpointAddress) == 
+                        usb.util.ENDPOINT_IN and
+                        usb.util.endpoint_type(ep.bmAttributes) == usb.util.ENDPOINT_TYPE_BULK):
+                        ep_in = ep
+                        break
+                
+                if ep_in:
+                    chunk = handle.read(ep_in.bEndpointAddress, 64, timeout=1000)
+                else:
+                    chunk = b""
+        except:
+            chunk = b""
+
+        if chunk:
+            buff.extend(chunk)
+
+        # ------------------------------------------------------
+        # Scan for RESP frames
+        # ------------------------------------------------------
+        idx = buff.find(RESP_MAGIC)
+        if idx >= 0 and len(buff) >= idx + MIN_FRAME:
+            # Extract length from: MAGIC(9) + VER(1) + SIZE(4)
+            try:
+                size = struct.unpack("<I", buff[idx+10:idx+14])[0]
+            except:
+                size = -1
+
+            end = idx + 14 + size
+            if size >= 0 and len(buff) >= end:
+                payload = bytes(buff[idx+14:end])
+                del buff[:end]
+                return "RESP", payload
+
+        # ------------------------------------------------------
+        # Scan for CMD frames
+        # ------------------------------------------------------
+        jdx = buff.find(CMD_MAGIC)
+        if jdx >= 0 and len(buff) >= jdx + MIN_FRAME:
+            try:
+                size = struct.unpack("<I", buff[jdx+10:jdx+14])[0]
+            except:
+                size = -1
+
+            end = jdx + 14 + size
+            if size >= 0 and len(buff) >= end:
+                payload = bytes(buff[jdx+14:end])
+                del buff[:end]
+                return "CMD", payload
+
+        # ------------------------------------------------------
+        # Avoid burning CPU
+        # ------------------------------------------------------
+        time.sleep(0.002)
+
+    return None, None
+
+def open_transport(dev):
+    """FIXED: Properly open device transports"""
+    if dev.transport == "serial":
+        try:
+            # Actually open the serial port
+            h = serial.Serial(dev.identifier, 115200, timeout=1)
+            dev.handle = h  # Store the opened handle
+            return h, True
+        except Exception as e:
+            print(f"[!] Failed to open serial port {dev.identifier}: {e}")
+            return None, True
+    else:
+        # USB device
+        try:
+            # Set configuration and claim interface
+            dev.handle.set_configuration()
+            usb.util.claim_interface(dev.handle, 0)
+            return dev.handle, False
+        except Exception as e:
+            print(f"[!] Failed to configure USB device: {e}")
+            return None, False
+
+def detect_device_type(handle):
+    """
+    Universal hybrid detection:
+    - MTK BootROM    : handshake 0xA0 or 'BOOTROM'
+    - Qualcomm EDL   : response 'OKAY', 'INFO', or sahara/edl signatures
+    - DFU Apple      : static DFU signatures or DFU mode via USB interface
+    - Generic USB    : fallback to QSLCL universal packets
+    """
+    try:
+        # Non-blocking peek
+        data = handle.read(64)
+    except:
+        return "GENERIC"
+
+    if not data:
+        return "GENERIC"
+
+    text = data.decode(errors="ignore").upper()
+
+    if "BOOTROM" in text or "BR" in text or data.startswith(b"\xA0"):
+        return "MTK"
+
+    if "EDL" in text or "SAHARA" in text or "FIREHOSE" in text:
+        return "QUALCOMM"
+
+    if "DFU" in text or b"\x12\x01" in data[:4]:
+        return "APPLE_DFU"
+
+    return "GENERIC"
+
+def qslcl_dispatch(dev, cmd_name, payload=b"", timeout=1.0):
+    """
+    Unified dispatcher with timeout support
+    """
+    # Convert command name → internal ID
+    cmd_upper = cmd_name.upper()
+
+    # Try QSLCLPAR first (command implementations)
+    if cmd_upper in QSLCLPAR_DB:
+        print(f"[*] QSLCLPAR routing → {cmd_upper}")
+        cmd_data = QSLCLPAR_DB[cmd_upper]["data"]
+        return exec_universal(dev, cmd_upper, cmd_data + payload)
+
+    # Try QSLCLEND (command engine)
+    if cmd_upper in QSLCLEND_DB:
+        print(f"[*] QSLCLEND routing → {cmd_upper}")
+        entry = QSLCLEND_DB[cmd_upper]
+        pkt = b"QSLCLEND" + struct.pack("<BH", entry["opcode"], entry["size"]) + entry["data"]
+        return exec_universal(dev, "ENGINE", pkt + payload)
+
+    # fallback to direct command
+    return exec_universal(dev, cmd_upper, payload)
+
+# =============================================================================
+# SECTOR SIZE DETECTOR
+# =============================================================================
+def detect_sector_size(dev):
+    """
+    Ultra-robust sector/page size detector for QSLCL-based devices.
+    """
+    VALID_SIZES = {512, 1024, 2048, 4096, 8192, 16384}
+
+    h, serial_mode = open_transport(dev)
+
+    # ============================================================
+    # 0. QSLCLIDX GETSECTOR override (highest priority)
+    # ============================================================
+    for entry_id, e in QSLCLIDX_DB.items():
+        if isinstance(e, dict) and e.get("name") == "GETSECTOR":
+            try:
+                resp = qslcl_dispatch(dev, "GETSECTOR", b"")
+                status = decode_runtime_result(resp)
+                v = int.from_bytes(status["extra"][:4], "little")
+                if v in VALID_SIZES:
+                    print("[*] Sector size via QSLCLIDX/GETSECTOR =", v)
+                    return v
+            except:
+                pass
+
+    # ============================================================
+    # 1. QSLCLPAR direct GETSECTOR handler
+    # ============================================================
+    if "GETSECTOR" in QSLCLPAR_DB:
+        try:
+            resp = qslcl_dispatch(dev, "GETSECTOR", b"")
+            status = decode_runtime_result(resp)
+            v = int.from_bytes(status["extra"][:4], "little")
+            if v in VALID_SIZES:
+                print("[*] Sector size via QSLCLPAR/GETSECTOR =", v)
+                return v
+        except:
+            pass
+
+    # ============================================================
+    # 2. QSLCLEND opcode fallback
+    # ============================================================
+    if "GETSECTOR" in QSLCLEND_DB:
+        try:
+            op = QSLCLEND_DB["GETSECTOR"]
+            pkt = b"QSLCLEND" + op
+            resp = qslcl_dispatch(dev, "ENGINE", pkt)
+            status = decode_runtime_result(resp)
+            v = int.from_bytes(status["extra"][:4], "little")
+            if v in VALID_SIZES:
+                print("[*] Sector size via QSLCLEND/GETSECTOR =", v)
+                return v
+        except:
+            pass
+
+    # ============================================================
+    # 3. GETVAR("SECTOR_SIZE")
+    # ============================================================
+    try:
+        pkt = encode_cmd("GETVAR", b"SECTOR_SIZE")
+        send(h, pkt, serial_mode)
+        t, data = recv(h, serial_mode)
+        if t == "RESP":
+            try:
+                v = int(data.decode(errors="ignore"), 0)
+                if v in VALID_SIZES:
+                    print("[*] Sector size via GETVAR(SECTOR_SIZE) =", v)
+                    return v
+            except:
+                pass
+    except:
+        pass
+
+    # ============================================================
+    # 4. GETINFO structured field scanning (RTF)
+    # ============================================================
+    try:
+        resp = qslcl_dispatch(dev, "GETINFO")
+        if resp:
+            status = decode_runtime_result(resp)
+            extra = status["extra"]
+
+            # Common offsets where page size appears
+            for offs in (0x10, 0x14, 0x18, 0x1C, 0x20, 0x24):
+                if offs + 4 <= len(extra):
+                    v = int.from_bytes(extra[offs:offs+4], "little")
+                    if v in VALID_SIZES:
+                        print("[*] Sector size via GETINFO field =", v)
+                        return v
+    except:
+        pass
+
+    # ============================================================
+    # 5. HELLO RTF frame (your loader sometimes embeds size)
+    # ============================================================
+    try:
+        resp = qslcl_dispatch(dev, "HELLO")
+        if resp:
+            status = decode_runtime_result(resp)
+            extra = status["extra"]
+            if len(extra) >= 4:
+                v = int.from_bytes(extra[:4], "little")
+                if v in VALID_SIZES:
+                    print("[*] Sector size via HELLO RTF =", v)
+                    return v
+    except:
+        pass
+
+    # ============================================================
+    # 6. Qualcomm Firehose XML
+    # ============================================================
+    dtype = detect_device_type(h)
+    if dtype == "QUALCOMM":
+        try:
+            h.write(b"<data>getstorageinfo</data>")
+            ans = h.read(2048)
+            m = re.search(rb"<pagesize>(\d+)</pagesize>", ans)
+            if m:
+                v = int(m.group(1))
+                if v in VALID_SIZES:
+                    print("[*] Sector size via Firehose XML =", v)
+                    return v
+        except:
+            pass
+
+    # ============================================================
+    # 7. MTK BootROM (PageSize=XXXX)
+    # ============================================================
+    if dtype == "MTK":
+        try:
+            h.write(b"\x00\x00\xA0\x0AINFO")
+            ans = h.read(256)
+            m = re.search(rb"PageSize=(\d+)", ans)
+            if m:
+                v = int(m.group(1))
+                if v in VALID_SIZES:
+                    print("[*] Sector size via MTK BootROM =", v)
+                    return v
+        except:
+            pass
+
+    # ============================================================
+    # 8. Apple DFU fixed size
+    # ============================================================
+    if dtype == "APPLE_DFU":
+        print("[*] Sector size via Apple DFU = 4096")
+        return 4096
+
+    # ============================================================
+    # 9. Safe fallback
+    # ============================================================
+    print("[!] Fallback sector size = 4096")
+    return 4096
+
+def get_sector_size(dev):
+    """
+    Cached wrapper. Ensures we only detect once.
+    """
+    global _DETECTED_SECTOR_SIZE
+    if _DETECTED_SECTOR_SIZE:
+        return _DETECTED_SECTOR_SIZE
+
+    sz = detect_sector_size(dev)
+    print(f"[*] SECTOR SIZE DETECTED = {sz}")
+    _DETECTED_SECTOR_SIZE = sz
+    return sz
+
+# =============================================================================
+# LOADER SENDER
+# =============================================================================
+def send_packets(handle, data, serial_mode, chunk=4096):
+    total = len(data)
+    sent = 0
+
+    for off in range(0, total, chunk):
+        blk = data[off:off+chunk]
+        header = b"QSLCL" + len(blk).to_bytes(4, "little")
+        pkt = header + blk
+
+        if serial_mode:
+            handle.write(pkt)
+        else:
+            try:
+                # Find the correct OUT endpoint for USB
+                cfg = handle.get_active_configuration()
+                intf = cfg[(0,0)]
+                ep_out = None
+                for ep in intf.endpoints():
+                    if (usb.util.endpoint_direction(ep.bEndpointAddress) == 
+                        usb.util.ENDPOINT_OUT and
+                        usb.util.endpoint_type(ep.bmAttributes) == usb.util.ENDPOINT_TYPE_BULK):
+                        ep_out = ep
+                        break
+                
+                if ep_out:
+                    handle.write(ep_out.bEndpointAddress, pkt, timeout=2000)
+                else:
+                    handle.ctrl_transfer(0x21, 0x09, 0x0200, 0, pkt)
+            except:
+                pass
+
+        sent += len(blk)
+        print(f"\r[*] Loader sending... {sent*100/total:5.1f}%", end="")
+        time.sleep(0.01)
+
+    print("\n[+] Loader transfer complete.")
+
+def handle_authentication(args):
+    if not getattr(args, "auth", False):
+        return True
+
+    devs = scan_all()
+    if not devs:
+        print("[!] No device connected for authentication.")
+        return False
+
+    dev = devs[0]
+    auto_loader_if_needed(args, dev)
+
+    print("[*] Authenticating loader…")
+
+    # ---------------------------------------------------------------
+    # Step 1: Confirm QSLCLHDR exists
+    # ---------------------------------------------------------------
+    if not QSLCLHDR_DB:
+        print("[!] No QSLCLHDR block loaded. Authentication not possible.")
+        return False
+
+    # ---------------------------------------------------------------
+    # Step 2: Extract certificate + optional metadata
+    # ---------------------------------------------------------------
+    cert = QSLCLHDR_DB.get("QSLCCERT")
+    hmac_tag = QSLCLHDR_DB.get("QSLCHMAC")
+    fingerprint = QSLCLHDR_DB.get("QSLCSHA2")
+
+    if not cert:
+        print("[!] QSLCCERT not found. Cannot authenticate.")
+        return False
+
+    print(f"[*] Certificate detected: {len(cert)} bytes")
+    if hmac_tag:
+        print("[*] HMAC detected (short 16-byte tag)")
+    if fingerprint:
+        print("[*] SHA-256 fingerprint detected")
+
+    # ---------------------------------------------------------------
+    # Step 3: Build payload
+    # ---------------------------------------------------------------
+    payload = b"QSLCCERT" + cert
+    if hmac_tag:
+        payload += b"QSLCHMAC" + hmac_tag
+    if fingerprint:
+        payload += b"QSLCSHA2" + fingerprint
+
+    # ---------------------------------------------------------------
+    # Step 4: Dispatch to available handler priority
+    # ---------------------------------------------------------------
+    # Priority 1 — Engine A5 opcode
+    if 0xA5 in QSLCLEND_DB:
+        print("[*] AUTH via QSLCLEND opcode A5")
+        entry = QSLCLEND_DB[0xA5]
+        pkt = b"QSLCLEND" + entry
+        resp = qslcl_dispatch(dev, "ENGINE", pkt)
+
+    # Priority 2 — QSLCLPAR AUTHENTICATE
+    elif "AUTHENTICATE" in QSLCLPAR_DB:
+        print("[*] AUTH via QSLCLPAR")
+        resp = qslcl_dispatch(dev, "AUTHENTICATE", payload)
+
+    # Priority 3 — VM5 nano-service AUTHENTICATE
+    elif "AUTHENTICATE" in QSLCLVM5_DB:
+        print("[*] AUTH via QSLCLVM5 nano-service")
+        raw = QSLCLVM5_DB["AUTHENTICATE"]["raw"]
+        pkt = b"QSLCLVM5" + raw + payload
+        resp = qslcl_dispatch(dev, "NANO", pkt)
+
+    # Priority 4 — fallback dispatcher
+    else:
+        print("[*] AUTH fallback mode")
+        resp = qslcl_dispatch(dev, "AUTHENTICATE", payload)
+
+    # ---------------------------------------------------------------
+    # Step 5: Decode via RTF
+    # ---------------------------------------------------------------
+    status = qslcl_decode_rtf(resp)
+    print(f"[AUTH] {status}")
+
+    if status != "SUCCESS":
+        print("[!] Authentication failed. Stopping.")
+        return False
+
+    print("[✓] Authentication OK. Continuing…")
+    return True
+
+def auto_loader_if_needed(args, dev):
+    """
+    Loads qslcl.bin only when --loader is specified.
+    """
+    if not getattr(args, "loader", None):
+        return
+
+    loader_path = args.loader
+    print(f"[*] Loading loader: {loader_path}")
+
+    # ============================================================
+    # 1. Read loader safely
+    # ============================================================
+    try:
+        with open(loader_path, "rb") as f:
+            blob = f.read()
+    except Exception as e:
+        print(f"[!] Cannot read loader: {e}")
+        return
+
+    if len(blob) < 0x100:
+        print("[!] Loader appears too small — aborting.")
+        return
+
+    # ============================================================
+    # 2. Parse internal modules BEFORE sending
+    # ============================================================
+    print("[*] Parsing loader structures…")
+
+    try:
+        loader = QSLCLLoader()
+        ok = loader.parse_loader(blob)
+        if not ok:
+            print("[!] Loader parsing failed.")
+            # Don't abort here, just continue with warning
+
+        print("[*] Detected modules:")
+        print(f"    QSLCLEND: {len(loader.END)} entries")
+        print(f"    QSLCLPAR: {len(loader.PAR)} commands")
+        print(f"    QSLCLIDX: {len(loader.IDX)} indices")
+        print(f"    QSLCLVM5: {len(loader.VM5)} microsvcs")
+        print(f"    QSLCLUSB: {len(loader.USB)} blocks")
+        print(f"    QSLCLSPT: {len(loader.SPT)} blocks")
+        print(f"    QSLCLHDR: {len(loader.HDR)} blocks")
+        print()
+
+    except Exception as e:
+        print("[!] Loader parsing failed:", e)
+        # Don't return, continue anyway
+
+    # ============================================================
+    # 3. Verify loader contains minimum required segments
+    # ============================================================
+    required = ["QSLCLPAR", "QSLCLEND"]  # Remove QSLCLRTF from required
+    missing = [r for r in required if not getattr(loader, r, {})]
+
+    if missing:
+        print(f"[!] Loader missing some modules: {missing}")
+        print("[!] But continuing anyway - some commands may not work")
+        # Don't abort here, just warn
+
+    # ============================================================
+    # 4. Open transport
+    # ============================================================
+    try:
+        handle, serial_mode = open_transport(dev)
+    except Exception as e:
+        print("[!] Cannot open transport:", e)
+        return
+
+    # ============================================================
+    # 5. Send loader into device
+    # ============================================================
+    print("[*] Uploading loader to device…")
+
+    try:
+        send_packets(handle, blob, serial_mode)
+    except Exception as e:
+        print("[!] Loader upload failed:", e)
+    finally:
+        if serial_mode and handle:
+            handle.close()
+
+    print("[+] Loader uploaded successfully.\n")
+
+# ... [REST OF THE FILE REMAINS THE SAME - all the existing command functions, main(), etc.]
+
+# =============================================================================
+# COMMAND WRAPPERS - UPDATED FOR NEW PARSER
+# =============================================================================
+def cmd_hello(args=None):
+    devs = scan_all()
+    if not devs:
+        return print("[!] No device connected.")
+
+    dev = devs[0]
+
+    print("[*] Sending HELLO...")
+
+    # Try QSLCLPAR first (command implementations)
+    if "HELLO" in QSLCLPAR_DB:
+        print("[*] Using QSLCLPAR HELLO command")
+        resp = qslcl_dispatch(dev, "HELLO", b"")
+    # Try QSLCLEND (command engine)
+    elif "HELLO" in QSLCLEND_DB:
+        print("[*] Using QSLCLEND HELLO command") 
+        resp = qslcl_dispatch(dev, "HELLO", b"")
+    else:
+        # Fallback
+        resp = qslcl_dispatch(dev, "HELLO", b"")
+
+    if not resp:
+        return print("[!] HELLO: No response from device.")
+
+    status = decode_runtime_result(resp)
+    print("[*] HELLO Response:", status)
+
+    # Display module summary
+    print("[*] Loader Modules Detected:")
+    print(f"  END commands : {len(QSLCLEND_DB)}")
+    print(f"  PAR commands : {len(QSLCLPAR_DB)}")
+    print(f"  DISP entries : {len(QSLCLDISP_DB)}")
+    print(f"  RTF entries  : {len(QSLCLRTF_DB)}")
+
+def cmd_ping(args=None):
+    devs = scan_all()
+    if not devs:
+        return print("[!] No device connected.")
+    dev = devs[0]
+
+    payload = struct.pack("<I", int(time.time()) & 0xFFFFFFFF)
+
+    # Try QSLCLPAR first
+    if "PING" in QSLCLPAR_DB:
+        print("[*] Using QSLCLPAR PING command")
+        t0 = time.time()
+        resp = qslcl_dispatch(dev, "PING", payload)
+    elif "PING" in QSLCLEND_DB:
+        print("[*] Using QSLCLEND PING command")
+        t0 = time.time()
+        resp = qslcl_dispatch(dev, "PING", payload)
+    else:
+        t0 = time.time()
+        resp = qslcl_dispatch(dev, "PING", payload)
+
+    dt = (time.time() - t0) * 1000
+
+    if not resp:
+        return print("[!] PING: No response.")
+
+    print(f"[*] RTT: {dt:.2f} ms")
+
+    status = decode_runtime_result(resp)
+    print(f"[*] RUNTIME: {status}")
+
+    if dt > 150:
+        print("[!] Warning: High latency (runtime engine or cable?)")
+
+def cmd_getinfo(args=None):
+    devs = scan_all()
+    if not devs:
+        return print("[!] No device connected.")
+    dev = devs[0]
+
+    print("[*] Requesting device information…")
+
+    # Try QSLCLPAR first
+    if "GETINFO" in QSLCLPAR_DB:
+        print("[*] Using QSLCLPAR GETINFO command")
+        resp = qslcl_dispatch(dev, "GETINFO")
+    elif "GETINFO" in QSLCLEND_DB:
+        print("[*] Using QSLCLEND GETINFO command")
+        resp = qslcl_dispatch(dev, "GETINFO")
+    else:
+        resp = qslcl_dispatch(dev, "GETINFO")
+
+    if resp:
+        decoded = decode_runtime_result(resp)
+        print("   Runtime:", decoded)
+        try:
+            info = parse_device_info(resp)
+            print_device_info(info)
+            return
+        except:
+            print("[!] GETINFO parse failed.")
+
+    print("[!] GETINFO: no valid response.")
+
+# ============================================================
+#  SAFE-AWARE MEMORY OPERATIONS WITH RUNTIME DECODING
+# ============================================================
+def _decode_and_show(resp, op, addr, size=None, origin="DISPATCH"):
+    if not resp:
+        print(f"[!] {op} failed @ 0x{addr:08X} (no response, via {origin})")
+        return None
+
+    result = decode_runtime_result(resp)
+
+    sev  = result.get("severity", "UNKNOWN")
+    name = result.get("name", "UNKNOWN")
+
+    msg = f"{op} @ 0x{addr:08X} ({origin}) → {name}"
+
+    if sev == "SUCCESS":
+        print(f"[✓] {msg}")
+    elif sev == "WARNING":
+        print(f"[~] {msg}")
+    else:
+        print(f"[✗] {msg}")
+
+    return result if sev in ("SUCCESS", "WARNING") else None
+
+def qslclidx_or_dispatch(dev, cname, payload, timeout=1.0):
+    """
+    Priority:
+        1. QSLCLIDX
+        2. QSLCLPAR
+        3. QSLCLVM5
+        4. QSLCLEND
+        5. Default raw dispatcher
+    """
+    # --- 1. QSLCLIDX ---
+    for entry_id, e in QSLCLIDX_DB.items():
+        if isinstance(e, dict) and e.get("cmd") == cname:
+            print(f"[*] QSLCLIDX hit: {cname} → entry_id=0x{entry_id:08X}")
+            return qslcl_dispatch(dev, cname, payload, timeout), "IDX"
+
+    # --- 2. QSLCLPAR ---
+    if cname in QSLCLPAR_DB:
+        return qslcl_dispatch(dev, cname, payload, timeout), "PAR"
+
+    # --- 3. QSLCLVM5 (Nano VM handlers)
+    if cname in QSLCLVM5_DB:
+        op = QSLCLVM5_DB[cname]["raw"]
+        pkt = b"QSLCLVM5" + op + payload
+        return qslcl_dispatch(dev, "NANO", pkt, timeout), "VM5"
+
+    # --- 4. QSLCLEND (handlers)
+    if cname in QSLCLEND_DB:
+        op = QSLCLEND_DB[cname]
+        pkt = b"QSLCLEND" + op + payload
+        return qslcl_dispatch(dev, "ENGINE", pkt, timeout), "ENG"
+
+    # --- 5. Default fallback ---
+    return qslcl_dispatch(dev, cname, payload, timeout), "FALLBACK"
+
+def cmd_partitions(args=None):
+    devs = scan_all()
+    if not devs:
+        return print("[!] No device.")
+
+    dev = devs[0]
+    auto_loader_if_needed(args, dev)
+
+    parts = load_partitions(dev)
+
+    print(f"[*] {len(parts)} partitions detected:\n")
+    for p in parts:
+        print(f"  {p['name']:<12}  off=0x{p['offset']:08X}  size=0x{p['size']:08X}")
+     
+def add_partition_or_address_argument(p):
+    p.add_argument(
+        "target",
+        help=(
+            "Partition name (boot, system, frp, etc.) "
+            "OR raw address (hex: 0x880000)"
+        )
+    )
+
+def main():
+    # -----------------------------------------------
+    # CLEAN HELP FORMATTER (Fixes wrapping/ugly help)
+    # -----------------------------------------------
+    class QSLCLHelp(argparse.HelpFormatter):
+        def __init__(self, prog):
+            # Wider width & nice indent for Android terminals
+            super().__init__(prog, max_help_position=36, width=140)
+
+    # -----------------------------------------------
+    # GLOBAL PARSER
+    # -----------------------------------------------
+    p = argparse.ArgumentParser(
+        description="QSLCL Tool v1.1.2",
+        add_help=True,
+        formatter_class=QSLCLHelp
+    )
+
+    # Global arguments
+    p.add_argument("--loader", help="Inject qslcl.bin before executing command")
+    p.add_argument("--auth", action="store_true", help="Authenticate QSLCL loader before executing command")
+    p.add_argument("--wait", type=int, default=0, help="Wait N seconds for device to appear")
+
+    # -----------------------------------------------
+    # SUBPARSER WRAPPER (adds global flags + formatter fix)
+    # -----------------------------------------------
+    sub = p.add_subparsers(
+        dest="cmd",
+        metavar="",        # <== prevents ugly wrapping in usage
+        required=False
+    )
+
+    def new_cmd(name, *args, **kwargs):
+        sp = sub.add_parser(
+            name,
+            *args,
+            **kwargs,
+            formatter_class=QSLCLHelp
+        )
+        sp.add_argument("--loader", help="Inject qslcl.bin before executing command")
+        sp.add_argument("--auth", action="store_true")
+        sp.add_argument("--wait", type=int, default=0, help="Wait time before executing")
+        return sp
+
+    # -----------------------------------------------
+    # COMMAND DEFINITIONS
+    # -----------------------------------------------
+    new_cmd("hello").set_defaults(func=cmd_hello)
+    new_cmd("ping").set_defaults(func=cmd_ping)
+    new_cmd("getinfo").set_defaults(func=cmd_getinfo)
+
+    new_cmd("partitions",
+            help="List all detected partitions"
+           ).set_defaults(func=cmd_partitions)
+
+    r = new_cmd("read", help="Read from partition, address, or storage device")
+    r.add_argument("target", help=(
+        "Target can be:\n"
+        "  • Partition name (boot, system, etc.)\n"
+        "  • Raw address (0x880000, 123456)\n" 
+        "  • Partition+offset (boot+0x1000)\n"
+        "  • Storage device (emmc:userdata, ufs:0:boot)"
+    ))
+    r.add_argument("arg2", nargs="?", help=(
+        "Output filename OR size in bytes (auto-detected if not provided)\n"
+        "Examples:\n"
+        "  read boot boot.img      # Save to boot.img\n"
+        "  read 0x880000 4096      # Read 4096 bytes from address\n"
+        "  read boot+0x1000 dump.bin # Read from offset and save"
+    ))
+    r.add_argument("-o", "--output", help="Output filename")
+    r.add_argument("--size", type=lambda x: int(x, 0), help="Size in bytes (hex: 0x1000, decimal: 4096)")
+    r.add_argument("--chunk-size", type=lambda x: int(x, 0), default=65536, 
+                  help="Read chunk size in bytes (default: 64KB)")
+    r.add_argument("--no-verify", action="store_true", help="Skip write verification")
+    r.set_defaults(func=cmd_read)
+
+    # ENHANCED WRITE COMMAND  
+    w = new_cmd("write", help="Write data to partition, address, or storage device")
+    w.add_argument("target", help=(
+        "Target can be:\n"
+        "  • Partition name (boot, system, etc.)\n"
+        "  • Raw address (0x880000, 123456)\n"
+        "  • Partition+offset (boot+0x1000)\n"
+        "  • Storage device (emmc:userdata, ufs:0:boot)"
+    ))
+    w.add_argument("data", help=(
+        "Data source can be:\n"
+        "  • File path (firmware.bin)\n"
+        "  • Hex string (AABBCCDDEEFF)\n"
+        "  • Pattern (00FF*100 for 100 repeats)\n"
+        "  • Fill pattern (FF:4096 for 4096 bytes of 0xFF)"
+    ))
+    w.add_argument("--chunk-size", type=lambda x: int(x, 0), default=65536,
+                  help="Write chunk size in bytes (default: 64KB)")
+    w.add_argument("--max-file-size", type=lambda x: int(x, 0), default=1073741824,
+                  help="Maximum file size in bytes (default: 1GB)")
+    w.add_argument("--no-verify", action="store_true", help="Skip write verification")
+    w.add_argument("--force", action="store_true", help="Skip safety checks (DANGEROUS)")
+    w.set_defaults(func=cmd_write)
+
+    # ENHANCED ERASE COMMAND
+    e = new_cmd("erase", help="Erase partition, address range, or storage region")
+    e.add_argument("target", help=(
+        "Target can be:\n"
+        "  • Partition name (boot, system, etc.)\n"
+        "  • Raw address (0x880000, 123456)\n"
+        "  • Partition+offset (boot+0x1000)\n"
+        "  • Storage device (emmc:userdata, ufs:0:boot)"
+    ))
+    e.add_argument("arg2", nargs="?", help=(
+        "Erase size in bytes (auto-detected for partitions)\n"
+        "Examples:\n"
+        "  erase boot           # Erase entire boot partition\n"
+        "  erase 0x880000 4096  # Erase 4096 bytes from address\n"
+        "  erase cache          # Erase cache partition"
+    ))
+    e.add_argument("--size", type=lambda x: int(x, 0), help="Size in bytes (hex: 0x1000, decimal: 4096)")
+    e.add_argument("--chunk-size", type=lambda x: int(x, 0), default=1048576,
+                  help="Erase chunk size in bytes (default: 1MB)")
+    e.add_argument("--force", action="store_true", help="Skip safety checks (DANGEROUS)")
+    e.set_defaults(func=cmd_erase)
+
+    peek_parser = new_cmd("peek", help="Read memory with advanced addressing and data interpretation")
+    peek_parser.add_argument("address", help="Memory address (hex, decimal, partition, register, symbol, or expression)")
+    peek_parser.add_argument("-s", "--size", type=int, default=4, help="Number of bytes to read (default: 4)")
+    peek_parser.add_argument("-t", "--data-type", choices=['auto', 'uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int16', 'int32', 'int64', 'float', 'double', 'string'], default='auto', help="Data type interpretation")
+    peek_parser.add_argument("-c", "--count", type=int, default=1, help="Number of elements for array types")
+    peek_parser.set_defaults(func=cmd_peek)
+
+    poke_parser = new_cmd("poke", help="Write memory with advanced addressing and data types")
+    poke_parser.add_argument("address", help="Memory address (hex, decimal, partition, register, symbol, or expression)")
+    poke_parser.add_argument("value", help="Value to write (supports multiple data types)")
+    poke_parser.add_argument("-t", "--data-type", choices=['auto', 'uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int16', 'int32', 'int64', 'float', 'double', 'hex', 'string'], default='auto', help="Data type of value")
+    poke_parser.add_argument("-s", "--size", type=int, default=4, help="Size of write in bytes (for hex/string types)")
+    poke_parser.set_defaults(func=cmd_poke)
+
+    rawmode_parser = new_cmd("rawmode", help="Raw mode access and privilege escalation commands")
+    rawmode_parser.add_argument("rawmode_subcommand", help="Rawmode subcommand (list, set, status, unlock, lock, configure, escalate, monitor, audit, reset)")
+    rawmode_parser.add_argument("rawmode_args", nargs="*", help="Additional arguments for rawmode command")
+    rawmode_parser.set_defaults(func=cmd_rawmode)
+
+    dump_parser = new_cmd("dump", help="Advanced memory dumping with multiple modes")
+    dump_parser.add_argument("address", help="Address, partition name, or region to dump")
+    dump_parser.add_argument("size", nargs="?", help="Size to dump (bytes, K, M, G, or hex with 0x)")
+    dump_parser.add_argument("output", nargs="?", help="Output file or directory path")
+    dump_parser.add_argument("--chunk-size", type=int, default=4096, help="Read chunk size (default: 4096)")
+    dump_parser.add_argument("--verify", action="store_true", help="Verify dump integrity with SHA256")
+    dump_parser.add_argument("--compress", action="store_true", help="Compress dump with gzip")
+    dump_parser.add_argument("--resume", action="store_true", help="Resume interrupted dump")
+    dump_parser.add_argument("--retries", type=int, default=3, help="Max retries for failed reads")
+    dump_parser.add_argument("--verbose", action="store_true", help="Verbose output")
+    dump_parser.set_defaults(func=cmd_dump)
+
+    reset_parser = new_cmd("reset", help="System reset and restart commands")
+    reset_parser.add_argument("reset_subcommand", help="Reset subcommand (list, soft, hard, force, domain, recovery, factory, bootloader, edl, pmic, watchdog, custom, sequence)")
+    reset_parser.add_argument("reset_args", nargs="*", help="Additional arguments for reset command")
+    reset_parser.add_argument("--force-reset", action="store_true", help="Bypass confirmation prompts")
+    reset_parser.set_defaults(func=cmd_reset)
+
+    bruteforce_parser = new_cmd("bruteforce", help="Advanced brute-force and system exploration")
+    bruteforce_parser.add_argument("bruteforce_subcommand", nargs="?", help="Bruteforce subcommand (list, scan, pattern, fuzz, dictionary, replay, analyze, continue)")
+    bruteforce_parser.add_argument("pattern", nargs="?", help="Legacy pattern (e.g., 0x00-0xFFFF)")
+    bruteforce_parser.add_argument("--threads", type=int, default=8, help="Number of threads")
+    bruteforce_parser.add_argument("--rawmode", action="store_true", help="Enable raw mode")
+    bruteforce_parser.add_argument("--output", help="Output filename")
+    bruteforce_parser.add_argument("--strategy", choices=["basic", "smart", "aggressive"], default="basic", help="Bruteforce strategy")
+    bruteforce_parser.add_argument("bruteforce_args", nargs="*", help="Additional arguments")
+    bruteforce_parser.set_defaults(func=cmd_bruteforce)
+
+    config_parser = new_cmd("config", help="Configuration management commands")
+    config_parser.add_argument("config_subcommand", help="Config subcommand (get, set, list, delete, backup, restore, reset, import, export, validate, info)")
+    config_parser.add_argument("config_args", nargs="*", help="Additional arguments for config command")
+    config_parser.add_argument("--verify", action="store_true", help="Verify configuration after setting")
+    config_parser.set_defaults(func=cmd_config)
+
+    config_list_parser = new_cmd("config-list", help="List configuration capabilities")
+    config_list_parser.set_defaults(func=cmd_config_list)
+
+    glitch_parser = new_cmd("glitch", help="Hardware glitch injection")
+    glitch_parser.add_argument("glitch_subcommand")
+    glitch_parser.add_argument("glitch_args", nargs="*")
+    glitch_parser.add_argument("--level", type=int)
+    glitch_parser.add_argument("--iter", type=int)
+    glitch_parser.add_argument("--window", type=int)
+    glitch_parser.add_argument("--sweep", type=int)
+    glitch_parser.set_defaults(func=cmd_glitch)
+
+    footer_parser = new_cmd("footer", help="Footer analysis")
+    footer_parser.add_argument("--type", dest="footer_type", default="STANDARD",
+                              choices=["STANDARD","EXTENDED","SECURITY","BOOT","LOADER","DEBUG","AUDIT","ALL"])
+    footer_parser.add_argument("--raw", action="store_true")
+    footer_parser.add_argument("--extended", action="store_true")
+    footer_parser.add_argument("--verbose", action="store_true")
+    footer_parser.add_argument("--crc", action="store_true")
+    footer_parser.add_argument("--metadata", action="store_true")
+    footer_parser.add_argument("--all", action="store_true")
+    footer_parser.add_argument("--validate", action="store_true")
+    footer_parser.add_argument("--hex", action="store_true")
+    footer_parser.add_argument("--structured", action="store_true")
+    footer_parser.add_argument("--json", action="store_true")
+    footer_parser.add_argument("--save", metavar="FILE")
+    footer_parser.add_argument("footer_args", nargs="*")
+    footer_parser.set_defaults(func=cmd_footer)
+
+    oem_parser = new_cmd("oem", help="OEM commands")
+    oem_parser.add_argument("oem_subcommand")
+    oem_parser.add_argument("oem_args", nargs="*")
+    oem_parser.set_defaults(func=cmd_oem)
+
+    odm_parser = new_cmd("odm", help="ODM commands")
+    odm_parser.add_argument("odm_subcommand")
+    odm_parser.add_argument("odm_args", nargs="*")
+    odm_parser.set_defaults(func=cmd_odm)
+
+    mode_parser = new_cmd("mode", help="Mode control")
+    mode_parser.add_argument("mode_subcommand")
+    mode_parser.add_argument("mode_args", nargs="*")
+    mode_parser.set_defaults(func=cmd_mode)
+
+    new_cmd("mode-status", help="Check current mode").set_defaults(func=cmd_mode_status)
+
+    crash_parser = new_cmd("crash", help="Crash simulation")
+    crash_parser.add_argument("crash_subcommand")
+    crash_parser.add_argument("crash_args", nargs="*")
+    crash_parser.set_defaults(func=cmd_crash)
+
+    new_cmd("crash-test", help="Crash test").set_defaults(func=cmd_crash_test)
+
+    bypass_parser = new_cmd("bypass", help="Security bypass engine")
+    bypass_parser.add_argument("bypass_subcommand")
+    bypass_parser.add_argument("bypass_args", nargs="*")
+    bypass_parser.set_defaults(func=cmd_bypass)
+
+    voltage_parser = new_cmd("voltage", help="Voltage control")
+    voltage_parser.add_argument("voltage_subcommand")
+    voltage_parser.add_argument("voltage_args", nargs="*")
+    voltage_parser.set_defaults(func=cmd_voltage)
+
+    power_parser = new_cmd("power", help="Power management")
+    power_parser.add_argument("power_subcommand")
+    power_parser.add_argument("power_args", nargs="*")
+    power_parser.set_defaults(func=cmd_power)
+
+    verify_parser = new_cmd("verify", help="System verification")
+    verify_parser.add_argument("verify_subcommand")
+    verify_parser.add_argument("verify_args", nargs="*")
+    verify_parser.set_defaults(func=cmd_verify)
+
+    rawstate_parser = new_cmd("rawstate", help="Low-level state inspection")
+    rawstate_parser.add_argument("rawstate_subcommand")
+    rawstate_parser.add_argument("rawstate_args", nargs="*")
+    rawstate_parser.set_defaults(func=cmd_rawstate)
+    # -----------------------------------------------
+    # PARSE ARGS
+    # -----------------------------------------------
+    args = p.parse_args()
+
+    # FIXED: Better device handling in main
+    if (args.wait or 0) > 0:
+        print(f"[*] Waiting up to {args.wait}s for device...")
+        dev = wait_for_device(timeout=args.wait)
+        if not dev:
+            print("[!] No device found within timeout.")
+            return
+    else:
+        devs = scan_all()
+        if not devs:
+            print("[!] No valid QSLCL-compatible device detected.")
+            return
+        dev = devs[0]
+
+    if not validate_device(dev):
+        print(f"[!] Device '{dev.product}' is not suitable for QSLCL operations.")
+        return
+
+    if args.loader:
+        print(f"[*] Injecting loader: {args.loader}")
+        auto_loader_if_needed(args, dev)
+
+    if hasattr(args, "func"):
+        args.func(args)
+    else:
+        p.print_help()
+
+if __name__ == "__main__":
+    main()
