@@ -30,7 +30,7 @@ QSLCL runs in:
 
 ## 🔥 Major Updates
 
-* **Universal Micro-VM Architecture** - 100% cross-platform execution (ARM/x86/RISC-V/MIPS/PowerPC)
+* **Universal Micro-VM Architecture** - 100% cross-platform execution
 * **Enhanced Parser Compatibility** - Complete header format synchronization between qslcl.bin and qslcl.py
 * **Quantum-Grade Entropy Engine** - Adaptive behavior based on environmental fingerprinting
 * **Self-Healing Binary Integrity** - Multi-layer runtime integrity verification
