@@ -138,7 +138,9 @@ gpg --recv-key 37065C6EFFEEB5C5
 If you are a developer, journalist, activist, or security researcher, you may mirror this file. If you are an OEM,be reminded: chaos cannot be blacklisted. If you are an attacker, the ELF will recognize you before you recognize it.
 
 Signed,
+
 Sharif Muhaymin
+
 Quantum Silicon Core Loader Creator
 
 https://github.com/Sharif-bot-cmd/Quantum-Silicon-Core-Loader
