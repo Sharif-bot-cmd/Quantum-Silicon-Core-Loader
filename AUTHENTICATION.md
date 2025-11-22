@@ -38,7 +38,7 @@ This message is digitally signed. For public trust verification:
 Fingerprint: 4882D26E965B17251FEDC2F337065C6EFFEEB5C5
 
 — Sharif Muhaymin
-Creator of qslcl.elf
+Creator of Quantum Silicon Core Loader 
 
 - ---
 
