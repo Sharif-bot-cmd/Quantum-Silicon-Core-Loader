@@ -401,3 +401,5 @@ python qslcl.py hello --loader=qslcl.bin --debug
 ---
 
 **QSLCL v5.5 — Where silicon meets consciousness** 🔥
+
+- also i upload the build.py on how my qslcl.bin creates and its features.
