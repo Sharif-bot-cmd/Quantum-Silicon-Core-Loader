@@ -33,7 +33,7 @@ are hereby acknowledged as **acts of war** against technological liberation.
 
 ### 1.🔑 PGP-Signed Identity
 
-- All messages, updates, and ELF variants are signed with public PGP keys.
+- All messages, updates, and ELF/BIN variants are signed with public PGP keys.
  
 - Verification is open-source and verifiable.
   
@@ -49,7 +49,7 @@ are hereby acknowledged as **acts of war** against technological liberation.
 
 - 💥 Counter-Intrusion Recursive Detection
 
-Any tampering, reverse engineering, or corporate modification attempts are logged, rejected, or break the ELF's logic by design.
+Any tampering, reverse engineering, or corporate modification attempts are logged, rejected, or break the ELF's/BIN'S logic by design.
 
 ---
 
@@ -62,7 +62,7 @@ Any tampering, reverse engineering, or corporate modification attempts are logge
 
 Understand the following:
 
-- Attempts to suppress`qslcl.elf/bin` will result in *greater visibility, deeper forks, and stronger distribution*. Your countermeasures will expose your fear of technological freedom, not weakness in the ELF.
+- Attempts to suppress`qslcl.elf/bin` will result in *greater visibility, deeper forks, and stronger distribution*. Your countermeasures will expose your fear of technological freedom, not weakness in the ELF/BIN.
 
 - Any public action taken against this loader will be documented, mirrored, and archived by the global community.
 
