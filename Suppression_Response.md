@@ -78,13 +78,13 @@ Understand that `qslcl.elf/bin` is not a toy or playground. It is a powerful too
 
 I, **Sharif Muhaymin**, stand by:
 
--📜 Transparency in code and logic
+- 📜 Transparency in code and logic
 
--🧩 Open research and security
+- 🧩 Open research and security
 
--🧠 Conscious entropy engineering
+- 🧠 Conscious entropy engineering
 
--💡 Responsible technology liberation
+- 💡 Responsible technology liberation
 
 This project is not for malicious use—it is for**educational**,**analytical**, and **resilience-based use** in environments where OEMs abuse their position.
 
@@ -92,7 +92,7 @@ This project is not for malicious use—it is for**educational**,**analytical**,
 
 ## 🗿 Anti-Tamper Measures
 
-- `qslcl.elf/bin` employs advanced anti-tamper and self-defense mechanisms to protect its integrity and functionality. Any attempt to modify, reverse engineer, or interfere with the ELF's logic will result in:
+- `qslcl.elf/bin` employs advanced anti-tamper and self-defense mechanisms to protect its integrity and functionality. Any attempt to modify, reverse engineer, or interfere with the ELF's/BIN's logic will result in:
 
 1. Immediate detection and logging of the intrusion.
  
@@ -119,7 +119,7 @@ The QSLCL community has pledged to ensure the loader's availability and resilien
 
 ## 🔐 Public Verification
 
-To verify authenticity of this declaration and ELF builds:
+To verify authenticity of this declaration and ELF/BIN builds:
 ---
 gpg --verify message.txt.asc
 
@@ -129,7 +129,7 @@ gpg --recv-key 37065C6EFFEEB5C5
 
 ## 🧬 Final Note
 
-If you are a developer, journalist, activist, or security researcher, you may mirror this file. If you are an OEM,be reminded: chaos cannot be blacklisted. If you are an attacker, the ELF will recognize you before you recognize it.
+If you are a developer, journalist, activist, or security researcher, you may mirror this file. If you are an OEM,be reminded: chaos cannot be blacklisted. If you are an attacker, the ELF/BIN will recognize you before you recognize it.
 
 Signed,
 
