@@ -1,14 +1,14 @@
-# **Quantum Silicon Core Loader — v5.5**
+# **Quantum Silicon Core Loader — v5.6**
 
 Primary Core: **qslcl.elf**
 
 Assistant Module: **qslcl.bin**
 
-Universal Controller: **qslcl.py (v1.1.2)**
+Universal Controller: **qslcl.py (v1.1.3)**
 
 ---
 
-# 🧬 Overview
+# Overview
 
 **Quantum Silicon Core Loader (QSLCL)** is a post-bootloader, post-vendor, post-exploit execution layer operating directly at the silicon boundary.
 
@@ -26,75 +26,188 @@ QSLCL runs in:
 
 ---
 
-# 🚀 What's New in **v5.5**
+# What's New in **v5.6**
 
-## 🔥 Major Updates
+## Major Updates
 
-* **Universal Micro-VM Architecture** - 100% cross-platform execution
-* **Enhanced Parser Compatibility** - Complete header format synchronization between qslcl.bin and qslcl.py
-* **Quantum-Grade Entropy Engine** - Adaptive behavior based on environmental fingerprinting
-* **Self-Healing Binary Integrity** - Multi-layer runtime integrity verification
+* **Complete Command System Overhaul** - 100% functional READ, WRITE, ERASE, PEEK, POKE, and RAWMODE commands
+* **Consolidated QSLCLPAR System** - Unified command engine replacing QSLCLEND duplication
+* **Enhanced Binary Compatibility** - Perfect parser/builder synchronization
+* **Advanced Memory Operations** - Professional-grade memory manipulation with safety features
 
-## 🛠 Technical Improvements
+## Technical Improvements
 
-* **QSLCLEND Engine Block** - Complete command engine with opcode-based dispatch
-* **QSLCLPAR Command Table** - Structured command implementations with metadata
-* **QSLCLDISP Dispatch System** - Hash-based command routing
-* **Enhanced USB Protocol Engine** - Full USB 2.0/3.0 specification compliance
-* **Universal Bootstrap System** - Architecture-neutral micro-VM bytecode
+* **QSLCLPAR Command Engine** - Complete 32-command implementation with opcode routing
+* **Universal Address Resolution** - Smart address parsing with partition, register, and expression support
+* **Bit-Level Operations** - AND/OR/XOR operations for safe register modification
+* **Multi-Format Data Support** - Hex, decimal, strings, floats, patterns, and expressions
+* **Comprehensive Safety System** - Critical region protection with BRICK confirmation
 
-## 🔧 Parser & Compatibility
+## Parser & Compatibility
 
-* **Fixed Header Detection** - Proper parsing of QSLCLBIN, QSLCLEND, QSLCLPAR, QSLCLDISP blocks
-* **Universal Binary Format** - Single qslcl.bin works across all architectures
-* **Enhanced Error Recovery** - Graceful handling of partial or corrupted loader states
-* **Real-time Module Discovery** - Dynamic detection of available command sets
+* **Enhanced Binary Validation** - Smart compatibility checking with detailed diagnostics
+* **Universal Transport Layer** - Robust USB/Serial communication with auto-retry
 
 ---
 
-# 🐍 qslcl.py — Universal Controller **v1.1.2**
+# qslcl.py — Universal Controller **v1.1.3**
 
-## 🎯 What's Fixed in v1.1.2
+## What's New in v1.1.3
 
-* **Complete Parser Rewrite** - Now correctly handles all QSLCL binary headers and structures
-* **Enhanced Command Dispatch** - Priority-based routing (QSLCLPAR → QSLCLEND → Universal)
-* **Better Error Reporting** - Detailed parsing diagnostics and module discovery
-* **Universal Transport Layer** - Improved USB/Serial communication reliability
-* **Runtime Fault Decoding** - Enhanced QSLCLRTF frame interpretation
+* **100% Complete Command Suite** - All core commands fully implemented
+* **Advanced Memory Operations** - Professional READ/WRITE/ERASE with verification
+* **Smart Data Type Detection** - Auto-detection of integers, floats, strings, and hex data
+* **Bit-Level Manipulation** - Safe register modification with AND/OR/XOR operations
+* **Enhanced Safety Features** - Critical region protection with force mode override
 
-## 🔄 Updated Command Execution
+## Fully Implemented Commands
 
+### **READ Command** - Advanced Memory Reading
 ```bash
-# Now properly detects and uses embedded command engines
-python qslcl.py hello --loader=qslcl.bin
-python qslcl.py ping --loader=qslcl.bin  
-python qslcl.py getinfo --loader=qslcl.bin
+# Read entire partition
+python qslcl.py read boot boot.img --loader=qslcl.bin
+
+# Read specific address with size
+python qslcl.py read 0x880000 --size 0x1000 --loader=qslcl.bin
+
+# Read partition offset
+python qslcl.py read boot+0x1000 --loader=qslcl.bin
+
+# Read with verification and progress
+python qslcl.py read system system.img --chunk-size 131072 --loader=qslcl.bin
 ```
 
-**New Parser Output:**
+### **WRITE Command** - Professional Memory Writing
+```bash
+# Write file to partition
+python qslcl.py write boot boot.img --loader=qslcl.bin
+
+# Write hex data
+python qslcl.py write 0x100000 "AABBCCDDEEFF" --loader=qslcl.bin
+
+# Write pattern data
+python qslcl.py write cache "00FF*1000" --loader=qslcl.bin
+python qslcl.py write userdata "FF:4096" --loader=qslcl.bin
+
+# Write with force mode (dangerous)
+python qslcl.py write boot boot.img --force --loader=qslcl.bin
+```
+
+### **ERASE Command** - Secure Data Erasure
+```bash
+# Erase partition with zeros
+python qslcl.py erase cache --loader=qslcl.bin
+
+# Erase with specific pattern
+python qslcl.py erase userdata --pattern FF --loader=qslcl.bin
+
+# Erase specific region
+python qslcl.py erase 0x100000 --size 1M --loader=qslcl.bin
+
+# Secure erase with random data
+python qslcl.py erase system --pattern random --loader=qslcl.bin
+```
+
+### **PEEK Command** - Advanced Memory Inspection
+```bash
+# Basic memory read
+python qslcl.py peek 0x100000 --loader=qslcl.bin
+
+# Read as specific type
+python qslcl.py peek 0x200000 --data-type float --loader=qslcl.bin
+python qslcl.py peek 0x300000 --data-type uint16 --loader=qslcl.bin
+
+# Read multiple elements
+python qslcl.py peek 0x400000 --count 8 --data-type uint32 --loader=qslcl.bin
+
+# Read with hex dump
+python qslcl.py peek boot --size 64 --hexdump --loader=qslcl.bin
+
+# Read register
+python qslcl.py peek sp --loader=qslcl.bin
+python qslcl.py peek pc --loader=qslcl.bin
+```
+
+### **POKE Command** - Precision Memory Writing
+```bash
+# Basic write
+python qslcl.py poke 0x100000 0x12345678 --loader=qslcl.bin
+
+# Write specific data types
+python qslcl.py poke 0x200000 3.14159 --data-type float --loader=qslcl.bin
+python qslcl.py poke 0x300000 -1 --data-type int32 --loader=qslcl.bin
+
+# Write strings
+python qslcl.py poke 0x400000 "Hello World" --data-type string --loader=qslcl.bin
+
+# Bitwise operations
+python qslcl.py poke 0x500000 0xFF --bit-op OR --loader=qslcl.bin
+python qslcl.py poke 0x600000 0x0F --bit-op AND --loader=qslcl.bin
+
+# Expressions
+python qslcl.py poke 0x700000 "0x1000 + 0x200 * 2" --loader=qslcl.bin
+```
+
+### **RAWMODE Command** - Privilege Escalation Engine
+```bash
+# List capabilities
+python qslcl.py rawmode list --loader=qslcl.bin
+
+# Check status
+python qslcl.py rawmode status --loader=qslcl.bin
+
+# Unlock privileges
+python qslcl.py rawmode unlock --loader=qslcl.bin
+
+# Enable features
+python qslcl.py rawmode set JTAG_ENABLE 1 --loader=qslcl.bin
+python qslcl.py rawmode set MMU_BYPASS 1 --loader=qslcl.bin
+
+# Escalate privileges
+python qslcl.py rawmode escalate SUPERVISOR --loader=qslcl.bin
+
+# Monitor system
+python qslcl.py rawmode monitor SYSTEM 30 --loader=qslcl.bin
+
+# View audit logs
+python qslcl.py rawmode audit ALL --loader=qslcl.bin
+```
+
+## Updated Command Execution
+
+```bash
+# Now with 100% functional commands
+python qslcl.py read boot boot.img --loader=qslcl.bin
+python qslcl.py write boot modified_boot.img --loader=qslcl.bin
+python qslcl.py erase cache --loader=qslcl.bin
+python qslcl.py peek 0x880000 --size 16 --loader=qslcl.bin
+python qslcl.py poke 0x880000 0xDEADBEEF --loader=qslcl.bin
+```
+
+**Enhanced Parser Output:**
 ```
 [*] Parsing loader structures (43104 bytes)...
 [+] Found 8 different header types:
     QSLCLBIN: 1 occurrences
-    QSLCLEND: 1 occurrences
     QSLCLPAR: 1 occurrences
     QSLCLDISP: 1 occurrences
     QSLCLUSB: 1 occurrences
     QSLCLVM5: 1 occurrences
     QSLCLRTF: 1 occurrences
     QSLCLHDR: 1 occurrences
+    QSLCLSPT: 1 occurrences
 [*] Successfully parsed 7 module types
 
 [*] Parser summary:
-[+] Detected modules: END(15), PAR(32), DISP(32), RTF(5), HDR(1), VM5(12), USB(13)
-[+] Available commands: HELLO, PING, GETINFO, GETVAR, GETSECTOR, RAW, READ...
+[+] Detected modules: PAR(32), DISP(32), RTF(5), HDR(1), VM5(12), USB(13), SPT(8)
+[+] Available commands: HELLO, PING, GETINFO, GETVAR, GETSECTOR, READ, WRITE, ERASE, PEEK, POKE, RAWMODE...
 ```
 
 ---
 
-# 🎯 Advanced Command Suite (v1.1.2)
+# Advanced Command Suite (v1.1.3)
 
-## 🔒 Universal OEM Control
+## Universal OEM Control
 
 ```bash
 python qslcl.py oem unlock --loader=qslcl.bin
@@ -108,7 +221,7 @@ Features:
 
 ---
 
-## 🏭 Factory ODM Control
+## Factory ODM Control
 
 Enable engineering interfaces:
 
@@ -135,7 +248,7 @@ python qslcl.py odm factory_reset  --loader=qslcl.bin
 
 ---
 
-## ⚡ System Verification Suite
+## System Verification Suite
 
 ```bash
 python qslcl.py verify integrity      --loader=qslcl.bin
@@ -146,7 +259,7 @@ python qslcl.py verify comprehensive  --loader=qslcl.bin
 
 ---
 
-## 🔌 Power & Voltage Control
+## Power & Voltage Control
 
 Power domains:
 
@@ -167,7 +280,7 @@ python qslcl.py voltage monitor 60 --loader=qslcl.bin
 
 ---
 
-## 🔓 Security Bypass Engine
+## Security Bypass Engine
 
 ```bash
 python qslcl.py bypass frp --loader=qslcl.bin
@@ -177,7 +290,7 @@ python qslcl.py bypass scan --loader=qslcl.bin
 
 ---
 
-## 💥 Fault Injection Framework
+## Fault Injection Framework
 
 Voltage glitch:
 
@@ -212,7 +325,7 @@ python qslcl.py glitch auto BYPASS 60 AGGRESSIVE --loader=qslcl.bin
 
 ---
 
-## 🔄 Smart Mode Management
+## Smart Mode Management
 
 List supported loader modes:
 
@@ -226,37 +339,19 @@ Query state:
 python qslcl.py mode status --loader=qslcl.bin
 ```
 
-Switch:
-
-```bash
-python qslcl.py mode QSLCL --loader=qslcl.bin
-```
-
 ---
 
-## 🛠 Advanced Memory Operations
+# Architecture Overview
 
-```bash
-# Universal memory access with auto-detection
-python qslcl.py read boot boot.img --loader=qslcl.bin
-python qslcl.py write boot modified_boot.img --loader=qslcl.bin
-python qslcl.py peek 0x880000 --size 16 --loader=qslcl.bin
-python qslcl.py poke 0x880000 0xDEADBEEF --loader=qslcl.bin
-```
+## Core Components
 
----
+* **qslcl.bin** - Universal Micro-VM execution engine with 32 fully implemented commands
+* **qslcl.py** - Complete universal controller with professional memory operations
+* **qslcl.elf** - Silicon-level primary loader
+* **Quantum Entropy Engine** - Environmental fingerprinting and adaptive behavior
+* **Self-Healing Integrity** - Multi-layer runtime verification
 
-# 🏗 Architecture Overview
-
-## 🎯 Core Components
-
-* **qslcl.bin** — Universal Micro-VM execution engine with cross-architecture bytecode
-* **qslcl.py** — Enhanced universal controller with complete parser rewrite
-* **qslcl.elf** — Silicon-level primary loader
-* **Quantum Entropy Engine** — Environmental fingerprinting and adaptive behavior
-* **Self-Healing Integrity** — Multi-layer runtime verification
-
-## 🔧 Protocol Stack
+## Protocol Stack
 
 * **USB 2.0/3.0** - Complete specification compliance with endpoint management
 * **UART/Serial** - Universal serial communication with auto-baud detection
@@ -265,22 +360,55 @@ python qslcl.py poke 0x880000 0xDEADBEEF --loader=qslcl.bin
 * **Apple DFU** - Apple Device Firmware Update protocol support
 * **Universal Micro-VM** - Architecture-neutral bytecode execution
 
-## 🧩 Binary Structure
+## Binary Structure
 
 ```
 QSLCLBIN Header
-├── QSLCLEND Command Engine
-├── QSLCLPAR Command Implementations  
+├── QSLCLPAR Command Engine (32 commands)
 ├── QSLCLDISP Dispatch Table
 ├── QSLCLUSB USB Protocol Engine
 ├── QSLCLVM5 Nano-Kernel Services
 ├── QSLCLRTF Runtime Fault Table
+├── QSLCLSPT Setup Packet Database
 └── QSLCLHDR Certificate & Security
 ```
 
+## Complete Command List
+
+**Core Memory Operations:**
+- `READ` - Advanced memory reading with verification
+- `WRITE` - Professional memory writing with safety checks
+- `ERASE` - Secure data erasure with multiple patterns
+- `PEEK` - Memory inspection with type detection
+- `POKE` - Precision memory writing with bit operations
+
+**System Commands:**
+- `HELLO` - Device handshake and identification
+- `PING` - Latency testing and connectivity verification
+- `GETINFO` - Comprehensive device information
+- `GETVAR` - System variable access
+- `GETSECTOR` - Storage sector size detection
+
+**Advanced Operations:**
+- `RAWMODE` - Privilege escalation and hardware access
+- `GETCONFIG` - System configuration management
+- `RESET` - System reset and restart control
+- `BRUTEFORCE` - Advanced system exploration
+- `AUTHENTICATE` - Security authentication
+
+**Specialized Commands:**
+- `OEM` - Original Equipment Manufacturer functions
+- `ODM` - Original Design Manufacturer controls
+- `MODE` - System mode management
+- `POWER` - Power domain control
+- `VOLTAGE` - Voltage regulation
+- `BYPASS` - Security bypass operations
+- `GLITCH` - Fault injection framework
+- `VERIFY` - System integrity verification
+
 ---
 
-# 📦 Installation & Quick Start
+# Installation & Quick Start
 
 ## Requirements
 
@@ -292,13 +420,28 @@ pip install requests tqdm   # optional
 ## Basic Usage
 
 ```bash
-# Build the universal binary
-python build.py
 
-# Load and execute commands
+# Test basic functionality
 python qslcl.py hello --loader=qslcl.bin
 python qslcl.py getinfo --loader=qslcl.bin
 python qslcl.py ping --loader=qslcl.bin
+```
+
+## Professional Usage
+
+```bash
+# Complete memory operations
+python qslcl.py read boot boot.img --loader=qslcl.bin
+python qslcl.py write boot modified_boot.img --loader=qslcl.bin --verify
+python qslcl.py erase cache --pattern random --loader=qslcl.bin
+
+# Advanced debugging
+python qslcl.py peek 0x100000 --hexdump --loader=qslcl.bin
+python qslcl.py poke 0x200000 0xDEADBEEF --bit-op OR --loader=qslcl.bin
+
+# System control
+python qslcl.py rawmode unlock --loader=qslcl.bin
+python qslcl.py rawmode set JTAG_ENABLE 1 --loader=qslcl.bin
 ```
 
 ## Advanced Usage
@@ -318,7 +461,7 @@ python qslcl.py hello --loader=qslcl.bin && python qslcl.py getinfo --loader=qsl
 
 # 🔌 Device Compatibility
 
-| Vendor   | Mode             | Detection Method            | v5.5 Status |
+| Vendor   | Mode             | Detection Method            | v5.6 Status |
 |----------|------------------|-----------------------------|-------------|
 | Qualcomm | EDL              | Sahara + Firehose handshake | ✅ Enhanced |
 | MediaTek | BROM / Preloader | 0xA0 preloader ping         | ✅ Enhanced |
@@ -326,11 +469,11 @@ python qslcl.py hello --loader=qslcl.bin && python qslcl.py getinfo --loader=qsl
 | Generic  | USB CDC/Bulk     | Endpoint auto-discovery     | ✅ Universal |
 | Any      | Serial COM       | UART auto sync              | ✅ Universal |
 
-**QSLCL v5.5 automatically selects the correct transport and architecture.**
+**QSLCL v5.6 automatically selects the correct transport and architecture.**
 
 ---
 
-# ⚠ Legal & Ethical Notice
+# Legal & Ethical Notice
 
 ## ✅ Allowed:
 
@@ -367,6 +510,12 @@ python qslcl.py hello --loader=qslcl.bin
 python qslcl.py hello --loader=qslcl.bin --wait 5
 ```
 
+**Memory Operation Errors:**
+```bash
+# Use smaller chunk sizes for problematic devices
+python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
+```
+
 ## Getting Help
 
 1. **Open a GitHub issue** with detailed information
@@ -381,25 +530,29 @@ python qslcl.py hello --loader=qslcl.bin --wait 5
 # Enable debug output
 python build.py --debug
 python qslcl.py hello --loader=qslcl.bin --debug
+
+# Verbose output for complex operations
+python qslcl.py rawmode list --verbose --loader=qslcl.bin
 ```
 
 ---
 
-# 🧩 Final Words
+# Final Words
 
-> **"Quantum Silicon Core Loader v5.5 doesn't just execute on silicon — it becomes part of the silicon's consciousness, interpreting hardware intent through universal micro-VM consciousness."**
+> **"Quantum Silicon Core Loader v5.6 represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, and every hardware interaction becomes an extension of silicon consciousness through our perfected micro-VM architecture."**
 
-## 🌟 Key Philosophy
+## Key Philosophy
 
-* **Universal Execution** - One binary, all architectures
-* **Silicon Intimacy** - Direct hardware conversation
-* **Adaptive Intelligence** - Environment-aware behavior
-* **Ethical Empowerment** - Capability with responsibility
+* **Universal Execution** - One binary, all architectures, 32 complete commands
+* **Silicon Intimacy** - Direct hardware conversation with bit-level precision
+* **Adaptive Intelligence** - Environment-aware behavior with safety enforcement
+* **Professional Grade** - Enterprise-level memory operations with verification
+* **Ethical Empowerment** - Capability with responsibility and safety controls
 
 📺 **YouTube**: [https://www.youtube.com/@EntropyVector](https://www.youtube.com/@EntropyVector)
 
 ---
 
-**QSLCL v5.5 — Where silicon meets consciousness** 🔥
+**QSLCL v5.6 — Where silicon consciousness meets professional execution** 
 
-- also i upload the build.py on how my qslcl.bin creates and its features.
+*Built with 100% functional memory operations, complete privilege management, and enterprise-grade safety features.*
