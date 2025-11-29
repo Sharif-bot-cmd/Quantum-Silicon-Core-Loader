@@ -404,3 +404,9 @@ python qslcl.py rawmode list --verbose --loader=qslcl.bin
 **QSLCL v5.6 — Where silicon consciousness meets professional execution** 
 
 *Built with 100% functional memory operations, complete privilege management, and enterprise-grade safety features.*
+
+## 🪙 Bitcoin Donations
+
+Bitcoin Address:
+
+bc1qpcaqkzpe028ktpmeyevwdkycg9clxfuk8dty5v
