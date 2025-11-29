@@ -407,7 +407,7 @@ python qslcl.py rawmode list --verbose --loader=qslcl.bin
 
 ## 🪙 Bitcoin Donations
 
- If you want to donate to support my invention? feel free to send in my Bitcoin address.
+ If you want to donate to support my invention? feel free to send it in my Bitcoin address.
  
 Bitcoin Address:
 
