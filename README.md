@@ -4,7 +4,7 @@ Primary Core: **qslcl.elf**
 
 Assistant Module: **qslcl.bin**
 
-Universal Controller: **qslcl.py (v1.1.3)**
+Universal Controller: **qslcl.py (v1.1.4)**
 
 ---
 
@@ -30,7 +30,7 @@ QSLCL runs in:
 
 ## Major Updates
 
-* **Complete Command System Overhaul** - 100% functional READ, WRITE, ERASE, PEEK, POKE, and RAWMODE commands
+* **Complete Command System Overhaul** - 100% functional READ, WRITE, ERASE, PEEK, POKE, PATCH and RAWMODE commands
 * **Consolidated QSLCLPAR System** - Unified command engine replacing QSLCLEND duplication
 * **Enhanced Binary Compatibility** - Perfect parser/builder synchronization
 * **Advanced Memory Operations** - Professional-grade memory manipulation with safety features
@@ -42,6 +42,7 @@ QSLCL runs in:
 * **Bit-Level Operations** - AND/OR/XOR operations for safe register modification
 * **Multi-Format Data Support** - Hex, decimal, strings, floats, patterns, and expressions
 * **Comprehensive Safety System** - Critical region protection with BRICK confirmation
+* **Advanced Patching System** - Professional binary patching with verification
 
 ## Parser & Compatibility
 
@@ -50,17 +51,36 @@ QSLCL runs in:
 
 ---
 
-# qslcl.py — Universal Controller **v1.1.3**
+# qslcl.py — Universal Controller **v1.1.4**
 
-## What's New in v1.1.3
+## What's New in v1.1.4
 
-* **100% Complete Command Suite** - All core commands fully implemented
-* **Advanced Memory Operations** - Professional READ/WRITE/ERASE with verification
+* **PATCH Command** - Advanced binary patching with multiple input formats and verification
+* **100% Complete Command Suite** - All core commands fully implemented including PATCH
+* **Advanced Memory Operations** - Professional READ/WRITE/ERASE/PATCH with verification
 * **Smart Data Type Detection** - Auto-detection of integers, floats, strings, and hex data
 * **Bit-Level Manipulation** - Safe register modification with AND/OR/XOR operations
 * **Enhanced Safety Features** - Critical region protection with force mode override
 
 ## Fully Implemented Commands
+
+### **PATCH Command** - Advanced Binary Patching
+```bash
+# Patch file to memory address
+python qslcl.py patch 0x880000 file patch.bin --loader=qslcl.bin
+
+# Patch hex data to boot partition with offset
+python qslcl.py patch boot+0x1000 hex "DEADBEEFCAFEBABE" --loader=qslcl.bin
+
+# Fill pattern patch (4096 bytes of 0x00)
+python qslcl.py patch system pattern 00:4096 --loader=qslcl.bin
+
+# Skip verification for faster patching
+python qslcl.py patch 0x12345678 hex "AABBCCDD" --no-verify --loader=qslcl.bin
+
+# Custom chunk size and retries
+python qslcl.py patch recovery file recovery_patch.bin --chunk-size 8192 --retries 5 --loader=qslcl.bin
+```
 
 ### **READ Command** - Advanced Memory Reading
 ```bash
@@ -193,8 +213,8 @@ python qslcl.py mode status --loader=qslcl.bin
 
 ## Core Components
 
-* **qslcl.bin** - Universal Micro-VM execution engine with 32 fully implemented commands
-* **qslcl.py** - Complete universal controller with professional memory operations
+* **qslcl.bin** - Universal Micro-VM execution engine with 33 fully implemented commands
+* **qslcl.py** - Complete universal controller with professional memory operations including PATCH
 * **qslcl.elf** - Silicon-level primary loader
 * **Quantum Entropy Engine** - Environmental fingerprinting and adaptive behavior
 * **Self-Healing Integrity** - Multi-layer runtime verification
@@ -212,7 +232,7 @@ python qslcl.py mode status --loader=qslcl.bin
 
 ```
 QSLCLBIN Header
-├── QSLCLPAR Command Engine (32 commands)
+├── QSLCLPAR Command Engine (33 commands)
 ├── QSLCLDISP Dispatch Table
 ├── QSLCLUSB USB Protocol Engine
 ├── QSLCLVM5 Nano-Kernel Services
@@ -229,6 +249,7 @@ QSLCLBIN Header
 - `ERASE` - Secure data erasure with multiple patterns
 - `PEEK` - Memory inspection with type detection
 - `POKE` - Precision memory writing with bit operations
+- `PATCH` - Advanced binary patching with verification
 
 **System Commands:**
 - `HELLO` - Device handshake and identification
@@ -268,7 +289,6 @@ pip install requests tqdm   # optional
 ## Basic Usage
 
 ```bash
-
 # Test basic functionality
 python qslcl.py hello --loader=qslcl.bin
 python qslcl.py getinfo --loader=qslcl.bin
@@ -282,6 +302,7 @@ python qslcl.py ping --loader=qslcl.bin
 python qslcl.py read boot boot.img --loader=qslcl.bin
 python qslcl.py write boot modified_boot.img --loader=qslcl.bin --verify
 python qslcl.py erase cache --pattern random --loader=qslcl.bin
+python qslcl.py patch 0x880000 file patch.bin --loader=qslcl.bin
 
 # Advanced debugging
 python qslcl.py peek 0x100000 --hexdump --loader=qslcl.bin
@@ -303,6 +324,11 @@ python qslcl.py getinfo --loader=qslcl.bin --wait 10
 
 # Multiple commands with same loader
 python qslcl.py hello --loader=qslcl.bin && python qslcl.py getinfo --loader=qslcl.bin
+
+# Professional patching workflow
+python qslcl.py read boot boot.img --loader=qslcl.bin
+# Modify boot.img externally
+python qslcl.py patch boot file boot_patched.img --loader=qslcl.bin --verify
 ```
 
 ---
@@ -362,6 +388,9 @@ python qslcl.py hello --loader=qslcl.bin --wait 5
 ```bash
 # Use smaller chunk sizes for problematic devices
 python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
+
+# For patching issues, disable verification
+python qslcl.py patch 0x100000 file patch.bin --no-verify --loader=qslcl.bin
 ```
 
 ## Getting Help
@@ -381,20 +410,24 @@ python qslcl.py hello --loader=qslcl.bin --debug
 
 # Verbose output for complex operations
 python qslcl.py rawmode list --verbose --loader=qslcl.bin
+
+# Test patch functionality
+python qslcl.py patch 0x100000 hex "AABBCC" --loader=qslcl.bin --verbose
 ```
 
 ---
 
 # Final Words
 
-> **"Quantum Silicon Core Loader v5.6 represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, and every hardware interaction becomes an extension of silicon consciousness through our perfected micro-VM architecture."**
+> **"Quantum Silicon Core Loader v5.6 represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, and now every binary patch becomes an extension of silicon consciousness through our perfected micro-VM architecture."**
 
 ## Key Philosophy
 
-* **Universal Execution** - One binary, all architectures, 32 complete commands
+* **Universal Execution** - One binary, all architectures, 33 complete commands
 * **Silicon Intimacy** - Direct hardware conversation with bit-level precision
 * **Adaptive Intelligence** - Environment-aware behavior with safety enforcement
 * **Professional Grade** - Enterprise-level memory operations with verification
+* **Advanced Patching** - Professional binary modification with read-back verification
 * **Ethical Empowerment** - Capability with responsibility and safety controls
 
 📺 **YouTube**: [https://www.youtube.com/@EntropyVector](https://www.youtube.com/@EntropyVector)
@@ -403,7 +436,7 @@ python qslcl.py rawmode list --verbose --loader=qslcl.bin
 
 **QSLCL v5.6 — Where silicon consciousness meets professional execution** 
 
-*Built with 100% functional memory operations, complete privilege management, and enterprise-grade safety features.*
+*Built with 100% functional memory operations, complete privilege management, enterprise-grade safety features, and professional binary patching capabilities.*
 
 ## 🪙 Bitcoin Donations
 
@@ -412,3 +445,22 @@ python qslcl.py rawmode list --verbose --loader=qslcl.bin
 Bitcoin Address:
 
 bc1qpcaqkzpe028ktpmeyevwdkycg9clxfuk8dty5v
+
+---
+
+## 🆕 **v1.1.4 PATCH Command Highlights**
+
+The new **PATCH** command provides professional binary patching capabilities:
+
+- **Multiple Target Formats**: Raw addresses, partitions with offsets, symbols
+- **Flexible Patch Data**: Files, hex strings, fill patterns, string replacements
+- **Automatic Verification**: Read-back comparison to ensure patch integrity
+- **Retry Mechanism**: Automatic retries on communication failures
+- **Chunked Operations**: Efficient handling of large patches
+- **Safety Features**: Critical region protection with confirmation prompts
+
+**Perfect for**: Firmware modifications, security patches, bootloader customization, and runtime code modification.
+
+---
+
+*QSLCL v1.1.4 completes the professional memory operation suite with enterprise-grade binary patching capabilities.*
