@@ -562,7 +562,6 @@ The new **BOOTSTRAP** command provides complete bootstrap management:
 
 *QSLCL v5.7 and qslcl.py v1.1.6 complete the professional ecosystem with universal dynamic bootstrapping capabilities alongside enterprise-grade memory operations.*
 
-## Legal & Support
+## Legal & Transparency
 
-- [LEGAL_NOTICE.md](./LEGAL_NOTICE.md) - Legal positioning and protections
-- [SUPPORT_REQUEST.md](./SUPPORT_REQUEST.md) - Communication history and good-faith efforts
+This project maintains transparent legal documentation and has established official communication with GitHub Support (Ticket: 3932406).
