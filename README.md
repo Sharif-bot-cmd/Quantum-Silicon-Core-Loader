@@ -565,7 +565,7 @@ The new **BOOTSTRAP** command provides complete bootstrap management:
 ## Legal & Support
 - [LEGAL_NOTICE.md](./LEGAL_NOTICE.md) - Legal positioning and protections
 - [SUPPORT_REQUEST.md](./SUPPORT_REQUEST.md) - Communication history and good-faith efforts
-- 
+
 ## Legal & Transparency
 
 This project maintains transparent legal documentation and has established official communication with GitHub Support (Ticket: 3932406).
