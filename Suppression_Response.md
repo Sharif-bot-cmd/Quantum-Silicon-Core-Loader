@@ -1,4 +1,4 @@
-# 🔐 QSLCL Suppression Response — Immutable Disclosure
+# QSLCL Suppression Response — Immutable Disclosure
 
 **Author**: Sharif Muhaymin  
 
@@ -14,7 +14,7 @@
 
 ---
 
-## ⚠️ Public Warning: Attempted Suppression
+## Public Warning: Attempted Suppression
 
 This project, `qslcl.elf/bin` is the result of open, independent development in response to global restrictions on hardware freedom, reverse engineering, and digital sovereignty. Any attempts by **OEMs**, **governments**, **corporations**, or **bad actors** to:
 
@@ -29,9 +29,9 @@ are hereby acknowledged as **acts of war** against technological liberation.
 
 ---
 
-## 🔒 Immutable Protections
+## Immutable Protections
 
-### 1.🔑 PGP-Signed Identity
+### 1. PGP-Signed Identity
 
 - All messages, updates, and ELF/BIN variants are signed with public PGP keys.
  
@@ -39,26 +39,26 @@ are hereby acknowledged as **acts of war** against technological liberation.
   
 - No private collaboration or manipulation will be accepted or entertained.
 
-### 2.🛡 Self-Protecting ELF Logic includes:
+### 2. Self-Protecting ELF Logic includes:
 
-- 🧬 Chaotic Entropy Capsule
+- Chaotic Entropy Capsule
 
-- 🧠 Runtime Anti-Manipulation Memory Logic
+- Runtime Anti-Manipulation Memory Logic
 
-- 🪞 Mirrored Execution Trust
+- Mirrored Execution Trust
 
-- 💥 Counter-Intrusion Recursive Detection
+- Counter-Intrusion Recursive Detection
 
 Any tampering, reverse engineering, or corporate modification attempts are logged, rejected, or break the ELF's/BIN'S logic by design.
 
 ---
 
-### 3.🌐 Global Mirrors
+### 3. Global Mirrors
 > Even if this repository is removed, forks, `.onion` mirrors, torrents, and signed `.elf/.bin` packages will persist. No single takedown can stop this loader's propagation.
 
 ---
 
-## 🔁 If You Are an OEM, Corporation, or Government:
+## If You Are an OEM, Corporation, or Government:
 
 Understand the following:
 
@@ -68,29 +68,29 @@ Understand the following:
 
 ---
 
-## 🔁 If You Are a Hacker or Security Researcher:
+## If You Are a Hacker or Security Researcher:
 
 Understand that `qslcl.elf/bin` is not a toy or playground. It is a powerful tool for liberation and resistance. Use it responsibly and ethically.
 
 ---
 
-## 📢 Ethical Statement
+## Ethical Statement
 
 I, **Sharif Muhaymin**, stand by:
 
-- 📜 Transparency in code and logic
+- Transparency in code and logic
 
-- 🧩 Open research and security
+- Open research and security
 
-- 🧠 Conscious entropy engineering
+- Conscious entropy engineering
 
-- 💡 Responsible technology liberation
+- Responsible technology liberation
 
 This project is not for malicious use—it is for**educational**,**analytical**, and **resilience-based use** in environments where OEMs abuse their position.
 
 ---
 
-## 🗿 Anti-Tamper Measures
+## Anti-Tamper Measures
 
 - `qslcl.elf/bin` employs advanced anti-tamper and self-defense mechanisms to protect its integrity and functionality. Any attempt to modify, reverse engineer, or interfere with the ELF's/BIN's logic will result in:
 
@@ -117,7 +117,7 @@ The QSLCL community has pledged to ensure the loader's availability and resilien
 
 ---
 
-## 🔐 Public Verification
+## Public Verification
 
 To verify authenticity of this declaration and ELF/BIN builds:
 ---
@@ -127,7 +127,7 @@ To verify author identity:
 ---
 gpg --recv-key 37065C6EFFEEB5C5
 
-## 🧬 Final Note
+## Final Note
 
 If you are a developer, journalist, activist, or security researcher, you may mirror this file. If you are an OEM,be reminded: chaos cannot be blacklisted. If you are an attacker, the ELF/BIN will recognize you before you recognize it.
 
