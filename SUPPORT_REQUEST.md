@@ -40,6 +40,8 @@ We're writing to let you know that the group you tried to contact (legal) may no
 If you have questions related to this or any other Google Group, visit the Help Center at https://support.google.com/a/github.com/bin/topic.py?topic=25838.
 
 Thanks,
+
+github.com admins
 ```
 
 **Note:** This email bounce serves as evidence of good-faith attempt to establish communication regarding project legitimacy.
