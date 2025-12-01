@@ -1,4 +1,4 @@
-# 🔐 LEGAL NOTICE & PROJECT PROTECTION
+# LEGAL NOTICE & PROJECT PROTECTION
 
 **Repository:** Quantum Silicon Core Loader (QSLCL)  
 **Author:** Sharif Muhaymin  
@@ -7,17 +7,17 @@
 
 ---
 
-## 📜 LEGAL POSITIONING STATEMENT
+## LEGAL POSITIONING STATEMENT
 
 ### **Project Purpose & Legitimacy**
 
 The **Quantum Silicon Core Loader (QSLCL)** is a legitimate research tool designed for:
 
-- 🛠️ **Right to Repair Enforcement** - Enabling device owners to modify hardware they legally own
-- 🎓 **Academic Research** - Hardware security analysis and architectural studies  
-- 🔍 **Security Research** - Vulnerability discovery and mitigation development
-- 📚 **Educational Use** - Teaching hardware architecture and security principles
-- 🌍 **Consumer Rights** - Supporting device ownership and control rights
+- **Right to Repair Enforcement** - Enabling device owners to modify hardware they legally own
+- **Academic Research** - Hardware security analysis and architectural studies  
+- **Security Research** - Vulnerability discovery and mitigation development
+- **Educational Use** - Teaching hardware architecture and security principles
+- **Consumer Rights** - Supporting device ownership and control rights
 
 ### **Legal Basis for Protection**
 
@@ -45,7 +45,7 @@ This project is protected under multiple legal frameworks:
 
 ---
 
-## 🛡️ PREEMPTIVE LEGAL DEFENSES
+## PREEMPTIVE LEGAL DEFENSES
 
 ### **Against DMCA Takedowns**
 
@@ -60,7 +60,6 @@ Any DMCA claim against this repository would be:
 
 This tool enables specifically protected activities:
 
-```python
 # LEGAL USAGE EXAMPLES
 - Device repair and restoration
 - Security vulnerability research
