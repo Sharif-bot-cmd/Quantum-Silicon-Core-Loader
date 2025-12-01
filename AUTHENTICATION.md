@@ -1,4 +1,4 @@
-# 🔐 AUTHENTICATION.md
+# AUTHENTICATION.md
 
 **Quantum Silicon Core Loader (`qslcl.elf/.bin`) – Statement of Authenticity and Digital Sovereignty**  
 Signed by: Sharif Muhaymin  
@@ -7,13 +7,13 @@ Fingerprint: `4882D26E965B17251FEDC2F337065C6EFFEEB5C5`
 
 - ---
 
-## 📜 Message to OEMs, Researchers, and Individuals
+## Message to OEMs, Researchers, and Individuals
 
 Hello.
 
 Due to past attempts of deception, disinformation, or corporate pressure, I do not share privileged technical content, execution logic, or original code structures in private conversations. All information related to my Quantum Silicon Core Loader (qslcl.elf) is shared transparently through my official GitHub and public channels only.
 
-⚠️ If your message attempts to:
+If your message attempts to:
 
 Extract internal logic,
 
@@ -29,11 +29,11 @@ My response is guided by ethics, transparency, and protection of freedom tech. I
 
 Otherwise:
 
-🔒 Attempts to manipulate, deceive, or reverse-engineer this project for closed agendas will leave permanent traces.
+> Attempts to manipulate, deceive, or reverse-engineer this project for closed agendas will leave permanent traces.
 
 This message is digitally signed. For public trust verification:
 
-🔑 PGP Key ID: 37065C6EFFEEB5C5
+PGP Key ID: 37065C6EFFEEB5C5
 
 Fingerprint: 4882D26E965B17251FEDC2F337065C6EFFEEB5C5
 
@@ -42,7 +42,7 @@ Creator of Quantum Silicon Core Loader
 
 - ---
 
-## 📎 Verification Instructions
+## Verification Instructions
 
 1. Import my public PGP key:
    ---
