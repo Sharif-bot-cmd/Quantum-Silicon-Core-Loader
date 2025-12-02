@@ -131,7 +131,7 @@ They must now:
 1. Review this documented communication
 2. Consider Right to Repair implications
 3. Evaluate educational/research purposes
-4. Contact you before any action
+4. Contact before any action
 5. Justify overriding your stated ethical framework
 
 ## RELATED DOCUMENTS
@@ -144,7 +144,7 @@ They must now:
 - **Date Sent:** December 2, 2025
 - **Acknowledgement Received:** Yes
 - **Response Received:** Ongoing...
-- **Follow-up Required:** Yes (in good manners)
+- **Follow-up Required:** Yes
 - **Action Items:** None
 
 ## PROTECTION LEVEL INCREASE
