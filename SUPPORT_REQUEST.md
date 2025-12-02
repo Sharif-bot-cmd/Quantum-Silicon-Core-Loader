@@ -20,37 +20,9 @@
 
 **Status:** ❌ **Failed - Email Bounced Back**  
 
-**Evidence:** Full bounce message preserved below 
+**Evidence:** bounce_back.jpg
 
 **Intent:** Demonstrate transparency and establish legitimate research purposes  
-
----
-
-## EMAIL BOUNCE EVIDENCE (PRESERVED VERBATIM)
-
-```
-From: legal@github.com
-Date: December 1, 2025
-Subject: Delivery Status Notification (Failure)
-To: muhaymin436@gmail.com
-
-Hello muhaymin436@gmail.com,
-
-We're writing to let you know that the group you tried to contact (legal) may not exist, or you may not have permission to post messages to the group. A few more details on why you weren't able to post:
-
- * You might have spelled or formatted the group name incorrectly.
- * The owner of the group may have removed this group.
- * You may need to join the group before receiving permission to post.
- * This group may not be open to posting.
-
-If you have questions related to this or any other Google Group, visit the Help Center at https://support.google.com/a/github.com/bin/topic.py?topic=25838.
-
-Thanks,
-
-github.com admins
-```
-
-**Note:** This email bounce serves as evidence of good-faith attempt to establish communication regarding project legitimacy.
 
 ---
 
