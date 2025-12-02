@@ -411,26 +411,37 @@ python qslcl.py bootstrap --architecture x86_64 --loader=qslcl.bin
 
 ---
 
-# Legal & Ethical Notice
+## 🛡️ Legal & Ethical Framework
 
-## ✅ Allowed:
+**Quantum Silicon Core Loader (QSLCL)** operates within established legal and ethical boundaries:
 
-* Research & Security Analysis
-* Device Repair & Diagnostics  
-* Firmware Development
-* Academic & Educational Use
-* Personal Device Modification
-* Bootstrap Research and Development
+### Permitted Uses:
+- **Device Owners**: Modifying hardware you legally own
+- **Researchers**: Security analysis and academic study
+- **Repair Technicians**: Right to Repair implementations
+- **Students**: Learning hardware architecture and security
+- **Developers**: Creating interoperable software and tools
 
-## ❌ Prohibited:
+### Prohibited Uses:
+- Unauthorized access to others' devices
+- Circumventing security on non-owned hardware
+- Malicious or destructive applications
+- Violation of applicable laws and regulations
 
-* Unauthorized Access to Others' Devices
-* Bypassing Protections on Hardware You Don't Own
-* Malicious Use or Exploitation
-* Violating Local Laws and Regulations
-* Unauthorized Bootstrap Modification
+### Legal Basis:
+This tool enables exercises of:
+- **First Sale Doctrine** rights (modification of owned property)
+- **Right to Repair** principles (globally recognized)
+- **Academic Research** exemptions (security studies)
+- **Educational Use** protections (learning purposes)
 
-> **"QSLCL provides capability — your ethics determine its application."**
+### Proactive Legal Protection:
+- GitHub Ticket #3932406: Official notice acknowledged
+- Comprehensive legal documentation included
+- Transparent communication with relevant parties
+- Philippine-based development (respects local/international law)
+
+> **Use responsibly. With great power comes great responsibility.**
 
 ---
 
