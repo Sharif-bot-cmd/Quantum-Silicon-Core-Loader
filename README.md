@@ -581,6 +581,6 @@ The new **BOOTSTRAP** command provides complete bootstrap management:
 
 This project maintains transparent legal documentation and has established official communication with GitHub Support (Ticket: 3932406).
 
-## PR relation
+## Legal army
 
-Google + GitHub + Sharif (me) = 🔥🔥🔥🔥🔥
+Google + GitHub (Microsoft) + Sharif (me) = 🏴🏴🏴🏴🏴
