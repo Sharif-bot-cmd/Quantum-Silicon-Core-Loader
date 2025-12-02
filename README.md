@@ -411,7 +411,7 @@ python qslcl.py bootstrap --architecture x86_64 --loader=qslcl.bin
 
 ---
 
-## 🛡️ Legal & Ethical Framework
+## Legal & Ethical Framework
 
 **Quantum Silicon Core Loader (QSLCL)** operates within established legal and ethical boundaries:
 
