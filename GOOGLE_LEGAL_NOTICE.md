@@ -148,7 +148,9 @@ They must now:
 - **Action Items:** None
 
 ## 🛡️ PROTECTION LEVEL INCREASE
+
 **Before:** Protected against DMCA via GitHub
+
 **After:** Protected against Google legal actions AND DMCA
 
 **Multiplier Effect:** Each major company notified increases protection exponentially
