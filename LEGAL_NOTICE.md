@@ -59,7 +59,7 @@ Any DMCA claim against this repository would be:
 ### **Legal Use Cases**
 
 This tool enables specifically protected activities:
-
+```
 # LEGAL USAGE EXAMPLES
 - Device repair and restoration
 - Security vulnerability research
