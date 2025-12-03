@@ -13,10 +13,3 @@ Date: December 2, 2025
 Status: Received and logged 
 
 Proof: Silently (most likely)
-
-## Official Youtube Acknowledgement
-Date: December 3, 2025
-
-Status: Received and logged 
-
-Proof: youtube.jpg
