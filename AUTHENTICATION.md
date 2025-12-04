@@ -11,7 +11,7 @@ Fingerprint: `4882D26E965B17251FEDC2F337065C6EFFEEB5C5`
 
 Hello.
 
-Due to past attempts of deception, disinformation, or corporate pressure, I do not share privileged technical content, execution logic, or original code structures in private conversations. All information related to my Quantum Silicon Core Loader (qslcl.elf) is shared transparently through my official GitHub and public channels only.
+Due to past attempts of deception, disinformation, or corporate pressure, I do not share privileged technical content, execution logic, or original code structures in private conversations. All information related to my Quantum Silicon Core Loader is shared transparently through my official GitHub and public channels only.
 
 If your message attempts to:
 
