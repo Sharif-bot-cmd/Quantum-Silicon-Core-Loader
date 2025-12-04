@@ -6,6 +6,8 @@ Assistant Module: **qslcl.bin**
 
 Universal Controller: **qslcl.py (v1.1.6)**
 
+> **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION.MATRIX.md)
+
 ---
 
 # Overview
