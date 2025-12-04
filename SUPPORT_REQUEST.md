@@ -6,7 +6,6 @@
 **PGP Key:** `37065C6EFFEEB5C5`  
 **Purpose:** Document good-faith efforts to communicate with platform providers
 
-> **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION.MATRIX.md)
 ---
 
 ## COMMUNICATION ATTEMPT HISTORY
