@@ -13,3 +13,10 @@ Date: December 2, 2025
 Status: Received and logged 
 
 Proof: Silently (most likely)
+
+## Official EFF Acknowledgment
+Date: December 4, 2025
+
+Status: Received and logged
+
+Proof: eff.jpg
