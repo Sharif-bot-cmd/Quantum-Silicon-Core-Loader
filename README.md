@@ -583,4 +583,4 @@ This project maintains transparent legal documentation and has established offic
 
 ## Legal army
 
-Google + GitHub (Microsoft) + Sharif (me) = 🏴🏴🏴🏴🏴
+Google + GitHub (Microsoft) + EFF + Sharif (me) = 🏴🏴🏴🏴🏴
