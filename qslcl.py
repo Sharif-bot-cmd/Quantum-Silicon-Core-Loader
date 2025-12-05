@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qslcl.py — Universal QSLCL Tool v1.1.6
+# qslcl.py — Universal QSLCL Tool v1.1.7
 # Author: Sharif — QSLCL Creator
 import sys, time, argparse, zlib, struct, threading, re, os, random, math, shutil, gzip, json
 from dataclasses import dataclass
@@ -2266,7 +2266,7 @@ def main():
     # GLOBAL PARSER
     # -----------------------------------------------
     p = argparse.ArgumentParser(
-        description="QSLCL Tool v1.1.6",
+        description="QSLCL Tool v1.1.7",
         add_help=True,
         formatter_class=QSLCLHelp
     )
