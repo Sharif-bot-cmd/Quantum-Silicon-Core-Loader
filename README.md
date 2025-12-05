@@ -1,10 +1,10 @@
-# **Quantum Silicon Core Loader — v0.5.8**
+# **Quantum Silicon Core Loader — v0.5.9**
 
 Primary Core: **qslcl.elf**
 
 Assistant Module: **qslcl.bin**
 
-Universal Controller: **qslcl.py (v1.1.6)**
+Universal Controller: **qslcl.py (v1.1.8)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION.MATRIX.md)
 
@@ -28,38 +28,18 @@ QSLCL runs in:
 
 ---
 
-# What's New in **v0.5.8**
+# What's New in **v0.5.9**
 
-- move bootstrap to other offset for stable alignment.
-
+- improve command handling for better functionality
+- 
 ---
 
-# qslcl.py — Universal Controller **v1.1.6**
+# qslcl.py — Universal Controller **v1.1.8**
 
-## What's New in v1.1.7
+## What's New in v1.1.8
 
-- Fix syntax error
-
-
-## New Bootstrap Commands
-
-### **BOOTSTRAP Command** - Universal Bootstrap Management
-```bash
-# List all available bootstrap configurations
-python qslcl.py bootstrap --loader=qslcl.bin
-
-# Execute specific architecture bootstrap
-python qslcl.py bootstrap --architecture x86_64 --loader=qslcl.bin
-python qslcl.py bootstrap --architecture arm64 --loader=qslcl.bin
-python qslcl.py bootstrap --architecture riscv --loader=qslcl.bin
-
-# Verify bootstrap integrity
-python qslcl.py bootstrap --verify --loader=qslcl.bin
-
-# Verify specific architecture bootstrap
-python qslcl.py bootstrap --architecture generic --verify --loader=qslcl.bin
-```
-
+- remove bootstrap command but keep the parser modules for bootstrap.
+- 
 ### **Enhanced GETINFO Command** - Bootstrap Awareness
 ```bash
 # Check bootstrap availability in device info
@@ -286,10 +266,6 @@ QSLCLBST Header
 - `GETVAR` - System variable access
 - `GETSECTOR` - Storage sector size detection
 
-**Bootstrap Commands:**
-- `BOOTSTRAP` - Dynamic bootstrap management and execution
-- Bootstrap integrity verification and architecture selection
-
 **Advanced Operations:**
 - `RAWMODE` - Privilege escalation and hardware access
 - `GETCONFIG` - System configuration management
@@ -440,16 +416,6 @@ python qslcl.py bootstrap --loader=qslcl.bin
 # Use wait parameter for slow devices
 python qslcl.py hello --loader=qslcl.bin --wait 5
 ```
-
-**Bootstrap Execution Issues:**
-```bash
-# Verify bootstrap integrity first
-python qslcl.py bootstrap --verify --loader=qslcl.bin
-
-# Try different architecture bootstrap
-python qslcl.py bootstrap --architecture generic --loader=qslcl.bin
-```
-
 **Memory Operation Errors:**
 ```bash
 # Use smaller chunk sizes for problematic devices
@@ -480,20 +446,17 @@ python qslcl.py rawmode list --verbose --loader=qslcl.bin
 
 # Test patch functionality
 python qslcl.py patch 0x100000 hex "AABBCC" --loader=qslcl.bin --verbose
-
-# Bootstrap debug information
-python qslcl.py bootstrap --loader=qslcl.bin --verbose
 ```
 
 ---
 
 # Final Words
 
-> **"Quantum Silicon Core Loader v5.7 represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, and now every bootstrap execution becomes an extension of silicon consciousness through our perfected micro-VM architecture with universal dynamic bootstrapping."**
+> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, and now every bootstrap execution becomes an extension of silicon consciousness through our perfected micro-VM architecture with universal dynamic bootstrapping."**
 
 ## Key Philosophy
 
-* **Universal Execution** - One binary, all architectures, 33 complete commands + dynamic bootstrap
+* **Universal Execution** - One binary, all architectures, 30+ complete commands + dynamic bootstrap
 * **Silicon Intimacy** - Direct hardware conversation with bit-level precision
 * **Adaptive Intelligence** - Environment-aware behavior with safety enforcement
 * **Professional Grade** - Enterprise-level memory operations with verification
@@ -505,10 +468,6 @@ python qslcl.py bootstrap --loader=qslcl.bin --verbose
 
 ---
 
-**QSLCL v5.7 — Where silicon consciousness meets professional execution** 
-
-*Built with 100% functional memory operations, complete privilege management, enterprise-grade safety features, professional binary patching capabilities, and universal dynamic bootstrapping.*
-
 ## Bitcoin Donations
 
  If you want to donate to support my invention? feel free to send it in my Bitcoin address.
@@ -516,21 +475,6 @@ python qslcl.py bootstrap --loader=qslcl.bin --verbose
 Bitcoin Address:
 
 bc1qpcaqkzpe028ktpmeyevwdkycg9clxfuk8dty5v
-
----
-
-## **v5.7 Bootstrap System Highlights**
-
-The new **Dynamic Bootstrap System** provides universal cross-architecture initialization:
-
-- **Multiple Architecture Support**: ARM, x86, RISC-V, MIPS, PowerPC bootstrap configurations
-- **Secure Bootstrap Mode**: Encrypted bootstrap execution with integrity protection
-- **Micro-VM Bytecode**: 100% architecture compatibility through universal bytecode
-- **CRC Integrity Validation**: Automatic bootstrap code integrity checking
-- **Entry Point Management**: Dynamic entry point resolution and verification
-- **Recovery Fallback**: Automatic recovery mechanisms for bootstrap failures
-
-**Perfect for**: Cross-platform firmware initialization, secure boot sequences, architecture-specific optimization, and universal device compatibility.
 
 ---
 
