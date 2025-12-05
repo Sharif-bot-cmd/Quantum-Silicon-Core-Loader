@@ -30,7 +30,7 @@
 
 **Date:** December 1, 2025
 
-**From:** GitHub Support Team
+**From:** developer@githubsupport.com
 
 **Ticket ID:** 3932406
 
@@ -42,8 +42,6 @@
 - Ticket created in their system (reference: 3932406)
 - Message is in their queue for legal/support review
 - This establishes official communication record
-
-**Full Response:**
 
 **Analysis:**
 
