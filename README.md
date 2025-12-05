@@ -31,7 +31,7 @@ QSLCL runs in:
 # What's New in **v0.5.9**
 
 - improve command handling for better functionality
-- 
+
 ---
 
 # qslcl.py — Universal Controller **v1.1.8**
