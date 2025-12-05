@@ -39,7 +39,7 @@ QSLCL runs in:
 ## What's New in v1.1.8
 
 - remove bootstrap command but keep the parser modules for bootstrap.
-- 
+  
 ### **Enhanced GETINFO Command** - Bootstrap Awareness
 ```bash
 # Check bootstrap availability in device info
