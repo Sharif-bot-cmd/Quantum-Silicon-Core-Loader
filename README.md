@@ -1,4 +1,4 @@
-# **Quantum Silicon Core Loader — v5.7**
+# **Quantum Silicon Core Loader — v0.5.8**
 
 Primary Core: **qslcl.elf**
 
