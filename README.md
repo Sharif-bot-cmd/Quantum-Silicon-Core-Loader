@@ -28,29 +28,9 @@ QSLCL runs in:
 
 ---
 
-# What's New in **v5.7**
+# What's New in **v0.5.8**
 
-## Major Updates
-
-* **Universal Dynamic Bootstrap System** - QSLCLBST header for cross-architecture bootstrapping
-* **Enhanced Bootstrap Management** - Architecture-specific bootstrap execution and verification
-* **Complete Bootstrap Integrity** - CRC validation and security envelope parsing
-* **Multi-Architecture Support** - ARM, x86, RISC-V, MIPS, PowerPC bootstrap configurations
-
-## Technical Improvements
-
-* **QSLCLBST Parser** - Complete dynamic bootstrap header parsing with security envelope
-* **Universal Bootstrap Engine** - Micro-VM bytecode for 100% architecture compatibility
-* **Secure Bootstrap Mode** - Security envelope with integrity verification
-* **Bootstrap CRC Validation** - Automatic integrity checking for bootstrap code
-* **Architecture Detection** - Smart bootstrap selection based on target architecture
-
-## Bootstrap Features
-
-* **Multiple Architecture Configs** - Store and execute different bootstrap for each architecture
-* **Secure Mode Bootstrap** - Encrypted bootstrap execution with integrity protection
-* **Entry Point Management** - Dynamic entry point resolution and verification
-* **Recovery Fallback** - Automatic recovery mechanisms for bootstrap failures
+- move bootstrap to other offset for stable alignment.
 
 ---
 
@@ -572,8 +552,6 @@ The new **BOOTSTRAP** command provides complete bootstrap management:
 **Perfect for**: Multi-architecture development, secure initialization, cross-platform testing, and universal firmware deployment.
 
 ---
-
-*QSLCL v5.7 and qslcl.py v1.1.6 complete the professional ecosystem with universal dynamic bootstrapping capabilities alongside enterprise-grade memory operations.*
 
 ## Legal & Support
 - [LEGAL_NOTICE.md](./LEGAL_NOTICE.md) - Legal positioning and protections
