@@ -36,13 +36,10 @@ QSLCL runs in:
 
 # qslcl.py — Universal Controller **v1.1.6**
 
-## What's New in v1.1.6
+## What's New in v1.1.7
 
-* **QSLCLBST Support** - Full dynamic bootstrap parsing and management
-* **Bootstrap Command** - Complete bootstrap execution and verification system
-* **Architecture-Aware Bootstrap** - Smart bootstrap selection and execution
-* **Bootstrap Integrity Verification** - Automatic CRC and security validation
-* **Enhanced Device Information** - Bootstrap availability reporting in device info
+- Fix syntax error
+
 
 ## New Bootstrap Commands
 
@@ -389,8 +386,6 @@ python qslcl.py bootstrap --architecture x86_64 --loader=qslcl.bin
 | Generic  | USB CDC/Bulk     | Endpoint auto-discovery     | ✅ Universal |
 | Any      | Serial COM       | UART auto sync              | ✅ Universal |
 
-**QSLCL v5.7 automatically selects the correct transport, architecture, and bootstrap configuration.**
-
 ---
 
 ## Legal & Ethical Framework
@@ -536,20 +531,6 @@ The new **Dynamic Bootstrap System** provides universal cross-architecture initi
 - **Recovery Fallback**: Automatic recovery mechanisms for bootstrap failures
 
 **Perfect for**: Cross-platform firmware initialization, secure boot sequences, architecture-specific optimization, and universal device compatibility.
-
----
-
-## **v1.1.6 Bootstrap Command Features**
-
-The new **BOOTSTRAP** command provides complete bootstrap management:
-
-- **Architecture Selection**: Execute specific bootstrap for target architecture
-- **Integrity Verification**: Automatic CRC validation and security checking
-- **Configuration Listing**: View all available bootstrap configurations
-- **Secure Execution**: Protected bootstrap execution with verification
-- **Device Integration**: Seamless integration with existing command system
-
-**Perfect for**: Multi-architecture development, secure initialization, cross-platform testing, and universal firmware deployment.
 
 ---
 
