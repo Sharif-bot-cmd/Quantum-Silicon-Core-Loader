@@ -67,9 +67,8 @@ Device-Specific Memory Offset Detection: Automatically discovers security-critic
 
 - Quantum Levels: 1-5 security reduction tiers.
 
-### **Enhanced GETINFO Command** - Bootstrap Awareness
+### **GETINFO Command** -
 ```bash
-# Check bootstrap availability in device info
 python qslcl.py getinfo --loader=qslcl.bin
 
 # Sample output with bootstrap information:
