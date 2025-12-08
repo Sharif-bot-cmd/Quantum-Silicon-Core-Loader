@@ -34,38 +34,10 @@ QSLCL runs in:
 
 ---
 
-# qslcl.py — Universal Controller **v1.1.9**
+# qslcl.py — Universal Controller **v1.2.0**
 
-## What's New in v1.1.9
+## What's New in v1.2.0
 
-1. Advanced Auto-Detection System
-Device-Specific Memory Offset Detection: Automatically discovers security-critical memory regions.
-
-- SOC Family Identification: Recognizes Apple A12+, Qualcomm, Samsung, and generic SOCs.
-
-- Security Enforcement Point Mapping: Identifies exact locations of security checks.
-
-- Heuristic Pattern Matching: Intelligent scanning for security mechanisms.
-
-2. Apple A12+ Security Architecture Bypass
-   
-- Complete Apple Security Stack Bypass: SEP, APRR, KPP, AMFI, Sandbox, CSR.
-
-- SOC Generation Support: A12, A13, A14, A15, A16, A17 and higher.
-
-- Precision Bypass: Uses auto-detected offsets for surgical security circumvention.
-
-- Quantum-Level Access: Hardware architecture-level security reduction.
-
-3. Quantum Silicon Core Loader Native Mechanisms
-   
-- No Vulnerability Exploitation Required: Pure QSLCL injection-based bypass.
-
-- Post-Exploitation Security Reduction: Works after QSLCL binary injection.
-
-- Hardware Architecture Bypass: SOC-agnostic security circumvention.
-
-- Quantum Levels: 1-5 security reduction tiers.
 
 ### **GETINFO Command** -
 ```bash
