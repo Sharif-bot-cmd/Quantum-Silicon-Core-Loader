@@ -38,28 +38,8 @@ QSLCL runs in:
 
 # What's New in **v1.2.0**
 
-## **Universal Dynamic Bootstrap System** - Architecture-Agnostic Loading
-- **QSLCLBST Parser**: Built-in bootstrap parser that automatically detects and loads architecture-specific bootstrap code
-- **Multi-Architecture Support**: Single binary contains bootstrap for ARM, x86, x86_64, ARM64, RISC-V, MIPS
-- **Secure Bootstrap**: CRC32 verification and security envelope for trusted execution
-- **Auto-Detection**: Automatically selects correct bootstrap based on device architecture
-- **Transparent Operation**: Bootstrap loading happens automatically when needed, no manual commands required
-
-## **Consolidated Command System** - Unified QSLCLPAR
-- **Single Command Database**: QSLCLPAR replaces QSLCLEND with unified name/opcode lookup
-- **Enhanced Command Dispatch**: Simplified command routing with better error handling
-- **Backward Compatibility**: Maintains support for all existing commands and workflows
-
-## **Improved Memory Operations**
-- **Advanced Patching**: Enhanced binary patching with verification and retry mechanisms
-- **Professional Partition Detection**: Universal GPT/MBR/Android/Apple partition detection
-- **Enhanced Target Resolution**: Smart address/partition/region resolution with expressions
-
-## **Robust Device Management**
-- **Auto Bootstrap Loading**: Bootstrap execution happens transparently when architecture matches
-- **Improved USB Handling**: Better endpoint detection and error recovery
-- **Enhanced Serial Support**: Reliable UART communication with auto-baud detection
-  
+- improve read, write, erase, poke, peek, dump for stability.
+- 
 ### **GETINFO Command** -
 ```bash
 python qslcl.py getinfo --loader=qslcl.bin
