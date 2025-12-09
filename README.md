@@ -2,9 +2,9 @@
 
 Primary Core: **qslcl.elf**
 
-Assistant Module: **qslcl.bin (v0.5.9)**
+Assistant Module: **qslcl.bin (v0.6.0)**
 
-Universal Controller: **qslcl.py (v1.2.0)**
+Universal Controller: **qslcl.py (v1.2.1)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION.MATRIX.md)
 
@@ -28,18 +28,18 @@ QSLCL runs in:
 
 ---
 
-# What's New in **v0.5.9**
+# What's New in **v0.6.0**
 
-- improve command handling for better functionality
-
+- unievrsal signing for all architecture (not just generic)
+  
 ---
 
-# qslcl.py — Universal Controller **v1.2.0**
+# qslcl.py — Universal Controller **v1.2.1**
 
-# What's New in **v1.2.0**
+# What's New in **v1.2.q**
 
-- improve read, write, erase, poke, peek, dump for stability.
-- 
+- minor improvements has been made for --auth
+  
 ### **GETINFO Command** -
 ```bash
 python qslcl.py getinfo --loader=qslcl.bin
