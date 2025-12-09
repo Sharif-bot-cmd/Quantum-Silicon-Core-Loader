@@ -36,7 +36,7 @@ QSLCL runs in:
 
 # qslcl.py — Universal Controller **v1.2.1**
 
-# What's New in **v1.2.q**
+# What's New in **v1.2.1**
 
 - minor improvements has been made for --auth
   
