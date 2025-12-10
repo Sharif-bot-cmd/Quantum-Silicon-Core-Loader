@@ -1,5 +1,3 @@
-[file name]: qslcl.py
-[file content begin]
 #!/usr/bin/env python3
 # qslcl.py — Universal QSLCL Tool v1.2.1
 # Author: Sharif — QSLCL Creator
@@ -3406,4 +3404,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-[file content end]
