@@ -300,9 +300,6 @@ pip install requests tqdm   # optional
 python qslcl.py hello --loader=qslcl.bin
 python qslcl.py getinfo --loader=qslcl.bin
 python qslcl.py ping --loader=qslcl.bin
-
-# Check bootstrap availability
-python qslcl.py bootstrap --loader=qslcl.bin
 ```
 
 ## Professional Usage
