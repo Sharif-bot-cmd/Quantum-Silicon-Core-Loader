@@ -405,9 +405,6 @@ This tool enables exercises of:
 ```bash
 # If modules aren't detected, check binary structure
 python qslcl.py hello --loader=qslcl.bin
-
-# Check bootstrap detection specifically
-python qslcl.py bootstrap --loader=qslcl.bin
 ```
 
 **Device Connection Issues:**
