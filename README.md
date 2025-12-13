@@ -2,9 +2,9 @@
 
 Primary Core: **qslcl.elf**
 
-Assistant Module: **qslcl.bin (v0.6.1)**
+Assistant Module: **qslcl.bin (v0.6.2)**
 
-Universal Controller: **qslcl.py (v1.2.2)**
+Universal Controller: **qslcl.py (v1.2.3)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION.MATRIX.md)
 
@@ -28,17 +28,19 @@ QSLCL runs in:
 
 ---
 
-# What's New in **v0.6.1**
+# What's New in **v0.6.2**
 
-- add command SETCONFIG
+- loader now have this kind of alignment for headers [MAGIC][uint32 LE body_size][uint32 LE flags][uint32 LE crc][body]
+  
 
 ---
 
-# qslcl.py — Universal Controller **v1.2.2**
+# qslcl.py — Universal Controller **v1.2.3**
 
-# What's New in **v1.2.2**
+# What's New in **v1.2.3**
 
-- improve command like bruteforce, patch, bypass, etc.
+- now qslcl.py will expect qslcl.bin alignment [MAGIC][uint32 LE body_size][uint32 LE flags][uint32 LE crc][body]
+  
   
 ### **GETINFO Command** -
 ```bash
