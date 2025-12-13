@@ -281,7 +281,8 @@ QSLCLBST Header
 - `BYPASS` - Security bypass operations
 - `GLITCH` - Fault injection framework
 - `VERIFY` - System integrity verification
-
+- `SETCONFIG` - Set configuration
+  
 ---
 
 # Installation & Quick Start
@@ -350,7 +351,7 @@ python qslcl.py bootstrap --architecture x86_64 --loader=qslcl.bin
 
 # Device Compatibility
 
-| Vendor   | Mode             | Detection Method            | v5.7 Status |
+| Vendor   | Mode             | Detection Method            | Status |
 |----------|------------------|-----------------------------|-------------|
 | Qualcomm | EDL              | Sahara + Firehose handshake | ✅ Enhanced |
 | MediaTek | BROM / Preloader | 0xA0 preloader ping         | ✅ Enhanced |
