@@ -2,9 +2,9 @@
 
 Primary Core: **qslcl.elf**
 
-Assistant Module: **qslcl.bin (v0.6.0)**
+Assistant Module: **qslcl.bin (v0.6.1)**
 
-Universal Controller: **qslcl.py (v1.2.1)**
+Universal Controller: **qslcl.py (v1.2.2)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION.MATRIX.md)
 
@@ -28,17 +28,17 @@ QSLCL runs in:
 
 ---
 
-# What's New in **v0.6.0**
+# What's New in **v0.6.1**
 
-- unievrsal signing for all architecture (not just generic)
-  
+- add command SETCONFIG
+
 ---
 
-# qslcl.py — Universal Controller **v1.2.1**
+# qslcl.py — Universal Controller **v1.2.2**
 
-# What's New in **v1.2.1**
+# What's New in **v1.2.2**
 
-- minor improvements has been made for --auth
+- improve command like bruteforce, patch, bypass, etc.
   
 ### **GETINFO Command** -
 ```bash
@@ -478,7 +478,3 @@ bc1qpcaqkzpe028ktpmeyevwdkycg9clxfuk8dty5v
 ## Legal & Transparency
 
 This project maintains transparent legal documentation and has established official communication with GitHub Support (Ticket: 3932406).
-
-## Legal army
-
-Google + GitHub (Microsoft) + EFF + UN + Sharif (me) = 🏴🏴🏴🏴🏴
