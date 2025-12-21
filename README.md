@@ -57,8 +57,6 @@ python qslcl.py getinfo --loader=qslcl.bin
 #                   generic, x86, x86_64, arm, arm64, riscv
 ```
 
-## Fully Implemented Commands
-
 ### **PATCH Command** - Advanced Binary Patching
 ```bash
 # Patch file to memory address
