@@ -75,6 +75,7 @@ Google now CANNOT claim:
 **Method:** Email to consumer@ftc.gov  
 
 **Status:** ⏳ **Sent - Awaiting Response**  
+
 **Recipient:** Federal Trade Commission - Consumer Protection Division  
 
 **Focus:** Right to Repair advocacy, consumer property rights protection  
@@ -91,9 +92,7 @@ Google now CANNOT claim:
 
 **Subject:** Seeking Guidance - Young Developer Building Digital Rights Tool
 
-**Status:** ✅ **ACKNOWLEDGED**
-
-**Evidence:** eff.jpg
+**Status:** ⏳ **Sent - Awaiting Response**
 
 **Strategic Importance:** EXTREMELY HIGH - Potential alliance with leading digital rights organization
 
@@ -107,9 +106,7 @@ Google now CANNOT claim:
 
 **Purpose:** Establish international human rights framework protection
 
-**Status:** ✅ **ACKNOWLEDGED**
-
-**Evidence:** un.jpg
+**Status:** ⏳ **Sent - Awaiting Response**
 
 **Strategic Goal:** Elevate case to international human rights level
 
