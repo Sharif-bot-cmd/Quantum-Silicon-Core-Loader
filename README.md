@@ -134,10 +134,6 @@ python qslcl.py hello --loader=qslcl.bin && python qslcl.py getinfo --loader=qsl
 python qslcl.py read boot boot.img --loader=qslcl.bin
 # Modify boot.img externally
 python qslcl.py patch boot file boot_patched.img --loader=qslcl.bin --verify
-
-# Bootstrap verification workflow
-python qslcl.py bootstrap --verify --loader=qslcl.bin
-python qslcl.py bootstrap --architecture x86_64 --loader=qslcl.bin
 ```
 
 ---
