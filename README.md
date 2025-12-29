@@ -2,9 +2,9 @@
 
 Primary Core: **qslcl.elf**
 
-Assistant Module: **qslcl.bin (v0.6.2)**
+Assistant Module: **qslcl.bin (v0.6.3)**
 
-Universal Controller: **qslcl.py (v1.2.4)**
+Universal Controller: **qslcl.py (v1.2.5)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION.MATRIX.md)
 
@@ -28,18 +28,18 @@ QSLCL runs in:
 
 ---
 
-# What's New in **v0.6.2**
+# What's New in **v0.6.3**
 
-- loader now have this kind of alignment for headers [MAGIC][uint32 LE body_size][uint32 LE flags][uint32 LE crc][body]
+- minor improvements has been made
   
 
 ---
 
-# qslcl.py — Universal Controller **v1.2.4**
+# qslcl.py — Universal Controller **v1.2.5**
 
-# What's New in **v1.2.4**
+# What's New in **v1.2.5**
 
-- parser issue has been fixed
+- major improvements to improve stability in some commands and parsers
   
 ## Complete Command List
 
@@ -75,7 +75,7 @@ QSLCL runs in:
 - `GLITCH` - Fault injection framework
 - `VERIFY` - System integrity verification
 - `SETCONFIG` - Set configuration
-  
+
 ---
 
 # Installation & Quick Start
