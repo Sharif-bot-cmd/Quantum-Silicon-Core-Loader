@@ -257,7 +257,7 @@ python qslcl.py patch 0x100000 hex "AABBCC" --loader=qslcl.bin --verbose
  
 Bitcoin Address:
 
-bc1q87d8ulr60qca4gcuau22a4egjcraxnc2v0z56y
+bc1q7x7kegwcvahtcnthaf3se7vzqldqrhgwl0zta6
 
 ---
 
