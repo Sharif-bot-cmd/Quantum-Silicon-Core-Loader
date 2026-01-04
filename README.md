@@ -251,16 +251,6 @@ python qslcl.py patch 0x100000 hex "AABBCC" --loader=qslcl.bin --verbose
 
 ---
 
-## Bitcoin Donations
-
- If you want to donate to support my invention? feel free to send it in my Bitcoin address.
- 
-Bitcoin Address:
-
-bc1q7x7kegwcvahtcnthaf3se7vzqldqrhgwl0zta6
-
----
-
 ## Legal & Support
 - [LEGAL_NOTICE.md](./LEGAL_NOTICE.md) - Legal positioning and protections
 - [SUPPORT_REQUEST.md](./SUPPORT_REQUEST.md) - Communication history and good-faith efforts
