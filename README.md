@@ -258,3 +258,8 @@ python qslcl.py patch 0x100000 hex "AABBCC" --loader=qslcl.bin --verbose
 ## Legal & Transparency
 
 This project maintains transparent legal documentation and has established official communication with GitHub Support (Ticket: 3932406).
+
+# 🚨 This repository has been migrated
+This project has been moved to [Clyssix/Quantum-Silicon-Core-Loader](https://github.com/Clyssix/Quantum-Silicon-Core-Loader)
+
+**This repo is now archived and will not receive further updates.**
