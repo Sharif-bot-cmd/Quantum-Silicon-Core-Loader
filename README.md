@@ -150,6 +150,16 @@ python qslcl.py patch boot file boot_patched.img --loader=qslcl.bin --verify
 
 ---
 
+## CRITICAL WARNING
+
+**QSLCL CAN PERMANENTLY BRICK (DESTROY) YOUR DEVICE IF USED INCORRECTLY.**
+
+- ✅ **SAFE:** EDL mode, DFU mode, BROM mode, Serial boot modes
+- ❌ **DANGEROUS:** Writing to iROM, BootROM, NOR flash boot sectors
+- 💀 **BRICK RISK:** Overwriting protected bootloaders (iBoot, SBL, U-Boot SPL)
+
+**YOU HAVE BEEN WARNED. THE AUTHOR IS NOT RESPONSIBLE FOR BRICKED DEVICES.**
+
 ## Legal & Ethical Framework
 
 **Quantum Silicon Core Loader (QSLCL)** operates within established legal and ethical boundaries:
