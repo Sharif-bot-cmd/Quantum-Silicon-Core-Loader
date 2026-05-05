@@ -3721,6 +3721,12 @@ def main():
                   help="Maximum file size in bytes (default: 1GB)")
     w.add_argument("--no-verify", action="store_true", help="Skip write verification")
     w.add_argument("--force", action="store_true", help="Skip safety checks (DANGEROUS)")
+    w.add_argument("--protection", choices=['strict', 'normal', 'permissive', 'off'], 
+                   default='normal', help="Protection level (default: normal)")
+    w.add_argument("--no-protection-checks", action="store_true", 
+                   help="DISABLE ALL PROTECTION CHECKS - EXTREMELY DANGEROUS")
+    w.add_argument("--test-readonly", action="store_true", 
+                   help="Test if target region is read-only before writing")
     w.set_defaults(func=cmd_write)
 
     # ENHANCED ERASE COMMAND
