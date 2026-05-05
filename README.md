@@ -4,7 +4,7 @@ Primary Core: **qslcl.elf**
 
 Assistant Module: **qslcl.bin (v0.6.3)**
 
-Universal Controller: **qslcl.py (v1.2.5)**
+Universal Controller: **qslcl.py (v1.2.6)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION_MATRIX.md)
 
@@ -35,11 +35,11 @@ QSLCL runs in:
 
 ---
 
-# qslcl.py — Universal Controller **v1.2.5**
+# qslcl.py — Universal Controller **v1.2.6**
 
-# What's New in **v1.2.5**
+# What's New in **v1.2.6**
 
-- major improvements to improve stability in some commands and parsers
+- add warning when attempting to write protected regions.
   
 ## Complete Command List
 
