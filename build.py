@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# build.py - QSLCL Binary Builder v5.2 (FIXED - QSLCLCMD as primary)
+# build.py - QSLCL Binary Builder v5.3
 # Patched version with QSLCLCMD as main command header
 
 import sys, struct, random, time, hmac, hashlib, os, zlib, uuid, json, platform, math
@@ -26,6 +26,43 @@ def create_standard_header(magic: bytes, body: bytes, flags: int = 0) -> bytes:
     body_crc = zlib.crc32(body) & 0xFFFFFFFF
     
     return struct.pack("<8sIII", magic, body_size, flags, body_crc)
+
+
+def create_response_frame(status_code: int, payload: bytes = b"", flags: int = 0) -> bytes:
+    """
+    Create QSLCLRESP response frame for device responses.
+    Matches what qslcl.py expects in parse_frame()
+    
+    Format:
+    - 8 bytes: "QSLCLRESP"
+    - 4 bytes: body size
+    - 4 bytes: flags
+    - 4 bytes: CRC32 of body
+    - body: status_code (2 bytes) + payload
+    """
+    # Build response body: status code (2 bytes little-endian) + payload
+    body = struct.pack("<H", status_code & 0xFFFF) + payload
+    
+    # Create standard header with QSLCLRESP magic
+    header = create_standard_header(b"QSLCLRESP", body, flags)
+    
+    return header + body
+
+# Also add response status codes (for RTF database)
+RESPONSE_STATUS = {
+    0x0000: "SUCCESS",
+    0x0001: "ERROR_GENERAL", 
+    0x0002: "ERROR_INVALID_COMMAND",
+    0x0003: "ERROR_INVALID_ADDRESS",
+    0x0004: "ERROR_INVALID_SIZE",
+    0x0005: "ERROR_CRC_MISMATCH",
+    0x0006: "ERROR_AUTH_FAILED",
+    0x0007: "ERROR_RAWMODE_REQUIRED",
+    0x0008: "ERROR_TIMEOUT",
+    0x0009: "ERROR_MEMORY_FAULT",
+    0x000A: "ERROR_USB_STALL",
+    0xFFFF: "ERROR_UNKNOWN",
+}
 
 def parse_standard_header(header: bytes):
     """Parse standardized header format."""
@@ -1400,6 +1437,48 @@ def align16(n: int) -> int:
     """Return the next multiple of 16 ≥ n."""
     return (n + 15) & ~0xF
 
+def embed_response_builder(image: bytearray, base: int = 0x7000, debug: bool = False) -> int:
+    """
+    Embed QSLCLRESP frame builder into the micro-VM.
+    This allows the device to send proper responses to the host.
+    """
+    
+    # Response builder micro-VM code (bytecode)
+    response_builder = bytearray([
+        # Build QSLCLRESP frame header
+        0x01, 0x00, 0x51, 0x53, 0x4C, 0x43, 0x4C, 0x52, 0x45, 0x53, 0x50,  # "QSLCLRESP" 
+        0x02, 0x00, 0x00, 0x00,  # Placeholder for size
+        0x03, 0x00, 0x00, 0x00,  # Placeholder for flags
+        0x04, 0x00, 0x00, 0x00,  # Placeholder for CRC
+        
+        # Add status code from previous operation
+        0x05, 0x00, 0x00, 0x00,  # Status code (from register)
+        
+        # Add response payload (if any)
+        0x06, 0x00, 0x00, 0x00,  # Payload size
+        0x07, 0x00, 0x00, 0x00,  # Payload data pointer
+        
+        # Calculate CRC32 of body
+        0x08, 0x00, 0x00, 0x00,  # CALL crc32 function
+        
+        # Fill in CRC in header
+        0x09, 0x00, 0x00, 0x00,  # STORE crc to header[16:20]
+        
+        # Send via USB
+        0x0A, 0x00, 0x00, 0x00,  # USB_SEND response frame
+        0xFF, 0x00, 0x00, 0x00,  # RET
+    ])
+    
+    # Embed into image
+    ensure_size(image, base + len(response_builder))
+    image[base:base + len(response_builder)] = response_builder
+    
+    if debug:
+        print(f"[*] QSLCLRESP response builder embedded at 0x{base:X}")
+        print(f"    Size: {len(response_builder)} bytes")
+    
+    return base + len(response_builder)
+
 def inject_universal_runtime_features(image: bytearray, base_off=None, debug=False):
     """
     QSLCLRTF v5.0 — Fully QSLCL-Compatible Runtime Fault Table
@@ -1682,6 +1761,17 @@ def generate_command_code(
         return uop("MOV",0,cmd_id) + uop("ENTROPY",1,0) + uop("XOR",0,1) + uop("IPC_SEND",0,0xFF) + uop("RET")
 
     functional_code = generate_functional_payload()
+
+    response_handler = bytearray([
+        # After command execution, build response
+        0xB0, 0x00, 0x00,  # MOV status, 0 (success default)
+        0xB1, 0x01, 0x00,  # STORE status to response buffer
+        0xB2, 0x00, 0x00,  # CALL build_response_frame
+        0xB3, 0x00, 0x00,  # SEND_RESPONSE over USB
+        0xFF, 0x00, 0x00,  # RET
+    ])
+    
+    functional_code += response_handler
 
     # ------------------------------------------------------------------
     # 4. Build payload
@@ -3574,6 +3664,15 @@ def build_qslcl_bin(
         debug=debug
     )
     current_offset = align_up(runtime_end_ptr, 0x10)
+
+    response_builder_offset = align_up(current_offset, 0x10)
+    ensure_size(image, response_builder_offset)
+    response_end_ptr = embed_response_builder(
+        image, 
+        base=response_builder_offset, 
+        debug=debug
+    )
+    current_offset = align_up(response_end_ptr, 0x10)
 
     # FIXED: Call embed_certificate_strings with correct parameters
     certificate_end_ptr = embed_certificate_strings(

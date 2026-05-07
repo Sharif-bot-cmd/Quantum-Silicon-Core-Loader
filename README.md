@@ -2,7 +2,7 @@
 
 Primary Core: **qslcl.elf**
 
-Assistant Module: **qslcl.bin (v0.6.3)**
+Assistant Module: **qslcl.bin (v0.6.4)**
 
 Universal Controller: **qslcl.py (v2.0.1)**
 
@@ -55,50 +55,6 @@ def universal_dfu_detection(dev):
 - ✅ iPad DFU modes auto-detected
 - ✅ Generic Android DFU devices supported
 - ✅ No more "device not recognized" errors for new hardware
-
----
-
-# What's New in **v2.0.0**
-
-## Massive Module Rewrite
-Complete rewrite of all 20+ command modules with comprehensive fixes:
-
-- **Fixed Import System** - Proper fallback chain: absolute → relative → standalone across all modules
-- **Unified Command Dispatch** - Consistent `_dispatch()` with `_find_cmd()` helper for QSLCLCMD database lookup
-- **Removed QSLCLPAR References** - All legacy references eliminated, consolidated to QSLCLCMD system
-- **Standardized Handler Signatures** - All handlers follow consistent `(dev, args, force, ...) -> bool` pattern
-- **Enhanced Safety System** - `_confirm()` with proper EOFError/KeyboardInterrupt handling across all modules
-- **Color-Coded Output** - Consistent `Colors` class across all modules for terminal output
-- **Progress Bar Fallbacks** - Local `ProgressBar` implementation when QSLCL version unavailable
-- **Structured Dispatch Tables** - Dictionary-based handler dispatch with alias support in every module
-- **Complete Error Recovery** - Retry logic, exponential backoff, and graceful fallbacks throughout
-
-## Module-Specific Improvements
-
-| Module | Key Fixes |
-|--------|-----------|
-| **read.py** | Proper resume support, disk space checking, format conversion |
-| **write.py** | Comprehensive protection manager, writability testing, verification |
-| **erase.py** | Multiple erase patterns, chunked execution, post-erase verification |
-| **poke.py** | Safe expression evaluator, DataType system, bit operations |
-| **peek.py** | Multi-strategy memory reading, pointer analysis, entropy calculation |
-| **oem.py** | Bootloader lock/unlock with region scanning, warranty management |
-| **odm.py** | Manufacturing test suites, calibration, supply chain management |
-| **rawmode.py** | Session management, audit logging, privilege level system |
-| **voltage.py** | PMIC register access, voltage monitoring, safety ranges |
-| **verify.py** | Checksum, signature, integrity, security, performance verification |
-| **reset.py** | Multiple reset types with safety confirmations |
-| **rawstate.py** | Hardware register access, bit field extraction, state monitoring |
-| **power.py** | Power domain control, battery management, efficiency metrics |
-| **patch.py** | Chunked patching, backup creation, hex diff verification |
-| **mode.py** | Mode activation/deactivation, configuration persistence |
-| **glitch.py** | Fault injection with parameter sweeping, device health monitoring |
-| **footer.py** | Footer parsing for 7 types, CRC validation, security assessment |
-| **dump.py** | Chunked dumping with resume, compression, integrity verification |
-| **crash.py** | Controlled crash injection, recovery monitoring, test suites |
-| **config.py** | Schema-based validation, backup/restore, import/export |
-| **bypass.py** | Auto-detection of security offsets, SOC-specific bypasses |
-| **bruteforce.py** | Multi-strategy scanning, fuzzing, dictionary attacks |
 
 ---
 
