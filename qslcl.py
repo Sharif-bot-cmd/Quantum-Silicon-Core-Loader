@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qslcl.py — Universal QSLCL Tool v1.2.10 (FIXED)
+# qslcl.py — Universal QSLCL Tool v2.0.1 
 # Author: Sharif — QSLCL Creator
 # Works on all SOC
 # Fixed: Frame parsing, CRC validation, QSLCLBIN header parsing, error handling
@@ -34,6 +34,52 @@ from modules.power import cmd_power
 from modules.verify import cmd_verify
 from modules.rawstate import cmd_rawstate
 from modules.patch import cmd_patch
+
+def universal_dfu_detection(dev):
+    """
+    Detect ANY DFU mode device (not just Apple)
+    Based on USB DFU Class Specification
+    """
+    try:
+        # DFU Class specification (USB.org)
+        # Interface Class 0xFE = Application Specific
+        # Interface Subclass 0x01 = Device Firmware Upgrade
+        # Interface Protocol 0x01/0x02 = DFU mode
+        
+        cfg = dev.get_active_configuration()
+        
+        for intf in cfg:
+            if (intf.bInterfaceClass == 0xFE and 
+                intf.bInterfaceSubClass == 0x01):
+                
+                # DFU mode detected!
+                protocol_map = {
+                    0x01: "DFU Mode (Runtime)",
+                    0x02: "DFU Mode (Download)",
+                }
+                protocol = protocol_map.get(intf.bInterfaceProtocol, "DFU Mode")
+                
+                # Get vendor name
+                vendor_name = "Unknown"
+                try:
+                    vendor_name = usb.util.get_string(dev, dev.iManufacturer)
+                except:
+                    pass
+                
+                return {
+                    'mode': 'DFU',
+                    'protocol': protocol,
+                    'vendor': vendor_name,
+                    'vid': dev.idVendor,
+                    'pid': dev.idProduct
+                }
+        
+        return None
+        
+    except Exception as e:
+        if _DEBUG:
+            print(f"[!] DFU detection error: {e}")
+        return None
 
 # =============================================================================
 # IMPORTS
@@ -1124,13 +1170,58 @@ def scan_usb():
     try:
         for d in usb.core.find(find_all=True):
             try:
+                # ============================================================
+                # DYNAMIC DFU DETECTION - Check for any DFU mode device first
+                # ============================================================
+                dfu_info = universal_dfu_detection(d)
+                if dfu_info:
+                    # This is a DFU device! Add it with proper info
+                    try:
+                        product = usb.util.get_string(d, d.iProduct) or f"DFU Device ({dfu_info['protocol']})"
+                    except:
+                        product = f"DFU Device ({dfu_info['protocol']})"
+                    
+                    try:
+                        serial = usb.util.get_string(d, d.iSerialNumber) or "dfu_mode"
+                    except:
+                        serial = "dfu_mode"
+                    
+                    devs.append(QSLCLDevice(
+                        transport="usb",
+                        identifier=f"bus={d.bus},addr={d.address}",
+                        vendor=dfu_info['vendor'],
+                        product=product,
+                        vid=d.idVendor,
+                        pid=d.idProduct,
+                        usb_class=0xFE,  # DFU class
+                        usb_subclass=0x01,
+                        usb_protocol=0x01 if "Download" in dfu_info['protocol'] else 0x02,
+                        serial=serial,
+                        handle=d,
+                        serial_mode=False
+                    ))
+                    
+                    if _DEBUG:
+                        print(f"[*] DFU device detected: {dfu_info['vendor']} (0x{d.idVendor:04X}:0x{d.idProduct:04X}) - {dfu_info['protocol']}")
+                    
+                    continue  # Skip normal USB processing for DFU devices
+                
+                # ============================================================
+                # NORMAL USB DEVICE SCANNING (Original logic)
+                # ============================================================
                 try:
                     cfg = d.get_active_configuration()
                 except usb.core.USBError:
                     continue
+                
+                # Get the first interface (index 0)
                 intf = cfg[(0, 0)]
+                
+                # Skip HID and hub class devices
                 if intf.bInterfaceClass in (0x01, 0x02, 0x03, 0x07, 0x08, 0x0A):
                     continue
+                
+                # Find bulk IN and OUT endpoints
                 ep_in = None
                 ep_out = None
                 for ep in intf.endpoints():
@@ -1140,16 +1231,23 @@ def scan_usb():
                     else:
                         if usb.util.endpoint_type(ep.bmAttributes) == usb.util.ENDPOINT_TYPE_BULK:
                             ep_out = ep
+                
+                # Need both IN and OUT endpoints for communication
                 if not ep_in or not ep_out:
                     continue
+                
+                # Get device strings
                 try:
                     product = usb.util.get_string(d, d.iProduct) or "USB Device"
                 except:
                     product = "USB Device"
+                
                 try:
                     serial = usb.util.get_string(d, d.iSerialNumber) or "default"
                 except:
                     serial = "default"
+                
+                # Create device object
                 devs.append(QSLCLDevice(
                     transport="usb",
                     identifier=f"bus={d.bus},addr={d.address}",
@@ -1164,11 +1262,16 @@ def scan_usb():
                     handle=d,
                     serial_mode=False
                 ))
-            except Exception:
+                
+            except Exception as e:
+                if _DEBUG:
+                    print(f"[!] USB device scan error for device: {e}")
                 continue
+                
     except Exception as e:
         if _DEBUG:
             print(f"[!] USB scan error: {e}")
+    
     return devs
 
 def scan_all():

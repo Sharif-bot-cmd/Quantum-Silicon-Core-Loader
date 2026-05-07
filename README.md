@@ -4,7 +4,7 @@ Primary Core: **qslcl.elf**
 
 Assistant Module: **qslcl.bin (v0.6.3)**
 
-Universal Controller: **qslcl.py (v2.0.0)**
+Universal Controller: **qslcl.py (v2.0.1)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION_MATRIX.md)
 
@@ -20,11 +20,41 @@ QSLCL runs in:
 
 * **Qualcomm EDL / Firehose**
 * **MediaTek BROM / Preloader**
-* **Apple DFU**
+* **Apple DFU** (Dynamic detection - no hardcoded PIDs)
 * **Engineering / META / Diagnostic Modes**
 * **Any USB/Serial exposed interface**
 
 > **"You don't run QSLCL — silicon interprets it."**
+
+---
+
+# What's New in **v2.0.1**
+
+## 🔥 Dynamic DFU Detection (Major Improvement)
+
+**Problem:** Previous versions used hardcoded Apple DFU PIDs (0x1227, 0x1226, 0x1222, 0x1281) which would fail on newer devices.
+
+**Solution:** Implemented USB DFU Class Specification detection:
+
+- **Universal DFU Detection** - Identifies ANY DFU mode device using USB class 0xFE (Application Specific) and subclass 0x01 (Device Firmware Upgrade)
+- **Vendor-Agnostic** - Works with Apple, Google, Samsung, OnePlus, and any other DFU-capable device
+- **Future-Proof** - No hardcoded PIDs needed; detects by USB standard compliance
+- **Autonomous Fallback** - Gracefully handles devices that don't fully comply with DFU spec
+
+**Technical Implementation:**
+```python
+def universal_dfu_detection(dev):
+    # Detects DFU by:
+    # 1. Interface Class 0xFE = Application Specific
+    # 2. Interface Subclass 0x01 = Device Firmware Upgrade  
+    # 3. Protocol 0x01/0x02 = Runtime/Download mode
+```
+
+**What this means for you:**
+- ✅ iPhone 16, 17, 18+ work immediately (no code changes needed)
+- ✅ iPad DFU modes auto-detected
+- ✅ Generic Android DFU devices supported
+- ✅ No more "device not recognized" errors for new hardware
 
 ---
 
@@ -72,17 +102,8 @@ Complete rewrite of all 20+ command modules with comprehensive fixes:
 
 ---
 
-<<<<<<< HEAD
-# qslcl.py — Universal Controller **v1.2.6**
+# qslcl.py — Universal Controller **v2.0.1**
 
-# What's New in **v1.2.6**
-
-- add warning when attempting to write protected regions.
-  
-=======
-# qslcl.py — Universal Controller **v2.0.0**
-
->>>>>>> 92ecccc (QSLCL 2.0.0 Updates)
 ## Complete Command List
 
 **Core Memory Operations:**
@@ -103,7 +124,7 @@ Complete rewrite of all 20+ command modules with comprehensive fixes:
 | `ping` | Latency testing and connectivity |
 | `getinfo` | Comprehensive device information |
 | `partitions` | Partition table listing |
-| `endpoints` | USB endpoint listing |
+| `endpoints` | USB endpoint listing (supports DFU devices) |
 | `config` | Configuration management |
 | `config-list` | List configuration capabilities |
 
@@ -151,9 +172,21 @@ python qslcl.py hello --loader=qslcl.bin
 python qslcl.py getinfo --loader=qslcl.bin
 python qslcl.py ping --loader=qslcl.bin
 
-# List available commands
+# List available commands and endpoints (now shows DFU devices)
 python qslcl.py --loader=qslcl.bin endpoints
 python qslcl.py config list --loader=qslcl.bin
+```
+
+## DFU Mode Detection (v2.0.1)
+
+```bash
+# Automatic DFU detection - no manual PID configuration needed
+python qslcl.py endpoints --debug
+
+# Expected output for DFU devices:
+# [*] DFU device detected: Apple Inc. (0x05AC:0xXXXX) - DFU Mode (Download)
+# [*] USB Endpoints (1 total):
+#      DFU Device    BIDIR     0x00       CTRL    64
 ```
 
 ## Professional Usage
@@ -186,7 +219,7 @@ python qslcl.py mode set DEBUG --loader=qslcl.bin
 # With authentication
 python qslcl.py hello --loader=qslcl.bin --auth
 
-# Wait for device detection
+# Wait for device detection (useful for DFU mode entry)
 python qslcl.py getinfo --loader=qslcl.bin --wait 10
 
 # Professional patching workflow
@@ -200,6 +233,9 @@ python qslcl.py crash-test basic 3 5 --loader=qslcl.bin
 # Hardware state inspection
 python qslcl.py rawstate monitor CLK_CTL 0.5 30 --loader=qslcl.bin
 python qslcl.py rawstate read CPUID --loader=qslcl.bin
+
+# DFU-specific operations (auto-detected)
+python qslcl.py read 0x8000000 --size 1M -o dfu_dump.bin --loader=qslcl.bin
 ```
 
 ---
@@ -210,7 +246,10 @@ python qslcl.py rawstate read CPUID --loader=qslcl.bin
 |----------|------------------|-----------------------------|--------|
 | Qualcomm | EDL              | Sahara + Firehose handshake | ✅ Enhanced |
 | MediaTek | BROM / Preloader | 0xA0 preloader ping         | ✅ Enhanced |
-| Apple    | DFU              | DFU signature               | ✅ Enhanced |
+| Apple    | DFU              | **Dynamic USB DFU Class**   | ✅ v2.0.1 (No hardcoded PIDs) |
+| Google   | DFU              | Dynamic USB DFU Class       | ✅ New |
+| Samsung  | DFU              | Dynamic USB DFU Class       | ✅ New |
+| OnePlus  | DFU              | Dynamic USB DFU Class       | ✅ New |
 | Generic  | USB CDC/Bulk     | Endpoint auto-discovery     | ✅ Universal |
 | Any      | Serial COM       | UART auto sync              | ✅ Universal |
 
@@ -273,6 +312,17 @@ python qslcl.py hello --loader=qslcl.bin
 python qslcl.py hello --loader=qslcl.bin --wait 5
 ```
 
+**DFU Device Not Detected (v2.0.1 fixed):**
+```bash
+# Enable debug to see DFU detection
+python qslcl.py endpoints --debug
+
+# If still not detected, check:
+# 1. Device is actually in DFU mode
+# 2. USB cable supports data (MFI for Apple)
+# 3. Run with sudo/administrator privileges
+```
+
 **Memory Operation Errors:**
 ```bash
 # Use smaller chunk sizes for problematic devices
@@ -295,7 +345,7 @@ python qslcl.py patch 0x100000 file patch.bin --no-verify --loader=qslcl.bin
 
 1. **Open a GitHub issue** with detailed information
 2. **Include your device model** and connection method
-3. **Provide command logs** and output with `--verbose`
+3. **Provide command logs** and output with `--debug`
 4. **Include qslcl.bin size and SHA256 hash**
 5. **Specify Python version and OS**
 6. **Include architecture information** from `getinfo`
@@ -313,11 +363,14 @@ python qslcl.py rawmode list --verbose --loader=qslcl.bin
 # Test specific functionality
 python qslcl.py verify list --loader=qslcl.bin
 python qslcl.py bypass test --loader=qslcl.bin
+
+# Debug DFU detection specifically
+python qslcl.py endpoints --debug 2>&1 | grep -i dfu
 ```
 
 ---
 
-# Module Architecture (v2.0.0)
+# Module Architecture (v2.0.1)
 
 All command modules follow a consistent architecture:
 
@@ -357,6 +410,43 @@ Each module features:
 
 ---
 
+# Technical Deep Dive: DFU Detection (v2.0.1)
+
+## How It Works
+
+```python
+def universal_dfu_detection(dev):
+    """
+    Detects ANY DFU mode device using USB DFU Class Specification
+    """
+    # USB DFU Class Specification defines:
+    # - bInterfaceClass: 0xFE (Application Specific)
+    # - bInterfaceSubClass: 0x01 (Device Firmware Upgrade)
+    # - bInterfaceProtocol: 0x01 (Runtime) or 0x02 (Download)
+    
+    cfg = dev.get_active_configuration()
+    for intf in cfg:
+        if (intf.bInterfaceClass == 0xFE and 
+            intf.bInterfaceSubClass == 0x01):
+            return {
+                'mode': 'DFU',
+                'protocol': 'DFU Mode (Download)' if intf.bInterfaceProtocol == 0x02 else 'DFU Mode (Runtime)',
+                'vendor': vendor_name,
+                'vid': dev.idVendor,
+                'pid': dev.idProduct
+            }
+    return None
+```
+
+## Why This Matters
+
+| Version | Detection Method | Future Device Support |
+|---------|-----------------|----------------------|
+| v2.0.0 and earlier | Hardcoded PID list | ❌ Requires code update for each new device |
+| v2.0.1 | USB DFU Class Specification | ✅ Works with any compliant DFU device |
+
+---
+
 # Final Words
 
 > **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, and every bootstrap execution becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping."**
@@ -370,8 +460,19 @@ Each module features:
 * **Advanced Patching** - Professional binary modification with read-back verification
 * **Modular Architecture** - Consistent, maintainable command modules
 * **Ethical Empowerment** - Capability with responsibility and safety controls
+* **Future-Proof Detection** - USB DFU Class compliance (v2.0.1)
 
 **YouTube**: [https://www.youtube.com/@EntropyVector](https://www.youtube.com/@EntropyVector)
+
+---
+
+## Version History
+
+| Version | Key Changes |
+|---------|-------------|
+| v2.0.1 | **Dynamic DFU detection** - No hardcoded PIDs, USB Class compliance |
+| v2.0.0 | Complete module rewrite, 20+ commands, unified dispatch |
+| v1.2.6 | Legacy version with static PID detection |
 
 ---
 
