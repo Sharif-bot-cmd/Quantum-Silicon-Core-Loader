@@ -4,7 +4,7 @@ Primary Core: **qslcl.elf**
 
 Assistant Module: **qslcl.bin (v0.6.3)**
 
-Universal Controller: **qslcl.py (v1.2.6)**
+Universal Controller: **qslcl.py (v2.0.0)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION_MATRIX.md)
 
@@ -28,53 +28,107 @@ QSLCL runs in:
 
 ---
 
-# What's New in **v0.6.3**
+# What's New in **v2.0.0**
 
-- minor improvements has been made
-  
+## Massive Module Rewrite
+Complete rewrite of all 20+ command modules with comprehensive fixes:
+
+- **Fixed Import System** - Proper fallback chain: absolute → relative → standalone across all modules
+- **Unified Command Dispatch** - Consistent `_dispatch()` with `_find_cmd()` helper for QSLCLCMD database lookup
+- **Removed QSLCLPAR References** - All legacy references eliminated, consolidated to QSLCLCMD system
+- **Standardized Handler Signatures** - All handlers follow consistent `(dev, args, force, ...) -> bool` pattern
+- **Enhanced Safety System** - `_confirm()` with proper EOFError/KeyboardInterrupt handling across all modules
+- **Color-Coded Output** - Consistent `Colors` class across all modules for terminal output
+- **Progress Bar Fallbacks** - Local `ProgressBar` implementation when QSLCL version unavailable
+- **Structured Dispatch Tables** - Dictionary-based handler dispatch with alias support in every module
+- **Complete Error Recovery** - Retry logic, exponential backoff, and graceful fallbacks throughout
+
+## Module-Specific Improvements
+
+| Module | Key Fixes |
+|--------|-----------|
+| **read.py** | Proper resume support, disk space checking, format conversion |
+| **write.py** | Comprehensive protection manager, writability testing, verification |
+| **erase.py** | Multiple erase patterns, chunked execution, post-erase verification |
+| **poke.py** | Safe expression evaluator, DataType system, bit operations |
+| **peek.py** | Multi-strategy memory reading, pointer analysis, entropy calculation |
+| **oem.py** | Bootloader lock/unlock with region scanning, warranty management |
+| **odm.py** | Manufacturing test suites, calibration, supply chain management |
+| **rawmode.py** | Session management, audit logging, privilege level system |
+| **voltage.py** | PMIC register access, voltage monitoring, safety ranges |
+| **verify.py** | Checksum, signature, integrity, security, performance verification |
+| **reset.py** | Multiple reset types with safety confirmations |
+| **rawstate.py** | Hardware register access, bit field extraction, state monitoring |
+| **power.py** | Power domain control, battery management, efficiency metrics |
+| **patch.py** | Chunked patching, backup creation, hex diff verification |
+| **mode.py** | Mode activation/deactivation, configuration persistence |
+| **glitch.py** | Fault injection with parameter sweeping, device health monitoring |
+| **footer.py** | Footer parsing for 7 types, CRC validation, security assessment |
+| **dump.py** | Chunked dumping with resume, compression, integrity verification |
+| **crash.py** | Controlled crash injection, recovery monitoring, test suites |
+| **config.py** | Schema-based validation, backup/restore, import/export |
+| **bypass.py** | Auto-detection of security offsets, SOC-specific bypasses |
+| **bruteforce.py** | Multi-strategy scanning, fuzzing, dictionary attacks |
 
 ---
 
+<<<<<<< HEAD
 # qslcl.py — Universal Controller **v1.2.6**
 
 # What's New in **v1.2.6**
 
 - add warning when attempting to write protected regions.
   
+=======
+# qslcl.py — Universal Controller **v2.0.0**
+
+>>>>>>> 92ecccc (QSLCL 2.0.0 Updates)
 ## Complete Command List
 
 **Core Memory Operations:**
-- `READ` - Advanced memory reading with verification
-- `WRITE` - Professional memory writing with safety checks
-- `ERASE` - Secure data erasure with multiple patterns
-- `PEEK` - Memory inspection with type detection
-- `POKE` - Precision memory writing with bit operations
-- `PATCH` - Advanced binary patching with verification
+| Command | Description |
+|---------|-------------|
+| `read` | Advanced memory reading with resume support |
+| `write` | Professional memory writing with protection checks |
+| `erase` | Secure data erasure with multiple patterns |
+| `peek` | Memory inspection with type detection |
+| `poke` | Precision memory writing with bit operations |
+| `patch` | Advanced binary patching with verification |
+| `dump` | Memory dumping with compression and verification |
 
 **System Commands:**
-- `HELLO` - Device handshake and identification
-- `PING` - Latency testing and connectivity verification
-- `GETINFO` - Comprehensive device information
-- `GETVAR` - System variable access
-- `GETSECTOR` - Storage sector size detection
+| Command | Description |
+|---------|-------------|
+| `hello` | Device handshake and identification |
+| `ping` | Latency testing and connectivity |
+| `getinfo` | Comprehensive device information |
+| `partitions` | Partition table listing |
+| `endpoints` | USB endpoint listing |
+| `config` | Configuration management |
+| `config-list` | List configuration capabilities |
 
 **Advanced Operations:**
-- `RAWMODE` - Privilege escalation and hardware access
-- `GETCONFIG` - System configuration management
-- `RESET` - System reset and restart control
-- `BRUTEFORCE` - Advanced system exploration
-- `AUTHENTICATE` - Security authentication
+| Command | Description |
+|---------|-------------|
+| `rawmode` | Privilege escalation with session management |
+| `reset` | System reset with multiple types |
+| `bruteforce` | Multi-strategy system exploration |
+| `bypass` | Security bypass with auto-detection |
+| `glitch` | Hardware fault injection framework |
+| `verify` | System integrity verification |
 
 **Specialized Commands:**
-- `OEM` - Original Equipment Manufacturer functions
-- `ODM` - Original Design Manufacturer controls
-- `MODE` - System mode management
-- `POWER` - Power domain control
-- `VOLTAGE` - Voltage regulation
-- `BYPASS` - Security bypass operations
-- `GLITCH` - Fault injection framework
-- `VERIFY` - System integrity verification
-- `SETCONFIG` - Set configuration
+| Command | Description |
+|---------|-------------|
+| `oem` | OEM bootloader unlock/lock functions |
+| `odm` | ODM manufacturing and customization |
+| `mode` | System mode management |
+| `power` | Power domain and battery control |
+| `voltage` | Voltage regulation and monitoring |
+| `crash` | Controlled crash injection testing |
+| `crash-test` | Automated crash test suites |
+| `footer` | Footer analysis and validation |
+| `rawstate` | Hardware state inspection |
 
 ---
 
@@ -84,6 +138,8 @@ QSLCL runs in:
 
 ```bash
 pip install pyserial pyusb
+pip install pycryptodome   # optional, for crypto operations
+pip install capstone        # optional, for disassembly
 pip install requests tqdm   # optional
 ```
 
@@ -94,6 +150,10 @@ pip install requests tqdm   # optional
 python qslcl.py hello --loader=qslcl.bin
 python qslcl.py getinfo --loader=qslcl.bin
 python qslcl.py ping --loader=qslcl.bin
+
+# List available commands
+python qslcl.py --loader=qslcl.bin endpoints
+python qslcl.py config list --loader=qslcl.bin
 ```
 
 ## Professional Usage
@@ -102,20 +162,22 @@ python qslcl.py ping --loader=qslcl.bin
 # Complete memory operations
 python qslcl.py read boot boot.img --loader=qslcl.bin
 python qslcl.py write boot modified_boot.img --loader=qslcl.bin --verify
-python qslcl.py erase cache --pattern random --loader=qslcl.bin
-python qslcl.py patch 0x880000 file patch.bin --loader=qslcl.bin
+python qslcl.py dump system --size 100M --compress --verify --loader=qslcl.bin
 
-# Bootstrap operations
-python qslcl.py bootstrap --architecture arm64 --loader=qslcl.bin
-python qslcl.py bootstrap --verify --loader=qslcl.bin
+# Configuration management
+python qslcl.py config get debug_level
+python qslcl.py config set timeout 10000
+python qslcl.py config backup my_config.json
 
-# Advanced debugging
-python qslcl.py peek 0x100000 --hexdump --loader=qslcl.bin
-python qslcl.py poke 0x200000 0xDEADBEEF --bit-op OR --loader=qslcl.bin
+# Security analysis
+python qslcl.py bypass detect --loader=qslcl.bin
+python qslcl.py verify security --verbose --loader=qslcl.bin
+python qslcl.py footer --type SECURITY --validate --loader=qslcl.bin
 
 # System control
-python qslcl.py rawmode unlock --loader=qslcl.bin
-python qslcl.py rawmode set JTAG_ENABLE 1 --loader=qslcl.bin
+python qslcl.py reset soft --loader=qslcl.bin
+python qslcl.py power status --loader=qslcl.bin
+python qslcl.py mode set DEBUG --loader=qslcl.bin
 ```
 
 ## Advanced Usage
@@ -127,13 +189,17 @@ python qslcl.py hello --loader=qslcl.bin --auth
 # Wait for device detection
 python qslcl.py getinfo --loader=qslcl.bin --wait 10
 
-# Multiple commands with same loader
-python qslcl.py hello --loader=qslcl.bin && python qslcl.py getinfo --loader=qslcl.bin
-
 # Professional patching workflow
 python qslcl.py read boot boot.img --loader=qslcl.bin
 # Modify boot.img externally
 python qslcl.py patch boot file boot_patched.img --loader=qslcl.bin --verify
+
+# Crash testing (USE WITH CAUTION!)
+python qslcl.py crash-test basic 3 5 --loader=qslcl.bin
+
+# Hardware state inspection
+python qslcl.py rawstate monitor CLK_CTL 0.5 30 --loader=qslcl.bin
+python qslcl.py rawstate read CPUID --loader=qslcl.bin
 ```
 
 ---
@@ -141,7 +207,7 @@ python qslcl.py patch boot file boot_patched.img --loader=qslcl.bin --verify
 # Device Compatibility
 
 | Vendor   | Mode             | Detection Method            | Status |
-|----------|------------------|-----------------------------|-------------|
+|----------|------------------|-----------------------------|--------|
 | Qualcomm | EDL              | Sahara + Firehose handshake | ✅ Enhanced |
 | MediaTek | BROM / Preloader | 0xA0 preloader ping         | ✅ Enhanced |
 | Apple    | DFU              | DFU signature               | ✅ Enhanced |
@@ -154,9 +220,12 @@ python qslcl.py patch boot file boot_patched.img --loader=qslcl.bin --verify
 
 **QSLCL CAN PERMANENTLY BRICK (DESTROY) YOUR DEVICE IF USED INCORRECTLY.**
 
-- ✅ **SAFE:** EDL mode, DFU mode, BROM mode, Serial boot modes
-- ❌ **DANGEROUS:** Writing to iROM, BootROM, NOR flash boot sectors
-- 💀 **BRICK RISK:** Overwriting protected bootloaders (iBoot, SBL, U-Boot SPL)
+| Safety Level | Operations | Risk |
+|-------------|-----------|------|
+| ✅ **SAFE** | EDL mode, DFU mode, BROM mode, Serial boot modes | Minimal |
+| ⚠️ **CAUTION** | Writing to user partitions, voltage changes | Moderate |
+| ❌ **DANGEROUS** | Writing to iROM, BootROM, NOR flash boot sectors | High |
+| 💀 **BRICK RISK** | Overwriting protected bootloaders (iBoot, SBL, U-Boot SPL) | Critical |
 
 **YOU HAVE BEEN WARNED. THE AUTHOR IS NOT RESPONSIBLE FOR BRICKED DEVICES.**
 
@@ -184,12 +253,6 @@ This tool enables exercises of:
 - **Academic Research** exemptions (security studies)
 - **Educational Use** protections (learning purposes)
 
-### Proactive Legal Protection:
-- GitHub Ticket #3932406: Official notice acknowledged
-- Comprehensive legal documentation included
-- Transparent communication with relevant parties
-- Philippine-based development (respects local/international law)
-
 > **Use responsibly. With great power comes great responsibility.**
 
 ---
@@ -209,12 +272,22 @@ python qslcl.py hello --loader=qslcl.bin
 # Use wait parameter for slow devices
 python qslcl.py hello --loader=qslcl.bin --wait 5
 ```
+
 **Memory Operation Errors:**
 ```bash
 # Use smaller chunk sizes for problematic devices
 python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
 
-# For patching issues, disable verification
+# For patching issues, resume interrupted operations
+python qslcl.py dump 0x10000000 --size 1M --resume --loader=qslcl.bin
+```
+
+**Verification Failures:**
+```bash
+# Increase retries for unreliable connections
+python qslcl.py write boot image.bin --loader=qslcl.bin --retries 5
+
+# Skip verification for known-good operations
 python qslcl.py patch 0x100000 file patch.bin --no-verify --loader=qslcl.bin
 ```
 
@@ -222,10 +295,10 @@ python qslcl.py patch 0x100000 file patch.bin --no-verify --loader=qslcl.bin
 
 1. **Open a GitHub issue** with detailed information
 2. **Include your device model** and connection method
-3. **Provide command logs** and output
+3. **Provide command logs** and output with `--verbose`
 4. **Include qslcl.bin size and SHA256 hash**
 5. **Specify Python version and OS**
-6. **Include bootstrap architecture information**
+6. **Include architecture information** from `getinfo`
 
 ## Debug Information
 
@@ -237,24 +310,65 @@ python qslcl.py hello --loader=qslcl.bin --debug
 # Verbose output for complex operations
 python qslcl.py rawmode list --verbose --loader=qslcl.bin
 
-# Test patch functionality
-python qslcl.py patch 0x100000 hex "AABBCC" --loader=qslcl.bin --verbose
+# Test specific functionality
+python qslcl.py verify list --loader=qslcl.bin
+python qslcl.py bypass test --loader=qslcl.bin
 ```
+
+---
+
+# Module Architecture (v2.0.0)
+
+All command modules follow a consistent architecture:
+
+```
+modules/
+├── read.py          # Memory reading with resume/verify
+├── write.py         # Memory writing with protection
+├── erase.py         # Secure erasure patterns
+├── peek.py          # Memory inspection
+├── poke.py          # Precision writes
+├── dump.py          # Bulk memory dumping
+├── patch.py         # Binary patching
+├── oem.py           # OEM operations
+├── odm.py           # ODM operations
+├── rawmode.py       # Privilege escalation
+├── voltage.py       # Voltage control
+├── verify.py        # System verification
+├── reset.py         # System reset
+├── rawstate.py      # Hardware state
+├── power.py         # Power management
+├── mode.py          # Mode management
+├── glitch.py        # Fault injection
+├── footer.py        # Footer analysis
+├── crash.py         # Crash injection
+├── config.py        # Configuration
+├── bypass.py        # Security bypass
+└── bruteforce.py    # Automated testing
+```
+
+Each module features:
+- **Standardized imports** with proper fallback chains
+- **Unified dispatch** via `_dispatch()` helper
+- **Dictionary-based handlers** with alias support
+- **Consistent error handling** with retry logic
+- **Color-coded output** via shared `Colors` class
+- **Progress tracking** with local fallback
 
 ---
 
 # Final Words
 
-> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, and now every bootstrap execution becomes an extension of silicon consciousness through our perfected micro-VM architecture with universal dynamic bootstrapping."**
+> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, and every bootstrap execution becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping."**
 
 ## Key Philosophy
 
-* **Universal Execution** - One binary, all architectures, 30+ complete commands + dynamic bootstrap
+* **Universal Execution** - One binary, all architectures, 30+ complete commands
 * **Silicon Intimacy** - Direct hardware conversation with bit-level precision
 * **Adaptive Intelligence** - Environment-aware behavior with safety enforcement
 * **Professional Grade** - Enterprise-level memory operations with verification
 * **Advanced Patching** - Professional binary modification with read-back verification
-* **Dynamic Bootstrapping** - Universal cross-architecture initialization
+* **Modular Architecture** - Consistent, maintainable command modules
 * **Ethical Empowerment** - Capability with responsibility and safety controls
 
 **YouTube**: [https://www.youtube.com/@EntropyVector](https://www.youtube.com/@EntropyVector)

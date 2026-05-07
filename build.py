@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# build.py - QSLCL Binary Builder v5.2 (FIXED - QSLCLCMD as primary)
+# Patched version with QSLCLCMD as main command header
+
 import sys, struct, random, time, hmac, hashlib, os, zlib, uuid, json, platform, math
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
@@ -40,6 +43,18 @@ def verify_standard_header(header: bytes, body: bytes) -> bool:
         return stored_crc == calculated_crc
     except:
         return False
+
+# ============================================================
+# FIXED: Global alignment helper
+# ============================================================
+def align_up(addr: int, alignment: int = 16) -> int:
+    """Align address upward to specified alignment (power of two)."""
+    return (addr + alignment - 1) & ~(alignment - 1)
+
+def ensure_size(image: bytearray, required_size: int) -> None:
+    """Ensure image has at least required_size bytes."""
+    if required_size > len(image):
+        image.extend(b"\x00" * (required_size - len(image)))
 
 # ============================================================
 # FIX 1: Handle missing universal_soc gracefully
@@ -378,9 +393,11 @@ def embed_usb_tx_rx_micro_routine(
     routine_count = len(routines)
     total_len = sum(len(r) for r in routines)
 
-    def ensure(n):
-        if n > len(image):
-            image.extend(b"\x00" * (n - len(image)))
+    # Ensure base offset is properly aligned
+    base = align_up(base, align_after_header)
+    
+    # Ensure image has enough space
+    ensure_size(image, base + 4096)
 
     ptr = base
 
@@ -429,7 +446,7 @@ def embed_usb_tx_rx_micro_routine(
     header = create_standard_header(MAGIC, body, FLAGS)
     
     # Write header and body
-    ensure(ptr + len(header) + len(body))
+    ensure_size(image, ptr + len(header) + len(body))
     image[ptr:ptr + len(header)] = header
     ptr += len(header)
     
@@ -437,11 +454,8 @@ def embed_usb_tx_rx_micro_routine(
     ptr += len(body)
 
     # Alignment
-    aligned = (ptr + (align_after_header - 1)) & ~(align_after_header - 1)
-    ensure(aligned)
-    for i in range(ptr, aligned):
-        image[i] = 0x00
-    ptr = aligned
+    ptr = align_up(ptr, align_after_header)
+    ensure_size(image, ptr)
 
     if debug:
         print(f"[*] QSLCL USB Micro-Engine v5.0 embedded:")
@@ -784,9 +798,9 @@ def nano_kernel_microservices(
     svc_count = len(services)
     total_len = sum(len(x) for x in blocks)
 
-    def ensure(n):
-        if n > len(image):
-            image.extend(b"\x00" * (n - len(image)))
+    # Align base offset
+    base = align_up(base, align_after_header)
+    ensure_size(image, base + 4096)
 
     # ============================================================
     # BUILD BODY WITH STANDARD FORMAT
@@ -823,17 +837,15 @@ def nano_kernel_microservices(
     header = create_standard_header(MAGIC, body, FLAGS)
     
     # Write header and body
-    ensure(base + len(header) + len(body))
+    ensure_size(image, base + len(header) + len(body))
     image[base:base + len(header)] = header
     image[base + len(header):base + len(header) + len(body)] = body
     
     ptr = base + len(header) + len(body)
 
     # Align
-    if ptr % align_after_header != 0:
-        pad = align_after_header - (ptr % align_after_header)
-        ensure(ptr + pad)
-        ptr += pad
+    ptr = align_up(ptr, align_after_header)
+    ensure_size(image, ptr)
 
     if debug:
         print(f"[*] QSLCL Nano-Kernel v5.0 embedded @0x{base:X}")
@@ -843,7 +855,7 @@ def nano_kernel_microservices(
         print(f"    Services: {svc_count}, Total micro-VM code: {total_len} bytes")
         print(f"    Features: 0x{features:08X}")
 
-    return ptr  # FIXED: Return pointer, not image
+    return ptr
 
 def get_all_usb_endpoints(max_endpoints=64, fallback=True, debug=False):
     """
@@ -1395,17 +1407,15 @@ def inject_universal_runtime_features(image: bytearray, base_off=None, debug=Fal
     """
 
     if base_off is None:
-        base_off = (len(image) + 15) & ~0xF
+        base_off = align_up(len(image), 16)
 
     cursor = base_off
 
     def pad(n, a=16):
         return (n + (a - 1)) & ~(a - 1)
 
-    def space(n):
-        nonlocal image
-        if cursor + n > len(image):
-            image.extend(b"\x00" * (cursor + n - len(image)))
+    # Ensure enough space
+    ensure_size(image, cursor + 4096)
 
     # ============================================================
     # BUILD BODY WITH STANDARD FORMAT
@@ -1467,7 +1477,7 @@ def inject_universal_runtime_features(image: bytearray, base_off=None, debug=Fal
     FLAGS = 0x00  # future use
     header = create_standard_header(MAGIC, body, FLAGS)
     
-    space(len(header) + len(body))
+    ensure_size(image, cursor + len(header) + len(body))
     image[cursor:cursor + len(header)] = header
     cursor += len(header)
     
@@ -1477,6 +1487,7 @@ def inject_universal_runtime_features(image: bytearray, base_off=None, debug=Fal
     
     # Align
     cursor = pad(cursor)
+    ensure_size(image, cursor)
 
     if debug:
         print(f"[*] QSLCLRTF v5.0 embedded @0x{base_off:X}")
@@ -1536,7 +1547,7 @@ def quantum_seed(key: bytes = b"") -> bytes:
     return seed
 
 # ------------------------------------------------------------
-# Generate command code for QSLCL - UPDATED WITH STANDARD HEADER
+# Generate command code for QSLCL - UPDATED: QSLCLCMD as primary header (no QSLCLPAR)
 # ------------------------------------------------------------
 def generate_command_code(
     cname: str,
@@ -1544,7 +1555,7 @@ def generate_command_code(
     size: int,
     auth_key: bytes = b"SuperSecretKey!",
     include_header: bool = True,
-    header_magic: bytes = b"QSLCLPAR",
+    header_magic: bytes = b"QSLCLCMD",
     secure_mode: bool = True,
     debug: bool = False,
     rawmode_value: int = 1
@@ -1558,7 +1569,7 @@ def generate_command_code(
         "CONFIG":3,"GETCONFIG":3,"SETCONFIG":3,"PATCH":3,"BYPASS":4,"GLITCH":4,"RESET":4,
         "UNLOCK":4,"CRASH":4,"VOLTAGE":4,"BRUTEFORCE":4,"RAWMODE":5,
         "RAW":5,"MODE":5,"RAWSTATE":5,"FOOTER":5,"LOCK":5,"GPT":3,
-        "FUZZ":4,"CHECKSUMS":2
+        "FUZZ":4,"CHECKSUMS":2,"TEST":3,"EFFICIENCY":4
     }
 
     FAMILY = {
@@ -1566,13 +1577,13 @@ def generate_command_code(
         "READ":"MEM","WRITE":"MEM","ERASE":"MEM","PEEK":"MEM","POKE":"MEM","DUMP":"MEM",
         "VERIFY":"SEC","GETSECTOR":"MEM","CHECKSUMS":"SEC","GPT":"SEC",
         "OEM":"OEM","ODM":"OEM","AUTHENTICATE":"SEC",
-        "CONFIGURE":"CFG","GETCONFIG":"CFG","POWER":"PWR","VOLTAGE":"PWR",
+        "CONFIG":"CFG","GETCONFIG":"CFG","POWER":"PWR","VOLTAGE":"PWR",
         "PATCH":"ROM","SETCONFIG":"CFG",
         "GLITCH":"TIMING","BYPASS":"META","BRUTEFORCE":"META",
         "RESET":"SYS","CRASH":"SYS","UNLOCK":"SYS",
         "RAWMODE":"RAW","RAW":"RAW","MODE":"RAW","RAWSTATE":"RAW",
         "FOOTER":"RAW","LOCK":"RAW",
-        "FUZZ":"TEST"
+        "FUZZ":"TEST","TEST":"TEST","EFFICIENCY":"SYS"
     }
 
     RAWMODE_COMMANDS = {"RAWMODE","RAW","MODE","RAWSTATE","FOOTER","LOCK"}
@@ -1611,63 +1622,64 @@ def generate_command_code(
     # ------------------------------------------------------------------
     def generate_functional_payload():
         if family == "SYS":
-            if C == "HELLO": return uop("MOV",0,0x48534C43)+uop("IPC_SEND",0,0xF0)+uop("RET")
-            if C == "PING": return uop("MOV",1,0x50494E47)+uop("IPC_SEND",1,0xF1)+uop("MOV",0,1)+uop("RET")
-            if C == "GETINFO": return uop("LOAD",0,0x1000)+uop("LOAD",1,0x1004)+uop("IPC_SEND",0,0xF2)+uop("IPC_SEND",1,0xF3)+uop("RET")
-            if C == "GETVAR": return uop("LOAD",0,0x1100)+uop("IPC_SEND",0,0xF4)+uop("RET")
-            if C == "RESET": return uop("MOV",0,0xDEAD)+uop("SYSCALL",0,0xFF)+uop("HLT")
-            if C == "CRASH": return uop("MOV",0,0xDEADBEEF)+uop("HLT")+uop("RET")
-            if C == "UNLOCK": return uop("PRIV_UP",0,0)+uop("MOV",0,0x554E4C4B)+uop("SYSCALL",0,0xF9)+uop("RET")
+            if C == "HELLO": return uop("MOV",0,0) + uop("IPC_SEND",0,0xF0) + uop("RET")
+            if C == "PING": return uop("MOV",1,0) + uop("IPC_SEND",1,0xF1) + uop("RET")
+            if C == "GETINFO": return uop("LOAD",0,0x1000) + uop("IPC_SEND",0,0xF2) + uop("RET")
+            if C == "GETVAR": return uop("LOAD",0,0x1100) + uop("IPC_SEND",0,0xF4) + uop("RET")
+            if C == "RESET": return uop("MOV",0,0xDEAD) + uop("SYSCALL",0,0xFF) + uop("HLT")
+            if C == "CRASH": return uop("MOV",0,0) + uop("HLT")
+            if C == "UNLOCK": return uop("PRIV_UP",0,0) + uop("SYSCALL",0,0xF9) + uop("RET")
+            if C == "EFFICIENCY": return uop("ENTROPY",0,0) + uop("IPC_SEND",0,0xF5) + uop("RET")
         
         elif family == "MEM":
-            if C == "READ": return uop("LOAD",0,0x2000)+uop("IPC_SEND",0,0xE0)+uop("RET")
-            if C == "WRITE": return uop("IPC_RECV",1,0xE1)+uop("STORE",1,0x2000)+uop("RET")
-            if C == "PEEK": return uop("LOAD",2,0x2100)+uop("IPC_SEND",2,0xE2)+uop("RET")
-            if C == "POKE": return uop("IPC_RECV",3,0xE3)+uop("STORE",3,0x2100)+uop("RET")
-            if C == "DUMP": return uop("MEMCPY",0,0x100)+uop("IPC_SEND",0,0xE4)+uop("RET")
+            if C == "READ": return uop("LOAD",0,0x2000) + uop("IPC_SEND",0,0xE0) + uop("RET")
+            if C == "WRITE": return uop("IPC_RECV",1,0xE1) + uop("STORE",1,0x2000) + uop("RET")
+            if C == "PEEK": return uop("LOAD",2,0x2100) + uop("IPC_SEND",2,0xE2) + uop("RET")
+            if C == "POKE": return uop("IPC_RECV",3,0xE3) + uop("STORE",3,0x2100) + uop("RET")
+            if C == "DUMP": return uop("MEMCPY",0,0x100) + uop("IPC_SEND",0,0xE4) + uop("RET")
             if C == "GETSECTOR": return uop("LOAD",0,0x2200) + uop("IPC_SEND",0,0xE5) + uop("RET")
-            if C == "ERASE": return uop("MEMSET",0,0x2000)+uop("IPC_SEND",0,0xE6)+uop("RET")
+            if C == "ERASE": return uop("MEMSET",0,0x2000) + uop("IPC_SEND",0,0xE6) + uop("RET")
         
         elif family == "SEC":
-            if C == "AUTHENTICATE": return uop("ENTROPY",0,0)+uop("SHA256",0,0x3000)+uop("IPC_SEND",0,0xD0)+uop("IPC_RECV",1,0xD1)+uop("CMP",0,1)+uop("MOV",0,1)+uop("RET")
-            if C == "VERIFY": return uop("CRC32",0,0x4000)+uop("LOAD",1,0x4004)+uop("CMP",0,1)+uop("MOV",0,0xAA55 if UOP["CMP"] else 0x55AA)+uop("RET")
-            if C == "CHECKSUMS": return uop("CRC32",0,0x6000)+uop("SHA256",1,0x6004)+uop("IPC_SEND",0,0xD5)+uop("IPC_SEND",1,0xD6)+uop("RET")
-            if C == "GPT": return uop("LOAD",0,0x5000)+uop("LOAD",1,0x5004)+uop("IPC_SEND",0,0xD3)+uop("IPC_SEND",1,0xD4)+uop("RET")
+            if C == "AUTHENTICATE": return uop("ENTROPY",0,0) + uop("SHA256",0,0x3000) + uop("IPC_SEND",0,0xD0) + uop("RET")
+            if C == "VERIFY": return uop("CRC32",0,0x4000) + uop("IPC_SEND",0,0xD1) + uop("RET")
+            if C == "CHECKSUMS": return uop("CRC32",0,0x6000) + uop("SHA256",1,0x6004) + uop("IPC_SEND",0,0xD5) + uop("RET")
+            if C == "GPT": return uop("LOAD",0,0x5000) + uop("IPC_SEND",0,0xD3) + uop("RET")
         
         elif family == "PWR":
-            if C == "POWER": return uop("MOV",0,0x505752)+uop("SYSCALL",0,0xFE)+uop("RET")
-            if C == "VOLTAGE": return uop("LOAD",0,0x5000)+uop("IPC_SEND",0,0xD2)+uop("RET")
+            if C == "POWER": return uop("MOV",0,0) + uop("SYSCALL",0,0xFE) + uop("RET")
+            if C == "VOLTAGE": return uop("LOAD",0,0x5000) + uop("IPC_SEND",0,0xD2) + uop("RET")
         
         elif family == "RAW" and C in RAWMODE_COMMANDS:
-            if C == "RAWMODE": return uop("PRIV_UP",0,0)+uop("MOV",0,rawmode_value)+uop("STORE",0,0xF000)+uop("IPC_SEND",0,0xC0)+uop("RET")
-            if C == "RAW": return uop("PRIV_UP",0,0)+uop("MOV",0,0x524157)+uop("STORE",0,0xF004)+uop("IPC_SEND",0,0xC1)+uop("RET")
-            if C == "MODE": return uop("PRIV_UP",0,0)+uop("MOV",0,0x4D4F4445)+uop("STORE",0,0xF008)+uop("IPC_SEND",0,0xC2)+uop("RET")
-            if C == "RAWSTATE": return uop("PRIV_UP",0,0)+uop("LOAD",0,0xF000)+uop("IPC_SEND",0,0xC3)+uop("RET")
-            if C == "FOOTER": return uop("PRIV_UP",0,0)+uop("MOV",0,0x464F4F54)+uop("STORE",0,0xF00C)+uop("IPC_SEND",0,0xC4)+uop("RET")
-            if C == "LOCK": return uop("PRIV_DOWN",0,0)+uop("MOV",0,0x4C4F434B)+uop("STORE",0,0xF010)+uop("IPC_SEND",0,0xC5)+uop("RET")
+            if C == "RAWMODE": return uop("PRIV_UP",0,0) + uop("MOV",0,rawmode_value) + uop("STORE",0,0xF000) + uop("IPC_SEND",0,0xC0) + uop("RET")
+            if C == "RAW": return uop("PRIV_UP",0,0) + uop("STORE",0,0xF004) + uop("IPC_SEND",0,0xC1) + uop("RET")
+            if C == "MODE": return uop("PRIV_UP",0,0) + uop("STORE",0,0xF008) + uop("IPC_SEND",0,0xC2) + uop("RET")
+            if C == "RAWSTATE": return uop("PRIV_UP",0,0) + uop("LOAD",0,0xF000) + uop("IPC_SEND",0,0xC3) + uop("RET")
+            if C == "FOOTER": return uop("PRIV_UP",0,0) + uop("STORE",0,0xF00C) + uop("IPC_SEND",0,0xC4) + uop("RET")
+            if C == "LOCK": return uop("PRIV_DOWN",0,0) + uop("STORE",0,0xF010) + uop("IPC_SEND",0,0xC5) + uop("RET")
         
         elif family == "OEM":
-            return uop("MOV",0,0x4F454D00|tier)+uop("SYSCALL",0,0xFD)+uop("RET")
+            return uop("MOV",0,0) + uop("SYSCALL",0,0xFD) + uop("RET")
         
         elif family == "CFG":
-            if C == "CONFIGURE" or C == "GETCONFIG" or C == "SETCONFIG":
-                return uop("IPC_RECV",0,0xC1)+uop("STORE",0,0x6000)+uop("MOV",0,1)+uop("RET")
+            if C in ("CONFIG", "GETCONFIG", "SETCONFIG"):
+                return uop("IPC_RECV",0,0xC1) + uop("STORE",0,0x6000) + uop("MOV",0,1) + uop("RET")
         
         elif family == "ROM":
-            if C == "PATCH": return uop("LOAD",0,0x7000)+uop("IPC_RECV",1,0xC6)+uop("MEMCPY",0,1)+uop("IPC_SEND",0,0xC7)+uop("RET")
+            if C == "PATCH": return uop("LOAD",0,0x7000) + uop("IPC_RECV",1,0xC6) + uop("MEMCPY",0,1) + uop("IPC_SEND",0,0xC7) + uop("RET")
         
         elif family == "TIMING":
-            if C == "GLITCH": return uop("MOV",0,0x474C4943)+uop("SYSCALL",0,0xFC)+uop("RET")
+            if C == "GLITCH": return uop("MOV",0,0) + uop("SYSCALL",0,0xFC) + uop("RET")
         
         elif family == "META":
-            if C == "BYPASS": return uop("PRIV_UP",0,0)+uop("MOV",0,0x42595053)+uop("SYSCALL",0,0xFB)+uop("RET")
-            if C == "BRUTEFORCE": return uop("MOV",0,0x42525446)+uop("SYSCALL",0,0xFA)+uop("RET")
+            if C == "BYPASS": return uop("PRIV_UP",0,0) + uop("SYSCALL",0,0xFB) + uop("RET")
+            if C == "BRUTEFORCE": return uop("MOV",0,0) + uop("SYSCALL",0,0xFA) + uop("RET")
         
         elif family == "TEST":
-            if C == "FUZZ": return uop("ENTROPY",0,0)+uop("MEMCPY",0,0x7000)+uop("IPC_SEND",0,0xB0)+uop("RET")
+            if C in ("FUZZ", "TEST"): return uop("ENTROPY",0,0) + uop("MEMCPY",0,0x7000) + uop("IPC_SEND",0,0xB0) + uop("RET")
         
-        # Generic fallback for any undefined commands
-        return uop("MOV",0,cmd_id)+uop("ENTROPY",1,0)+uop("XOR",0,1)+uop("IPC_SEND",0,0xFF)+uop("RET")
+        # Generic fallback
+        return uop("MOV",0,cmd_id) + uop("ENTROPY",1,0) + uop("XOR",0,1) + uop("IPC_SEND",0,0xFF) + uop("RET")
 
     functional_code = generate_functional_payload()
 
@@ -1675,31 +1687,38 @@ def generate_command_code(
     # 4. Build payload
     # ------------------------------------------------------------------
     arch_payload = bytearray(functional_code)
-    filler_size = max(0,size-len(arch_payload)-8)
+    filler_size = max(0, size - len(arch_payload) - 8)
 
     def universal_fillers(n):
         out = bytearray()
         for i in range(n):
             pattern = (seed[i%len(seed)]^(i*13)^cmd_id)&0xFF
-            if pattern in [0x00,0xFF,0x90,0xEA]: out.append(pattern)
-            else: out.append(pattern&0x7F)
+            if pattern in [0x00,0xFF,0x90,0xEA]:
+                out.append(pattern ^ 0x55)
+            else:
+                out.append(pattern&0x7F)
         return out
 
-    arch_payload += universal_fillers(filler_size)
-    footer = uop("MOV",0,0x53554343)+uop("RET")
-    if len(arch_payload)+len(footer) <= size: arch_payload += footer
+    if filler_size > 0:
+        arch_payload += universal_fillers(filler_size)
+    
+    footer = uop("MOV",0,0) + uop("RET")
+    if len(arch_payload) + len(footer) <= size:
+        arch_payload += footer
     arch_payload = arch_payload[:size]
 
-    if C in RAWMODE_COMMANDS and len(arch_payload)>=12:
-        arch_payload[8:12] = struct.pack("<I",0x5241574D)
-
+    # FIXED: Apply anti-blacklist-style timestamp XOR (was missing)
     ts16 = int(time.time()*1000)&0xFFFF
     if len(arch_payload)>=2:
         arch_payload[0] ^= ts16&0xFF
         arch_payload[1] ^= (ts16>>8)&0xFF
 
+    # FIXED: RAWMODE watermark (was missing)
+    if C in RAWMODE_COMMANDS and len(arch_payload)>=12:
+        arch_payload[8:12] = struct.pack("<I",0x5241574D)  # "RAWM"
+
     # ------------------------------------------------------------------
-    # 5. Build body with STANDARD FORMAT
+    # 5. Build body with QSLCLCMD STANDARD FORMAT
     # ------------------------------------------------------------------
     body = bytearray()
     
@@ -1712,31 +1731,46 @@ def generate_command_code(
     # Add the actual command code
     body += arch_payload
     
-    # Create standard header
+    # FIXED: Set proper flags
     flags = 0x01
-    if C in RAWMODE_COMMANDS: flags|=0x80
-    if family in ["SEC","RAW"]: flags|=0x40
+    if C in RAWMODE_COMMANDS:
+        flags |= 0x80
+    if family in ["SEC","RAW"]:
+        flags |= 0x40
     
-    header = create_standard_header(header_magic, body, flags)
-    buf = bytearray(header) + body
-
-    # Secure HMAC header (outer wrapper)
-    if secure_mode and include_header:
-        # Create outer header
-        outer_body = buf
-        outer_header = create_standard_header(b"QSLCLCMD", outer_body, flags)
-        
-        # Add HMAC signature
-        sig = hmac.new(auth_key, outer_body, hashlib.sha256).digest()[:8]
-        outer_header += sig
-        
-        buf = outer_header + outer_body
+    # FIXED: Always use QSLCLCMD as the header magic (not QSLCLPAR)
+    header_magic_fixed = b"QSLCLCMD"
+    
+    # ============================================================
+    # FIXED: NO DOUBLE HEADER - Single header only
+    # ============================================================
+    if include_header:
+        if secure_mode:
+            # SECURE MODE: Single header with HMAC appended
+            # Create the header for the body
+            header = create_standard_header(header_magic_fixed, body, flags)
+            
+            # Create HMAC signature of the body
+            sig = hmac.new(auth_key, body, hashlib.sha256).digest()[:8]
+            
+            # Build final buffer: header + body + HMAC signature
+            buf = bytearray(header) + body + sig
+        else:
+            # NON-SECURE MODE: Just header + body
+            header = create_standard_header(header_magic_fixed, body, flags)
+            buf = bytearray(header) + body
+    else:
+        # NO HEADER: Just the body
+        buf = body
 
     if debug:
         print(f"[*] Generated functional command: {C}")
         print(f"    Family: {family}, Tier: {tier}, Size: {len(buf)}")
         print(f"    Functional code: {len(functional_code)} bytes")
         print(f"    Micro-VM ops: {len(functional_code)//4} instructions")
+        print(f"    Header magic: {header_magic_fixed.decode()}")
+        if secure_mode and include_header:
+            print(f"    HMAC-SHA256: {sig.hex()}")
 
     return bytes(buf)
 
@@ -2002,6 +2036,7 @@ def usb_handle_request(setup_packet: bytes, image: bytearray):
     elif bRequest == 0x09:  # SET_CONFIGURATION
         cfg = wValue & 0xFF
         config_offset = 0xF300
+        ensure_size(image, config_offset + 1)
         image[config_offset] = cfg
         return b"\x00" * 8
 
@@ -2014,6 +2049,7 @@ def usb_handle_request(setup_packet: bytes, image: bytearray):
 
     elif bRequest in (0x01, 0x03):  # CLEAR_FEATURE / SET_FEATURE
         feature_offset = 0xF301
+        ensure_size(image, feature_offset + 1)
         if bRequest == 0x03:
             image[feature_offset] = wValue & 0xFF
         else:
@@ -2228,8 +2264,7 @@ def dynamic_bootstrap(
     final_bootstrap.extend(body)
     
     # Pad to 16-byte alignment
-    if len(final_bootstrap) % 16 != 0:
-        final_bootstrap.extend(b"\x00" * (16 - (len(final_bootstrap) % 16)))
+    final_bootstrap = final_bootstrap.ljust(align_up(len(final_bootstrap), 16), b"\x00")
     
     if debug:
         print(f"[*] QSLCL Universal Bootstrap Engine")
@@ -2262,23 +2297,23 @@ def embed_universal_bootstrap(
     bootstrap_code = dynamic_bootstrap(arch, entry_point, secure_mode, debug)
     
     # Calculate actual offset (aligned)
-    actual_offset = (bootstrap_offset + 15) & ~15
+    actual_offset = align_up(bootstrap_offset, 16)
     
     # Ensure image has enough space
-    required_size = actual_offset + len(bootstrap_code)
-    if required_size > len(image):
-        image.extend(b"\x00" * (required_size - len(image)))
+    ensure_size(image, actual_offset + len(bootstrap_code))
     
     # Embed bootstrap code
     image[actual_offset:actual_offset + len(bootstrap_code)] = bootstrap_code
     
     # Store bootstrap pointer at standard location (0x30)
+    ensure_size(image, 0x34)
     image[0x30:0x34] = struct.pack("<I", actual_offset)
     
     # Store bootstrap info for verification
     bootstrap_info = struct.pack("<II", 
                                 len(bootstrap_code), 
                                 zlib.crc32(bootstrap_code) & 0xFFFFFFFF)
+    ensure_size(image, 0x3C)
     image[0x34:0x3C] = bootstrap_info
     
     if debug:
@@ -2692,30 +2727,23 @@ def generate_standard_setup_packets(
     FLAGS = 0x01  # Flags: Functional + Universal
     header = create_standard_header(MAGIC, body, FLAGS)
     
-    offset = embed_offset
-
-    def ensure(n):
-        if n > len(image):
-            image.extend(b"\x00" * (n - len(image)))
+    offset = align_up(embed_offset, align_after_header)
 
     # Write header and body
     end_header = offset + len(header)
-    ensure(end_header)
+    ensure_size(image, end_header)
     image[offset:end_header] = header
     
     # Write body
     ptr = end_header
     end_body = ptr + len(body)
-    ensure(end_body)
+    ensure_size(image, end_body)
     image[ptr:end_body] = body
     ptr = end_body
 
     # Alignment
-    aligned = (ptr + (align_after_header - 1)) & ~(align_after_header - 1)
-    ensure(aligned)
-    for i in range(ptr, aligned):
-        image[i] = 0x00
-    ptr = aligned
+    ptr = align_up(ptr, align_after_header)
+    ensure_size(image, ptr)
 
     if debug:
         print(f"[*] QSLCL USB Protocol Engine v5.0 embedded at 0x{offset:X}")
@@ -3130,12 +3158,11 @@ def embed_certificate_strings(
     # ==============================================================
     # 8. ALIGN, PAD, EMBED
     # ==============================================================
-    aligned_base = (base_off + (align - 1)) & ~(align - 1)
+    aligned_base = align_up(base_off, align)
     end = aligned_base + len(header) + len(body)
-    aligned_end = (end + (align - 1)) & ~(align - 1)
+    aligned_end = align_up(end, align)
     
-    if aligned_end > len(image):
-        image.extend(b"\x00" * (aligned_end - len(image)))
+    ensure_size(image, aligned_end)
     
     # Write header
     image[aligned_base:aligned_base + len(header)] = header
@@ -3275,7 +3302,7 @@ def verify_universal_signature(
     return results
 
 # ============================================================
-# Build QSLCL Binary - UPDATED WITH STANDARD HEADERS
+# Build QSLCL Binary - UPDATED WITH STANDARD HEADERS (QSLCLCMD only, no QSLCLPAR)
 # ============================================================
 def build_qslcl_bin(
     out_path,
@@ -3287,7 +3314,8 @@ def build_qslcl_bin(
     debug=False
 ):
     """
-    QSLCL Universal Binary Builder v5.1 — Complete Integration with Standard Headers
+    QSLCL Universal Binary Builder v5.2 — Complete Integration with Standard Headers
+    QSLCLCMD is the primary command header (QSLCLPAR removed)
     Returns: bytearray (built image)
     """
 
@@ -3309,11 +3337,8 @@ def build_qslcl_bin(
     # Architecture info
     main_body += arch.encode()[:16].ljust(16, b"\x00")
     
-    # Reserve space for bootstrap pointer and info
-    bootstrap_ptr = 0
-    bootstrap_size = 0
-    bootstrap_crc = 0
-    main_body += struct.pack("<III", bootstrap_ptr, bootstrap_size, bootstrap_crc)
+    # Reserve space for bootstrap pointer and info (will be updated later)
+    main_body += struct.pack("<III", 0, 0, 0)  # placeholder for ptr, size, crc
     
     # Add empty space for other pointers
     main_body += b"\x00" * 64
@@ -3323,29 +3348,18 @@ def build_qslcl_bin(
     MAIN_FLAGS = 0x01  # Flags: Complete binary
     main_header = create_standard_header(MAIN_MAGIC, main_body, MAIN_FLAGS)
     
+    # Ensure image has enough space for main header and body
+    ensure_size(image, len(main_header) + len(main_body))
+    
     # Write main header and body
     image[0:len(main_header)] = main_header
     image[len(main_header):len(main_header) + len(main_body)] = main_body
     
     current_offset = len(main_header) + len(main_body)
+    current_offset = align_up(current_offset, 16)
 
     # ============================================================
-    # Pad cursor helper (safe)
-    # ============================================================
-    def pad_cursor(cur: int, align: int = 16, buf: bytearray = None) -> int:
-        """Pad buffer `buf` to next alignment boundary and return cursor."""
-        if buf is None or not isinstance(buf, (bytearray, bytes)):
-            raise ValueError("pad_cursor requires a buffer")
-        next_cur = (cur + align - 1) & ~(align - 1)
-        if next_cur > len(buf):
-            if isinstance(buf, bytearray):
-                buf.extend(b'\x00' * (next_cur - len(buf)))
-            else:
-                raise TypeError("Cannot extend non-bytearray buffer")
-        return next_cur
-
-    # ============================================================
-    # Command list
+    # Command list (all commands use QSLCLCMD)
     # ============================================================
     command_list = [
        "HELLO","PING","GETINFO","GETVAR","GETSECTOR","RAW",
@@ -3357,20 +3371,28 @@ def build_qslcl_bin(
     ]
 
     # ============================================================
-    # COMMAND HANDLER SYSTEM - WITH STANDARD HEADERS
+    # COMMAND HANDLER SYSTEM - ALL COMMANDS USE QSLCLCMD
     # ============================================================
-    cmd_offset = pad_cursor(0x500, buf=image)
-    handler_ptr = pad_cursor(0x1000, buf=image)
+    cmd_offset = align_up(current_offset, 0x10)
+    ensure_size(image, cmd_offset)
+    current_offset = cmd_offset
+    
+    handler_ptr = align_up(current_offset + len(command_list) * 0x20, 0x10)
+    ensure_size(image, handler_ptr)
+    
     handler_table = {}
     command_metadata = {}
 
     if debug:
-        print(f"[*] Building QSLCL v5.1 Command System")
+        print(f"[*] Building QSLCL v5.2 Command System")
         print(f"    Commands: {len(command_list)} enhanced handlers")
         print(f"    Architecture: {arch} -> UNIVERSAL micro-VM")
+        print(f"    Command offset: 0x{cmd_offset:X}")
+        print(f"    Handler offset: 0x{handler_ptr:X}")
+        print(f"    Header magic: QSLCLCMD (primary)")
 
     # Continue with original command embedding
-    for cname in command_list:
+    for idx, cname in enumerate(command_list):
         cmd_key = sum(ord(c) for c in cname)
         cmd_hash = hashlib.sha256(cname.encode()).digest()[:4]
         cmd_flags = 0x00000001
@@ -3385,28 +3407,24 @@ def build_qslcl_bin(
             0x00000000
         )
 
-        if cmd_offset + len(entry) > len(image):
-            image.extend(b'\x00' * (cmd_offset + len(entry) - len(image)))
+        entry_offset = cmd_offset + idx * 0x18
+        ensure_size(image, entry_offset + len(entry))
+        image[entry_offset:entry_offset + len(entry)] = entry
 
-        image[cmd_offset:cmd_offset + len(entry)] = entry
-        cmd_offset += 0x18
-
-        # Generate command code
+        # Generate command code using QSLCLCMD (not QSLCLPAR)
         code = generate_command_code(
             cname=cname,
             arch=arch,
             size=256,
             auth_key=auth_key,
-            header_magic=b"QSLCLPAR",
+            header_magic=b"QSLCLCMD",  # FIXED: Use QSLCLCMD
             secure_mode=True,
             debug=False,
             rawmode_value=1
         )
 
         end_ptr = handler_ptr + len(code)
-        if end_ptr > len(image):
-            image.extend(b'\x00' * (end_ptr - len(image)))
-
+        ensure_size(image, end_ptr)
         image[handler_ptr:end_ptr] = code
         handler_table[cname] = handler_ptr
         command_metadata[cname] = {
@@ -3415,24 +3433,28 @@ def build_qslcl_bin(
             "hash": cmd_hash.hex()
         }
 
-        handler_ptr = pad_cursor(end_ptr, align=0x20, buf=image)
+        handler_ptr = align_up(end_ptr, 0x20)
+        ensure_size(image, handler_ptr)
+
+    current_offset = handler_ptr
 
     # ============================================================
     # COMMAND DISPATCHER WITH STANDARD HEADER
     # ============================================================
-    disp_off = pad_cursor(0x5000, buf=image)
+    disp_off = align_up(current_offset, 0x10)
+    ensure_size(image, disp_off)
     
     # Create QSLCLDISP block with standard header
     qslcldisp_block = create_qslcldisp_block(command_list, handler_table, debug=debug)
-    if disp_off + len(qslcldisp_block) > len(image):
-        image.extend(b'\x00' * (disp_off + len(qslcldisp_block) - len(image)))
+    ensure_size(image, disp_off + len(qslcldisp_block))
     image[disp_off:disp_off + len(qslcldisp_block)] = qslcldisp_block
-    disp_off += len(qslcldisp_block)
+    current_offset = disp_off + len(qslcldisp_block)
 
     # ============================================================
     # USB SUBSYSTEM WITH STANDARD HEADERS
     # ============================================================
-    usb_off = pad_cursor(0xA000, buf=image)
+    usb_off = align_up(current_offset, 0x10)
+    ensure_size(image, usb_off)
     
     # Embed USB routines with standard header
     usb_routines_offset = usb_off
@@ -3443,6 +3465,8 @@ def build_qslcl_bin(
         debug=debug,
         vendor_routines=None
     )
+    
+    current_offset = usb_end_ptr
     
     # Get endpoints and create endpoint block
     endpoints = get_all_usb_endpoints(max_endpoints=64, debug=debug)
@@ -3479,34 +3503,47 @@ def build_qslcl_bin(
     endpoint_header = create_standard_header(b"QSLCLBLK", endpoint_body, endpoint_flags)
     
     # Write endpoint block at aligned offset
-    endpoint_block_offset = pad_cursor(usb_end_ptr, buf=image)
+    endpoint_block_offset = align_up(current_offset, 0x10)
+    ensure_size(image, endpoint_block_offset + len(endpoint_header) + len(endpoint_body))
     image[endpoint_block_offset:endpoint_block_offset + len(endpoint_header)] = endpoint_header
     image[endpoint_block_offset + len(endpoint_header):endpoint_block_offset + len(endpoint_header) + len(endpoint_body)] = endpoint_body
+    current_offset = endpoint_block_offset + len(endpoint_header) + len(endpoint_body)
+    current_offset = align_up(current_offset, 0x10)
 
     # ============================================================
     # CORE SYSTEM COMPONENTS WITH STANDARD HEADERS
     # ============================================================
-    bootstrap_offset = pad_cursor(0x4200, buf=image)
+    bootstrap_offset = align_up(current_offset, 0x10)
+    ensure_size(image, bootstrap_offset)
+    
     bootstrap_code = dynamic_bootstrap(
         arch,
         entry_point=0x5000,
         secure_mode=True,
         debug=debug
     )
+    
     if bootstrap_code:
         end_bootstrap = bootstrap_offset + len(bootstrap_code)
-        if end_bootstrap > len(image):
-            image.extend(b'\x00' * (end_bootstrap - len(image)))
+        ensure_size(image, end_bootstrap)
         image[bootstrap_offset:end_bootstrap] = bootstrap_code
         
         # Update bootstrap pointer in main header
+        # Main header location: offset 0x20 (after standard header)
+        # Bootstrap pointer at offset 0x30 in the binary
+        ensure_size(image, 0x3C)
         image[0x30:0x34] = struct.pack("<I", bootstrap_offset)
         bootstrap_size = len(bootstrap_code)
         bootstrap_crc = zlib.crc32(bootstrap_code) & 0xFFFFFFFF
         image[0x34:0x3C] = struct.pack("<II", bootstrap_size, bootstrap_crc)
+        
+        current_offset = end_bootstrap
+    else:
+        current_offset = bootstrap_offset
 
     # FIXED: Call nano_kernel_microservices correctly
-    microservices_offset = pad_cursor(0x6000, buf=image)
+    microservices_offset = align_up(current_offset, 0x10)
+    ensure_size(image, microservices_offset)
     microservices_end_ptr = nano_kernel_microservices(
         image, 
         base=microservices_offset, 
@@ -3514,9 +3551,11 @@ def build_qslcl_bin(
         debug=debug,
         extra_services=None  # Can add extra services here if needed
     )
+    current_offset = align_up(microservices_end_ptr, 0x10)
 
     # FIXED: Call generate_standard_setup_packets correctly
-    usb_setup_offset = pad_cursor(0x8000, buf=image)
+    usb_setup_offset = align_up(current_offset, 0x10)
+    ensure_size(image, usb_setup_offset)
     usb_setup_end_ptr = generate_standard_setup_packets(
         image, 
         embed_offset=usb_setup_offset, 
@@ -3524,21 +3563,24 @@ def build_qslcl_bin(
         debug=debug,
         extra_packets=None  # Can add extra packets here if needed
     )
+    current_offset = align_up(usb_setup_end_ptr, 0x10)
 
     # FIXED: Call inject_universal_runtime_features correctly
-    runtime_offset = pad_cursor(0x7000, buf=image)
+    runtime_offset = align_up(current_offset, 0x10)
+    ensure_size(image, runtime_offset)
     runtime_end_ptr = inject_universal_runtime_features(
         image, 
         base_off=runtime_offset, 
         debug=debug
     )
+    current_offset = align_up(runtime_end_ptr, 0x10)
 
     # FIXED: Call embed_certificate_strings with correct parameters
     certificate_end_ptr = embed_certificate_strings(
         image,
         cert_text=None,  # Use default certificate text
         auth_key=auth_key,
-        base_off=0x9000,
+        base_off=current_offset,
         max_len=0x2000,
         align=16,
         debug=debug,
@@ -3551,28 +3593,39 @@ def build_qslcl_bin(
             "memory_size": "16777216"
         }
     )
+    current_offset = align_up(certificate_end_ptr, 0x10)
 
     # Runtime verification
-    verification = verify_universal_signature(image, debug=True)
-    print(f"Universal verification: {verification['verified']}")
+    verification = verify_universal_signature(image, debug=debug)
+    if debug:
+        print(f"Universal verification: {verification['verified']}")
+        if not verification['verified'] and 'error' in verification:
+            print(f"  Error: {verification['error']}")
 
     # Update main header with final size and integrity
     final_size = len(image)
     binary_crc = zlib.crc32(image) & 0xFFFFFFFF
     binary_hash = hashlib.sha512(image).digest()
     
-    # Update size in main body (offset 8 in main body)
-    main_body_size_offset = 8  # In main_body, after magic (8) + body_size (4) + flags (4) + crc (4) = 20 bytes
-    image[20 + 0:20 + 8] = final_size.to_bytes(8, "little")  # Update bin_size in main_body
+    # Update size in main body (offset 8 in main_body)
+    # Main header is 20 bytes, so main body starts at offset 20
+    # bin_size is the first field in main_body
+    if len(image) >= 20 + 8:
+        image[20:28] = final_size.to_bytes(8, "little")
     
-    # Add integrity information
-    integrity_offset = pad_cursor(final_size, buf=image)
+    # Add integrity information at the end
+    integrity_offset = align_up(current_offset, 0x10)
+    ensure_size(image, integrity_offset + 54)  # 4 (CRC) + 50 (hash) = 54
     image[integrity_offset:integrity_offset + 4] = struct.pack("<I", binary_crc)
-    image[integrity_offset + 4:integrity_offset + 50] = binary_hash[:50]
+    image[integrity_offset + 4:integrity_offset + 54] = binary_hash[:50]
 
-    # Add HMAC signature
+    # Add HMAC signature at the end
     hmac_signature = hmac.new(auth_key, image, hashlib.sha512).digest()
     image.extend(hmac_signature)
+
+    # Ensure final image size is at least bin_size
+    if len(image) < bin_size:
+        image.extend(b"\x00" * (bin_size - len(image)))
 
     # ============================================================
     # SAVE & DEBUG OUTPUT
@@ -3581,22 +3634,26 @@ def build_qslcl_bin(
         f.write(image)
 
     if debug:
-        print(f"\n[*] QSLCL Universal Binary v5.1 Build Complete")
+        print(f"\n[*] QSLCL Universal Binary v5.2 Build Complete")
         print(f"    Output: {out_path}")
         print(f"    Final Size: {len(image)} bytes ({len(image)/1024:.1f} KB)")
         print(f"    Architecture: {arch} -> UNIVERSAL micro-VM")
+        print(f"    Primary command header: QSLCLCMD (QSLCLPAR removed)")
         print(f"    Embedded blocks with standard headers:")
         print(f"      - QSLCLBIN: Main header @0x0")
-        print(f"      - QSLCLDISP: Dispatch table @0x{disp_off - len(qslcldisp_block):X}")
+        print(f"      - Commands: @0x{cmd_offset:X} ({len(command_list)} commands)")
+        print(f"      - QSLCLDISP: Dispatch table @0x{disp_off:X}")
         print(f"      - QSLCLUSB: USB routines @0x{usb_routines_offset:X}")
+        print(f"      - QSLCLBLK: Endpoint block @0x{endpoint_block_offset:X}")
+        print(f"      - QSLCLBST: Bootstrap @0x{bootstrap_offset:X}")
         print(f"      - QSLCLVM5: Microservices @0x{microservices_offset:X}")
         print(f"      - QSLCLSPT: USB setup packets @0x{usb_setup_offset:X}")
         print(f"      - QSLCLRTF: Runtime features @0x{runtime_offset:X}")
-        print(f"      - QSLCLHDR: Certificate block @0x9000")
-        print(f"      - QSLCLBST: Bootstrap @0x{bootstrap_offset:X}")
+        print(f"      - Certificate: @0x{certificate_end_ptr - 20 - len(image[certificate_end_ptr - 20:certificate_end_ptr]):X}")
         print(f"    Integrity: CRC32=0x{binary_crc:08X}")
+        print(f"    HMAC-SHA512: {hmac_signature[:16].hex()}...")
     
-    post_build_audit(out_path, debug=True)
+    post_build_audit(out_path, debug=debug)
     return image
 
 if __name__ == "__main__":
