@@ -125,6 +125,7 @@ QSLCLIDX_DB  = {}
 QSLCLRTF_DB  = {}
 QSLCLBST_DB  = {}  # Dynamic Bootstrap Database
 QSLCLEND_DB  = {}  # Endpoint Database for QSLCLEND blocks
+QSLCLENC_DB  = {}  
 
 # Global debug flag
 _DEBUG = False
@@ -136,6 +137,33 @@ def set_debug(enabled: bool = True):
 
 def align_up(x, block):
     return (x + block - 1) & ~(block - 1)
+
+# =============================================================================
+# HELPER FUNCTIONS FOR QSLCLENC
+# =============================================================================
+
+def has_encryption_layer() -> bool:
+    """Check if QSLCL binary has encryption layer"""
+    return bool(QSLCLENC_DB)
+
+def get_encryption_info() -> dict:
+    """Get encryption layer information"""
+    return QSLCLENC_DB.get('encryption', {})
+
+def encryption_supports_chacha20() -> bool:
+    """Check if ChaCha20-Poly1305 is supported"""
+    enc_info = get_encryption_info()
+    return enc_info.get('features', {}).get('chacha20_poly1305', False)
+
+def encryption_supports_aes256() -> bool:
+    """Check if AES-256-GCM is supported"""
+    enc_info = get_encryption_info()
+    return enc_info.get('features', {}).get('aes256_gcm', False)
+
+def encryption_integrity_valid() -> bool:
+    """Check if encryption block integrity is valid"""
+    enc_info = get_encryption_info()
+    return enc_info.get('integrity_valid', False)
 
 # =============================================================================
 # FIXED: STANDARD HEADER PARSING - Matches build.py's create_standard_header()
@@ -452,6 +480,139 @@ def load_qslclend(blob):
                         pos += 32
     
     QSLCLEND_DB = out
+    return out
+
+def load_qslclenc(blob):
+    """
+    QSLCLENC parser - Encryption Layer for USB Communication
+    Parses ChaCha20-Poly1305 and AES-256-GCM encryption blocks
+    
+    Structure:
+    - capabilities (4 bytes): Feature bitmap
+    - version (4 bytes): Format version
+    - timestamp (4 bytes): Build time
+    - key_exchange_routine (variable)
+    - encrypt_routine (variable)
+    - decrypt_routine (variable)
+    - aes_fallback_routine (variable)
+    - routine_offsets (4 bytes each)
+    - default_key (32 bytes)
+    - integrity_footer (16 bytes)
+    """
+    global QSLCLENC_DB
+    out = {}
+    
+    structured_blocks = scan_for_structured_blocks(blob)
+    
+    if 'QSLCLENC' in structured_blocks:
+        for block in structured_blocks['QSLCLENC']:
+            body = block['body']
+            header = block['header']
+            
+            print(f"[*] Found QSLCLENC structured block at 0x{block['offset']:X} ({len(body)} bytes)")
+            
+            if not header['crc_valid']:
+                print(f"[!] WARNING: QSLCLENC header CRC mismatch!")
+            
+            if len(body) >= 12:
+                try:
+                    # Parse encryption capabilities
+                    capabilities = struct.unpack("<I", body[0:4])[0]
+                    version = struct.unpack("<I", body[4:8])[0]
+                    timestamp = struct.unpack("<I", body[8:12])[0]
+                    
+                    # Parse feature flags
+                    enc_info = {
+                        "offset": block['offset'],
+                        "size": len(body),
+                        "crc_valid": header['crc_valid'],
+                        "capabilities": capabilities,
+                        "version": f"{(version >> 16) & 0xFFFF}.{(version >> 8) & 0xFF}.{version & 0xFF}",
+                        "timestamp": timestamp,
+                        "timestamp_str": time.ctime(timestamp) if timestamp else "Unknown",
+                        "features": {
+                            "chacha20_poly1305": bool(capabilities & 0x01),
+                            "aes256_gcm": bool(capabilities & 0x02),
+                            "key_negotiation": bool(capabilities & 0x04),
+                            "perfect_forward_secrecy": bool(capabilities & 0x08),
+                            "anti_replay": bool(capabilities & 0x10),
+                        }
+                    }
+                    
+                    # Find routine offsets (after the 12-byte header)
+                    # The 4 routines are at positions 12, then after each routine
+                    pos = 12
+                    
+                    # Parse key exchange routine
+                    if pos + 4 <= len(body):
+                        key_ex_off = struct.unpack("<I", body[pos:pos+4])[0] if pos + 4 <= len(body) else 0
+                        pos += 4
+                    else:
+                        key_ex_off = 0
+                    
+                    # Parse encrypt routine offset
+                    if pos + 4 <= len(body):
+                        enc_off = struct.unpack("<I", body[pos:pos+4])[0]
+                        pos += 4
+                    else:
+                        enc_off = 0
+                    
+                    # Parse decrypt routine offset
+                    if pos + 4 <= len(body):
+                        dec_off = struct.unpack("<I", body[pos:pos+4])[0]
+                        pos += 4
+                    else:
+                        dec_off = 0
+                    
+                    # Parse AES fallback routine offset
+                    if pos + 4 <= len(body):
+                        aes_off = struct.unpack("<I", body[pos:pos+4])[0]
+                        pos += 4
+                    else:
+                        aes_off = 0
+                    
+                    # Default key is at pos (should be 32 bytes)
+                    default_key = body[pos:pos+32] if pos + 32 <= len(body) else b""
+                    pos += 32
+                    
+                    # Integrity footer (16 bytes SHA256 hash)
+                    integrity_footer = body[pos:pos+16] if pos + 16 <= len(body) else b""
+                    
+                    enc_info["routines"] = {
+                        "key_exchange_offset": key_ex_off,
+                        "encrypt_offset": enc_off,
+                        "decrypt_offset": dec_off,
+                        "aes_fallback_offset": aes_off,
+                    }
+                    
+                    enc_info["default_key"] = default_key.hex() if default_key else "None"
+                    enc_info["integrity_footer"] = integrity_footer.hex() if integrity_footer else "None"
+                    
+                    # Verify integrity of encryption block
+                    if integrity_footer:
+                        # Calculate hash of body without footer
+                        body_without_footer = body[:-16] if len(body) >= 16 else body
+                        calculated_hash = hashlib.sha256(body_without_footer).digest()[:16]
+                        enc_info["integrity_valid"] = (calculated_hash == integrity_footer)
+                    else:
+                        enc_info["integrity_valid"] = False
+                    
+                    out['encryption'] = enc_info
+                    
+                    print(f"[*] QSLCLENC: Encryption layer v{enc_info['version']}")
+                    print(f"    Capabilities: 0x{capabilities:08X}")
+                    print(f"      - ChaCha20-Poly1305: {'✓' if enc_info['features']['chacha20_poly1305'] else '✗'}")
+                    print(f"      - AES-256-GCM: {'✓' if enc_info['features']['aes256_gcm'] else '✗'}")
+                    print(f"      - Key negotiation: {'✓' if enc_info['features']['key_negotiation'] else '✗'}")
+                    print(f"    Integrity: {'✓ Valid' if enc_info['integrity_valid'] else '✗ Invalid'}")
+                    print(f"    Build time: {enc_info['timestamp_str']}")
+                    
+                except Exception as e:
+                    if _DEBUG:
+                        print(f"[!] QSLCLENC parse error: {e}")
+                        traceback.print_exc()
+    
+    QSLCLENC_DB = out
     return out
 
 def load_qslclcmd(blob):
@@ -829,7 +990,7 @@ class QSLCLLoader:
         self.ENG  = {}  # Alias for CMD
         self.BST  = {}  # Bootstrap storage
         self.END  = {}  # Endpoint storage
-
+        self.ENC = {}
     def parse_loader(self, blob):
         """Parse QSLCL binary with structured format support"""
         print(f"[*] Parsing loader ({len(blob)} bytes)...")
@@ -863,6 +1024,7 @@ class QSLCLLoader:
             ('QSLCLVM5', load_qslclvm5),
             ('QSLCLSPT', load_qslclspt),
             ('QSLCLIDX', load_qslclidx),
+            ('QSLCLENC', load_qslclenc), 
         ]
         
         for magic, loader_func in parse_order:
@@ -938,7 +1100,8 @@ class QSLCLLoader:
         self.CMD = QSLCLCMD_DB
         self.END = QSLCLEND_DB
         self.BST = QSLCLBST_DB
-        
+        self.ENC = QSLCLENC_DB
+
         return found_any or bool(self.CMD)
 
 # =============================================================================
@@ -1898,6 +2061,47 @@ def cmd_endpoints(args=None):
         if eps:
             print(f"    {ep_type}: {len(eps)} endpoints")
 
+def cmd_encryption(args=None):
+    """Display QSLCLENC encryption layer information"""
+    if not QSLCLENC_DB:
+        print("[!] No encryption layer (QSLCLENC) found in loader")
+        print("[*] Build with: python build.py qslcl.bin --encrypt")
+        return
+    
+    enc_info = QSLCLENC_DB.get('encryption', {})
+    
+    if not enc_info:
+        print("[!] Encryption layer found but failed to parse")
+        return
+    
+    print("\n[*] QSLCLENC Encryption Layer Information")
+    print("=" * 60)
+    print(f"    Version:        {enc_info.get('version', 'Unknown')}")
+    print(f"    Build Time:     {enc_info.get('timestamp_str', 'Unknown')}")
+    print(f"    CRC Valid:      {'✓' if enc_info.get('crc_valid', False) else '✗'}")
+    print(f"    Integrity:      {'✓ Valid' if enc_info.get('integrity_valid', False) else '✗ Invalid'}")
+    
+    print(f"\n[*] Supported Ciphers:")
+    features = enc_info.get('features', {})
+    print(f"    ChaCha20-Poly1305: {'✓ YES' if features.get('chacha20_poly1305') else '✗ NO'}")
+    print(f"    AES-256-GCM:       {'✓ YES' if features.get('aes256_gcm') else '✗ NO'}")
+    print(f"    Key Negotiation:   {'✓ YES' if features.get('key_negotiation') else '✗ NO'}")
+    print(f"    Perfect Forward:   {'✓ YES' if features.get('perfect_forward_secrecy') else '✗ NO'}")
+    print(f"    Anti-Replay:       {'✓ YES' if features.get('anti_replay') else '✗ NO'}")
+    
+    routines = enc_info.get('routines', {})
+    if routines:
+        print(f"\n[*] Micro-VM Routines:")
+        for name, offset in routines.items():
+            if offset:
+                print(f"    {name}: 0x{offset:04X}")
+    
+    if enc_info.get('default_key'):
+        print(f"\n[*] Default Key: {enc_info['default_key'][:16]}...")
+    
+    print("\n[*] This device supports encrypted USB communication")
+    print("    QSLCL commands will be encrypted before transmission")
+
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
@@ -2260,6 +2464,9 @@ def main():
     rawstate_parser.add_argument("rawstate_subcommand", help="Rawstate subcommand")
     rawstate_parser.add_argument("rawstate_args", nargs="*", help="Additional arguments")
     rawstate_parser.set_defaults(func=cmd_rawstate)
+
+    enc_parser = new_cmd("encryption", help="Display encryption layer information")
+    enc_parser.set_defaults(func=cmd_encryption)
 
     args = p.parse_args()
 

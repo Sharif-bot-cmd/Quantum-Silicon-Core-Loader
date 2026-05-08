@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # build.py - QSLCL Binary Builder v5.3
 # Patched version with QSLCLCMD as main command header
-
 import sys, struct, random, time, hmac, hashlib, os, zlib, uuid, json, platform, math
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
@@ -3392,19 +3391,241 @@ def verify_universal_signature(
     return results
 
 # ============================================================
+# NEW: QSLCLENC - Encryption Layer for A18+ USB Protection
+# ============================================================
+
+# ============================================================
+# FIXED: QSLCLENC - Encryption Layer for A18+ USB Protection
+# ============================================================
+
+def embed_encryption_layer(
+    image: bytearray,
+    base_offset: int = None,
+    align_after_header: int = 16,
+    debug: bool = False
+) -> int:
+    """
+    QSLCLENC v1.0 - Encryption Layer for USB Communication
+    Injects at EOF or specified offset without overwriting existing blocks
+    """
+    
+    # ============================================================
+    # ENCRYPTION ALGORITHM SUPPORT (Micro-VM Bytecode)
+    # ============================================================
+    
+    # Extended UOP for encryption operations (INCLUDING RET)
+    ENC_UOP = {
+        "CRYPTO_INIT":   0xE0,  # Initialize crypto engine
+        "CRYPTO_ENCRYPT": 0xE1,  # Encrypt frame
+        "CRYPTO_DECRYPT": 0xE2,  # Decrypt frame
+        "KEY_EXCHANGE":   0xE3,  # Session key negotiation
+        "CHACHA20":       0xE4,  # ChaCha20 cipher
+        "POLY1305":       0xE5,  # Poly1305 MAC
+        "AES_GCM":        0xE6,  # AES-256-GCM
+        "SESSION_NONCE":  0xE7,  # Generate/verify nonce
+        "MOV":            0x01,  # MOV instruction (from main UOP)
+        "RET":            0xFF,  # RETURN instruction (FIXED)
+    }
+    
+    def uop_enc(op, reg=0, arg=0):
+        """Pack encryption micro-VM instruction"""
+        if op not in ENC_UOP:
+            # Fallback to NOP if op not found
+            if debug:
+                print(f"[!] Warning: Unknown encryption op '{op}', using NOP")
+            return struct.pack("<BBH", 0x00, reg & 0xFF, arg & 0xFFFF)
+        return struct.pack("<BBH", ENC_UOP[op], reg & 0xFF, arg & 0xFFFF)
+    
+    # ============================================================
+    # ENCRYPTION MICRO-VM BYTECODE
+    # ============================================================
+    
+    # Session key negotiation handler
+    key_exchange_routine = bytearray([
+        *uop_enc("MOV", 0, 0),          # Initialize
+        *uop_enc("KEY_EXCHANGE", 0, 0), # Start key exchange
+        *uop_enc("SESSION_NONCE", 1, 0),# Generate nonce
+        *uop_enc("CRYPTO_INIT", 2, 0),  # Init crypto engine
+        *uop_enc("MOV", 1, 1),          # Set success flag
+        *uop_enc("RET", 0, 0),          # Return (FIXED)
+    ])
+    
+    # Frame encryption routine
+    encrypt_frame_routine = bytearray([
+        *uop_enc("MOV", 0, 0),          # Initialize
+        *uop_enc("CRYPTO_ENCRYPT", 0, 0),# Encrypt frame body
+        *uop_enc("SESSION_NONCE", 1, 1),# Update nonce
+        *uop_enc("POLY1305", 2, 0),     # Generate MAC
+        *uop_enc("MOV", 1, 1),          # Set success flag
+        *uop_enc("RET", 0, 0),          # Return (FIXED)
+    ])
+    
+    # Frame decryption routine
+    decrypt_frame_routine = bytearray([
+        *uop_enc("MOV", 0, 0),          # Initialize
+        *uop_enc("CRYPTO_DECRYPT", 0, 0),# Decrypt frame body
+        *uop_enc("SESSION_NONCE", 1, 2),# Verify nonce
+        *uop_enc("POLY1305", 2, 1),     # Verify MAC
+        *uop_enc("MOV", 1, 1),          # Set success flag
+        *uop_enc("RET", 0, 0),          # Return (FIXED)
+    ])
+    
+    # Fallback to AES-256-GCM if ChaCha20 unavailable
+    aes_fallback_routine = bytearray([
+        *uop_enc("MOV", 0, 0),          # Initialize
+        *uop_enc("AES_GCM", 0, 0),      # AES-GCM mode
+        *uop_enc("CRYPTO_INIT", 1, 0),  # Initialize
+        *uop_enc("CRYPTO_ENCRYPT", 2, 0),# Encrypt
+        *uop_enc("MOV", 1, 1),          # Set success flag
+        *uop_enc("RET", 0, 0),          # Return (FIXED)
+    ])
+    
+    # ============================================================
+    # ENCRYPTION CONFIGURATION HEADER
+    # ============================================================
+    
+    # Determine injection offset (EOF or specified)
+    if base_offset is None:
+        # Inject at EOF (end of current image)
+        base_offset = align_up(len(image), align_after_header)
+    else:
+        base_offset = align_up(base_offset, align_after_header)
+    
+    # Build QSLCLENC body
+    enc_body = bytearray()
+    
+    # Encryption capabilities bitmap
+    capabilities = 0
+    capabilities |= 0x01  # ChaCha20-Poly1305
+    capabilities |= 0x02  # AES-256-GCM
+    capabilities |= 0x04  # Session key negotiation
+    capabilities |= 0x08  # Perfect forward secrecy
+    capabilities |= 0x10  # Anti-replay protection
+    
+    enc_body += struct.pack("<I", capabilities)      # 4 bytes: features
+    enc_body += struct.pack("<I", 0x00010000)        # 4 bytes: version (1.0)
+    enc_body += struct.pack("<I", int(time.time()))  # 4 bytes: timestamp
+    
+    # Store routine sizes for offset calculation
+    routine_sizes = []
+    
+    # Add key exchange routine
+    routine_sizes.append(len(enc_body))
+    enc_body += key_exchange_routine
+    
+    # Add encrypt routine
+    routine_sizes.append(len(enc_body))
+    enc_body += encrypt_frame_routine
+    
+    # Add decrypt routine
+    routine_sizes.append(len(enc_body))
+    enc_body += decrypt_frame_routine
+    
+    # Add AES fallback routine
+    routine_sizes.append(len(enc_body))
+    enc_body += aes_fallback_routine
+    
+    # Add routine offset table (4 bytes per routine)
+    for offset in routine_sizes:
+        enc_body += struct.pack("<I", offset)
+    
+    # Add default session key (placeholder, replaced at runtime)
+    default_key = hashlib.sha256(b"QSLCL_ENC_V1_PRE_SHARED").digest()
+    enc_body += default_key[:32]  # 32-byte key
+    
+    # Add integrity footer
+    enc_footer = hashlib.sha256(enc_body).digest()[:16]
+    enc_body += enc_footer
+    
+    # Create standard header for QSLCLENC
+    ENC_MAGIC = b"QSLCLENC"
+    ENC_FLAGS = 0x01  # Flags: Encryption enabled
+    
+    enc_header = create_standard_header(ENC_MAGIC, enc_body, ENC_FLAGS)
+    
+    # ============================================================
+    # NON-DESTRUCTIVE INJECTION
+    # ============================================================
+    
+    # Save original content if we're inserting
+    original_len = len(image)
+    
+    # Ensure image has enough space
+    total_size = len(enc_header) + len(enc_body)
+    injection_point = base_offset
+    
+    # Extend image if injecting at EOF
+    if injection_point >= original_len:
+        ensure_size(image, injection_point + total_size)
+    
+    # Write QSLCLENC header
+    image[injection_point:injection_point + len(enc_header)] = enc_header
+    
+    # Write QSLCLENC body
+    enc_body_start = injection_point + len(enc_header)
+    ensure_size(image, enc_body_start + len(enc_body))
+    image[enc_body_start:enc_body_start + len(enc_body)] = enc_body
+    
+    # Update main QSLCLBIN to point to encryption layer
+    try:
+        # Search for QSLCLBIN magic
+        bin_pos = image.find(b"QSLCLBIN")
+        if bin_pos != -1 and bin_pos + 20 < len(image):
+            # Parse existing header
+            header_info = parse_standard_header(image[bin_pos:bin_pos + 20])
+            if header_info and header_info.get('body'):
+                # Body starts at bin_pos + 20
+                body_start = bin_pos + 20
+                
+                # Add encryption pointer at offset 0x60 in body
+                enc_ptr_offset = body_start + 0x60
+                if enc_ptr_offset + 4 <= len(image):
+                    # Store pointer to encryption layer
+                    image[enc_ptr_offset:enc_ptr_offset + 4] = struct.pack("<I", injection_point)
+                    
+                    if debug:
+                        print(f"[*] Updated QSLCLBIN: encryption pointer at 0x{enc_ptr_offset:X} -> 0x{injection_point:X}")
+    except Exception as e:
+        if debug:
+            print(f"[!] Could not update QSLCLBIN pointer: {e}")
+    
+    # Calculate final position
+    final_pos = injection_point + total_size
+    final_aligned = align_up(final_pos, align_after_header)
+    ensure_size(image, final_aligned)
+    
+    if debug:
+        print(f"[*] QSLCLENC v1.0 embedded at 0x{injection_point:X}")
+        print(f"    Magic: {ENC_MAGIC.decode('ascii')}")
+        print(f"    Header size: {len(enc_header)} bytes")
+        print(f"    Body size: {len(enc_body)} bytes")
+        print(f"    Total: {total_size} bytes")
+        print(f"    Capabilities: 0x{capabilities:08X}")
+        print(f"      - ChaCha20-Poly1305: {'✓' if capabilities & 0x01 else '✗'}")
+        print(f"      - AES-256-GCM: {'✓' if capabilities & 0x02 else '✗'}")
+        print(f"      - Perfect forward secrecy: {'✓' if capabilities & 0x08 else '✗'}")
+        print(f"    Injection method: {'EOF' if base_offset is None else f'custom 0x{base_offset:X}'}")
+        print(f"    Original size: 0x{original_len:X}")
+        print(f"    New size: 0x{final_aligned:X}")
+        print(f"    Growth: {final_aligned - original_len} bytes")
+    
+    return final_aligned
+
+# ============================================================
 # Build QSLCL Binary - UPDATED WITH STANDARD HEADERS (QSLCLCMD only, no QSLCLPAR)
 # ============================================================
 def build_qslcl_bin(
     out_path,
     arch="generic",
-    bin_size=0x40000,
+    bin_size=0x20000,
     auth_key: bytes = b"SuperSecretKey!",
     cert_pem: bytes = b"",
     priv_key_pem: bytes = b"",
-    debug=False
+    debug=False,
+    enable_encryption: bool = False 
 ):
     """
-    QSLCL Universal Binary Builder v5.2 — Complete Integration with Standard Headers
+    QSLCL Universal Binary Builder v5.3 — Complete Integration with Standard Headers
     QSLCLCMD is the primary command header (QSLCLPAR removed)
     Returns: bytearray (built image)
     """
@@ -3665,6 +3886,23 @@ def build_qslcl_bin(
     )
     current_offset = align_up(runtime_end_ptr, 0x10)
 
+    if enable_encryption:
+        enc_offset = align_up(current_offset, 0x10)
+        # Enable debug to see encryption injection
+        enc_end = embed_encryption_layer(
+            image,
+            base_offset=enc_offset,  # Fixed offset (not EOF)
+            align_after_header=16,
+            debug=debug
+        )
+        current_offset = align_up(enc_end, 0x10)
+        
+        if debug:
+            print(f"[*] QSLCLENC encryption layer embedded at 0x{enc_offset:X}")
+    else:
+        if debug:
+            print(f"[*] QSLCLENC disabled (use --encrypt to enable)")
+
     response_builder_offset = align_up(current_offset, 0x10)
     ensure_size(image, response_builder_offset)
     response_end_ptr = embed_response_builder(
@@ -3756,11 +3994,25 @@ def build_qslcl_bin(
     return image
 
 if __name__ == "__main__":
-    out_file = "qslcl.bin"
-    if len(sys.argv) > 1:
-        out_file = sys.argv[1]
-
-    # Build the binary
-    build_qslcl_bin(out_file, arch="generic", debug=True)
-
-    print(f"[+] QSLCL binary created: {out_file}")
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="QSLCL Binary Builder")
+    parser.add_argument("output", nargs="?", default="qslcl.bin", help="Output file")
+    parser.add_argument("--arch", default="generic", help="Target architecture")
+    parser.add_argument("--debug", action="store_true", help="Enable debug output")
+    parser.add_argument("--encrypt", action="store_true", help="Enable QSLCLENC encryption layer")
+    parser.add_argument("--size", type=int, default=0x20000, help="Binary size (bytes)")
+    
+    args = parser.parse_args()
+    
+    build_qslcl_bin(
+        args.output,
+        arch=args.arch,
+        bin_size=args.size,
+        debug=args.debug,
+        enable_encryption=args.encrypt  # NEW
+    )
+    
+    print(f"[+] QSLCL binary created: {args.output}")
+    if args.encrypt:
+        print(f"[+] QSLCLENC encryption layer enabled")

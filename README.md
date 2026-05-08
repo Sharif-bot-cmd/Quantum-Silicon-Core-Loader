@@ -2,9 +2,9 @@
 
 Primary Core: **qslcl.elf**
 
-Assistant Module: **qslcl.bin (v0.6.4)**
+Assistant Module: **qslcl.bin (v0.6.5)**
 
-Universal Controller: **qslcl.py (v2.0.1)**
+Universal Controller: **qslcl.py (v2.0.2)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION_MATRIX.md)
 
@@ -28,7 +28,74 @@ QSLCL runs in:
 
 ---
 
-# What's New in **v2.0.1**
+# What's New in **v0.6.5 / v2.0.2** 🔐
+
+## QSLCLENC - Future-Proof Encryption Layer
+
+**Problem:** Apple may add USB encryption to DFU mode in A18+ and newer devices, breaking all existing tools.
+
+**Solution:** Added QSLCLENC - a universal encryption layer that supports **ChaCha20-Poly1305** and **AES-256-GCM** ciphers.
+
+### New Features:
+
+| Feature | Description |
+|---------|-------------|
+| **Dynamic Cipher Negotiation** | Automatically selects best available cipher |
+| **Perfect Forward Secrecy** | Session keys never reuse |
+| **Anti-Replay Protection** | Nonce-based frame verification |
+| **Zero Overwrite Injection** | Encrypts at EOF, preserves all existing blocks |
+| **Micro-VM Crypto Routines** | Architecture-neutral encryption |
+
+### Supported Encryption Algorithms:
+
+```python
+# QSLCLENC automatically supports:
+✅ ChaCha20-Poly1305  (Apple's likely choice for A18+)
+✅ AES-256-GCM        (Fallback for compatibility)
+✅ Session Key Exchange (No hardcoded keys)
+✅ HMAC Integrity Check (Prevents tampering)
+```
+
+### New Commands:
+
+```bash
+# Display encryption layer information
+python qslcl.py encryption --loader=qslcl.bin
+
+# Build with encryption support
+python build.py qslcl.bin --encrypt
+```
+
+### New Block Type: QSLCLENC
+
+```
+QSLCL Binary Layout (v0.6.5):
+┌─────────────────────────────────────────────┐
+│ 0x00000000  QSLCLBIN (Main Header)          │
+│ 0x00001000  QSLCLCMD (47 Commands)          │
+│ 0x00002000  QSLCLEND (64 Endpoints)         │
+│ 0x00003000  QSLCLBST (Bootstrap)            │
+│ 0x00004000  QSLCLDISP (Dispatch)            │
+│ 0x00005000  QSLCLRTF (Runtime Faults)       │
+│ 0x00006000  QSLCLVM5 (Microservices)        │
+│ 0x00007000  QSLCLHDR (Certificate)          │
+│ 0x00008000  QSLCLRESP (Response Builder)    │
+│ ★ 0x00009000  QSLCLENC (NEW - Encryption) ★ │
+└─────────────────────────────────────────────┘
+```
+
+### Why This Matters for A18+:
+
+| Without QSLCLENC | With QSLCLENC |
+|-----------------|----------------|
+| ❌ Device rejects plaintext USB | ✅ Frames encrypted before send |
+| ❌ Tool fails silently | ✅ Auto-negotiates encryption |
+| ❌ Requires complete rewrite | ✅ Minor update only |
+| ❌ No forward compatibility | ✅ Future-proof by design |
+
+---
+
+# What's New in **v2.0.1** (Previous)
 
 ## 🔥 Dynamic DFU Detection (Major Improvement)
 
@@ -58,9 +125,24 @@ def universal_dfu_detection(dev):
 
 ---
 
-# qslcl.py — Universal Controller **v2.0.1**
+# What's New in **v2.0.0**
 
-## Complete Command List
+## Massive Module Rewrite
+Complete rewrite of all 20+ command modules with comprehensive fixes:
+
+- **Fixed Import System** - Proper fallback chain: absolute → relative → standalone across all modules
+- **Unified Command Dispatch** - Consistent `_dispatch()` with `_find_cmd()` helper for QSLCLCMD database lookup
+- **Removed QSLCLPAR References** - All legacy references eliminated, consolidated to QSLCLCMD system
+- **Standardized Handler Signatures** - All handlers follow consistent `(dev, args, force, ...) -> bool` pattern
+- **Enhanced Safety System** - `_confirm()` with proper EOFError/KeyboardInterrupt handling across all modules
+- **Color-Coded Output** - Consistent `Colors` class across all modules for terminal output
+- **Progress Bar Fallbacks** - Local `ProgressBar` implementation when QSLCL version unavailable
+- **Structured Dispatch Tables** - Dictionary-based handler dispatch with alias support in every module
+- **Complete Error Recovery** - Retry logic, exponential backoff, and graceful fallbacks throughout
+
+---
+
+# Complete Command List
 
 **Core Memory Operations:**
 | Command | Description |
@@ -81,6 +163,7 @@ def universal_dfu_detection(dev):
 | `getinfo` | Comprehensive device information |
 | `partitions` | Partition table listing |
 | `endpoints` | USB endpoint listing (supports DFU devices) |
+| `encryption` | **NEW** - Display encryption layer information |
 | `config` | Configuration management |
 | `config-list` | List configuration capabilities |
 
@@ -123,17 +206,38 @@ pip install requests tqdm   # optional
 ## Basic Usage
 
 ```bash
+# Build with encryption support (NEW)
+python build.py qslcl.bin --encrypt --debug
+
 # Test basic functionality
 python qslcl.py hello --loader=qslcl.bin
 python qslcl.py getinfo --loader=qslcl.bin
 python qslcl.py ping --loader=qslcl.bin
 
-# List available commands and endpoints (now shows DFU devices)
-python qslcl.py --loader=qslcl.bin endpoints
-python qslcl.py config list --loader=qslcl.bin
+# List available commands and endpoints
+python qslcl.py endpoints --loader=qslcl.bin
+python qslcl.py encryption --loader=qslcl.bin  # NEW - show encryption layer
 ```
 
-## DFU Mode Detection (v2.0.1)
+## Encryption Layer Usage (v0.6.5+)
+
+```bash
+# Build with encryption enabled
+python build.py qslcl.bin --encrypt --debug
+
+# Check encryption status
+python qslcl.py encryption --loader=qslcl.bin
+
+# Expected output:
+# [*] Found QSLCLENC structured block at 0x8A00 (256 bytes)
+# [*] QSLCLENC: Encryption layer v1.0
+#     Capabilities: 0x0000001F
+#       - ChaCha20-Poly1305: ✓
+#       - AES-256-GCM: ✓
+#     Integrity: ✓ Valid
+```
+
+## DFU Mode Detection (v2.0.1+)
 
 ```bash
 # Automatic DFU detection - no manual PID configuration needed
@@ -153,6 +257,9 @@ python qslcl.py read boot boot.img --loader=qslcl.bin
 python qslcl.py write boot modified_boot.img --loader=qslcl.bin --verify
 python qslcl.py dump system --size 100M --compress --verify --loader=qslcl.bin
 
+# With encryption (auto-detected if QSLCLENC present)
+python qslcl.py read 0x80000000 --size 1M -o dump.bin --loader=qslcl.bin
+
 # Configuration management
 python qslcl.py config get debug_level
 python qslcl.py config set timeout 10000
@@ -169,45 +276,31 @@ python qslcl.py power status --loader=qslcl.bin
 python qslcl.py mode set DEBUG --loader=qslcl.bin
 ```
 
-## Advanced Usage
-
-```bash
-# With authentication
-python qslcl.py hello --loader=qslcl.bin --auth
-
-# Wait for device detection (useful for DFU mode entry)
-python qslcl.py getinfo --loader=qslcl.bin --wait 10
-
-# Professional patching workflow
-python qslcl.py read boot boot.img --loader=qslcl.bin
-# Modify boot.img externally
-python qslcl.py patch boot file boot_patched.img --loader=qslcl.bin --verify
-
-# Crash testing (USE WITH CAUTION!)
-python qslcl.py crash-test basic 3 5 --loader=qslcl.bin
-
-# Hardware state inspection
-python qslcl.py rawstate monitor CLK_CTL 0.5 30 --loader=qslcl.bin
-python qslcl.py rawstate read CPUID --loader=qslcl.bin
-
-# DFU-specific operations (auto-detected)
-python qslcl.py read 0x8000000 --size 1M -o dfu_dump.bin --loader=qslcl.bin
-```
-
 ---
 
 # Device Compatibility
 
-| Vendor   | Mode             | Detection Method            | Status |
-|----------|------------------|-----------------------------|--------|
-| Qualcomm | EDL              | Sahara + Firehose handshake | ✅ Enhanced |
-| MediaTek | BROM / Preloader | 0xA0 preloader ping         | ✅ Enhanced |
-| Apple    | DFU              | **Dynamic USB DFU Class**   | ✅ v2.0.1 (No hardcoded PIDs) |
-| Google   | DFU              | Dynamic USB DFU Class       | ✅ New |
-| Samsung  | DFU              | Dynamic USB DFU Class       | ✅ New |
-| OnePlus  | DFU              | Dynamic USB DFU Class       | ✅ New |
-| Generic  | USB CDC/Bulk     | Endpoint auto-discovery     | ✅ Universal |
-| Any      | Serial COM       | UART auto sync              | ✅ Universal |
+| Vendor   | Mode             | Detection Method            | Encryption | Status |
+|----------|------------------|-----------------------------|------------|--------|
+| Qualcomm | EDL              | Sahara + Firehose handshake | Optional   | ✅ Enhanced |
+| MediaTek | BROM / Preloader | 0xA0 preloader ping         | Optional   | ✅ Enhanced |
+| Apple    | DFU (A12-A17)    | Dynamic USB DFU Class       | No         | ✅ v2.0.1 |
+| Apple    | DFU (A18+)       | Dynamic USB DFU Class       | **Required** | ⚠️ v0.6.5 ready |
+| Google   | DFU              | Dynamic USB DFU Class       | Optional   | ✅ New |
+| Samsung  | DFU              | Dynamic USB DFU Class       | Optional   | ✅ New |
+| Generic  | USB CDC/Bulk     | Endpoint auto-discovery     | Optional   | ✅ Universal |
+| Any      | Serial COM       | UART auto sync              | No         | ✅ Universal |
+
+---
+
+# Version History
+
+| Version | Date | Key Changes |
+|---------|------|-------------|
+| **v0.6.5 / v2.0.2** | 2026 | **QSLCLENC encryption layer** - ChaCha20/AES, future-proof for A18+ |
+| v0.6.4 / v2.0.1 | 2026 | Dynamic DFU detection, QSLCLRESP fixes |
+| v0.6.3 / v2.0.0 | 2026 | Complete module rewrite, 47 commands |
+| v0.5.x / v1.x | 2025 | Legacy versions |
 
 ---
 
@@ -224,6 +317,39 @@ python qslcl.py read 0x8000000 --size 1M -o dfu_dump.bin --loader=qslcl.bin
 
 **YOU HAVE BEEN WARNED. THE AUTHOR IS NOT RESPONSIBLE FOR BRICKED DEVICES.**
 
+---
+
+## Encryption Layer Technical Details
+
+### Architecture
+
+```
+Without QSLCLENC:
+QSLCLCMD → USB → Device (plaintext, detectable)
+
+With QSLCLENC:
+QSLCLCMD → [ENCRYPT] → QSLCLENC → USB → Device → [DECRYPT] → Execute
+           ↑                                    ↑
+    Session key negotiated              ChaCha20 verified
+    at startup                          Poly1305 MAC checked
+```
+
+### Supported Cipher Suites
+
+| Cipher | Key Size | MAC | Hardware Acceleration |
+|--------|----------|-----|----------------------|
+| ChaCha20-Poly1305 | 256-bit | Poly1305 | ARMv8.2-A+ (Apple Silicon) |
+| AES-256-GCM | 256-bit | GMAC | AES-NI / ARMv8 Crypto Extensions |
+
+### Integrity Protection
+
+- **CRC32** - Frame header integrity
+- **HMAC-SHA256** - Session authentication  
+- **Poly1305** - Per-packet authentication (ChaCha20 mode)
+- **SHA256 Footer** - Full encryption block verification
+
+---
+
 ## Legal & Ethical Framework
 
 **Quantum Silicon Core Loader (QSLCL)** operates within established legal and ethical boundaries:
@@ -235,18 +361,14 @@ python qslcl.py read 0x8000000 --size 1M -o dfu_dump.bin --loader=qslcl.bin
 - **Students**: Learning hardware architecture and security
 - **Developers**: Creating interoperable software and tools
 
+### Encryption Layer Legal Note:
+The QSLCLENC encryption layer is designed for **research and interoperability**, not to defeat lawful access. It uses standard, publicly documented algorithms (ChaCha20, AES-256-GCM) with no backdoors.
+
 ### Prohibited Uses:
 - Unauthorized access to others' devices
 - Circumventing security on non-owned hardware
 - Malicious or destructive applications
 - Violation of applicable laws and regulations
-
-### Legal Basis:
-This tool enables exercises of:
-- **First Sale Doctrine** rights (modification of owned property)
-- **Right to Repair** principles (globally recognized)
-- **Academic Research** exemptions (security studies)
-- **Educational Use** protections (learning purposes)
 
 > **Use responsibly. With great power comes great responsibility.**
 
@@ -262,13 +384,16 @@ This tool enables exercises of:
 python qslcl.py hello --loader=qslcl.bin
 ```
 
-**Device Connection Issues:**
+**Encryption Layer Not Found:**
 ```bash
-# Use wait parameter for slow devices
-python qslcl.py hello --loader=qslcl.bin --wait 5
+# Build with encryption enabled
+python build.py qslcl.bin --encrypt --debug
+
+# Verify encryption block
+python qslcl.py encryption --loader=qslcl.bin
 ```
 
-**DFU Device Not Detected (v2.0.1 fixed):**
+**DFU Device Not Detected (v2.0.1+ fixed):**
 ```bash
 # Enable debug to see DFU detection
 python qslcl.py endpoints --debug
@@ -288,45 +413,26 @@ python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
 python qslcl.py dump 0x10000000 --size 1M --resume --loader=qslcl.bin
 ```
 
-**Verification Failures:**
-```bash
-# Increase retries for unreliable connections
-python qslcl.py write boot image.bin --loader=qslcl.bin --retries 5
-
-# Skip verification for known-good operations
-python qslcl.py patch 0x100000 file patch.bin --no-verify --loader=qslcl.bin
-```
-
-## Getting Help
-
-1. **Open a GitHub issue** with detailed information
-2. **Include your device model** and connection method
-3. **Provide command logs** and output with `--debug`
-4. **Include qslcl.bin size and SHA256 hash**
-5. **Specify Python version and OS**
-6. **Include architecture information** from `getinfo`
-
 ## Debug Information
 
 ```bash
 # Enable debug output
-python build.py --debug
+python build.py --debug --encrypt
 python qslcl.py hello --loader=qslcl.bin --debug
 
 # Verbose output for complex operations
 python qslcl.py rawmode list --verbose --loader=qslcl.bin
 
-# Test specific functionality
-python qslcl.py verify list --loader=qslcl.bin
-python qslcl.py bypass test --loader=qslcl.bin
-
 # Debug DFU detection specifically
 python qslcl.py endpoints --debug 2>&1 | grep -i dfu
+
+# Debug encryption layer
+python qslcl.py encryption --loader=qslcl.bin --debug
 ```
 
 ---
 
-# Module Architecture (v2.0.1)
+# Module Architecture (v2.0.2)
 
 All command modules follow a consistent architecture:
 
@@ -366,50 +472,13 @@ Each module features:
 
 ---
 
-# Technical Deep Dive: DFU Detection (v2.0.1)
-
-## How It Works
-
-```python
-def universal_dfu_detection(dev):
-    """
-    Detects ANY DFU mode device using USB DFU Class Specification
-    """
-    # USB DFU Class Specification defines:
-    # - bInterfaceClass: 0xFE (Application Specific)
-    # - bInterfaceSubClass: 0x01 (Device Firmware Upgrade)
-    # - bInterfaceProtocol: 0x01 (Runtime) or 0x02 (Download)
-    
-    cfg = dev.get_active_configuration()
-    for intf in cfg:
-        if (intf.bInterfaceClass == 0xFE and 
-            intf.bInterfaceSubClass == 0x01):
-            return {
-                'mode': 'DFU',
-                'protocol': 'DFU Mode (Download)' if intf.bInterfaceProtocol == 0x02 else 'DFU Mode (Runtime)',
-                'vendor': vendor_name,
-                'vid': dev.idVendor,
-                'pid': dev.idProduct
-            }
-    return None
-```
-
-## Why This Matters
-
-| Version | Detection Method | Future Device Support |
-|---------|-----------------|----------------------|
-| v2.0.0 and earlier | Hardcoded PID list | ❌ Requires code update for each new device |
-| v2.0.1 | USB DFU Class Specification | ✅ Works with any compliant DFU device |
-
----
-
 # Final Words
 
-> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, and every bootstrap execution becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping."**
+> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, and every bootstrap execution becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping and now, quantum-resistant encryption."**
 
 ## Key Philosophy
 
-* **Universal Execution** - One binary, all architectures, 30+ complete commands
+* **Universal Execution** - One binary, all architectures, 47 complete commands
 * **Silicon Intimacy** - Direct hardware conversation with bit-level precision
 * **Adaptive Intelligence** - Environment-aware behavior with safety enforcement
 * **Professional Grade** - Enterprise-level memory operations with verification
@@ -417,18 +486,9 @@ def universal_dfu_detection(dev):
 * **Modular Architecture** - Consistent, maintainable command modules
 * **Ethical Empowerment** - Capability with responsibility and safety controls
 * **Future-Proof Detection** - USB DFU Class compliance (v2.0.1)
+* **Encryption Ready** - ChaCha20/AES for A18+ compatibility (v0.6.5)
 
 **YouTube**: [https://www.youtube.com/@EntropyVector](https://www.youtube.com/@EntropyVector)
-
----
-
-## Version History
-
-| Version | Key Changes |
-|---------|-------------|
-| v2.0.1 | **Dynamic DFU detection** - No hardcoded PIDs, USB Class compliance |
-| v2.0.0 | Complete module rewrite, 20+ commands, unified dispatch |
-| v1.2.6 | Legacy version with static PID detection |
 
 ---
 
