@@ -1,7 +1,7 @@
 # LEGAL NOTICE & PROJECT PROTECTION
 
 **Repository:** Quantum Silicon Core Loader (QSLCL)  
-**Author:** Sharif Muhaymin  
+**Author:** Sharif Muhaymin  (Sharif-bot-cmd)
 **PGP Key ID:** `37065C6EFFEEB5C5`  
 **Status:** Active Development & Research
 
