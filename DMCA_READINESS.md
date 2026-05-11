@@ -40,10 +40,8 @@ QSLCL includes numerous built-in protections demonstrating responsible disclosur
 | Safeguard | Location | Purpose |
 |-----------|----------|---------|
 | **CRITICAL WARNING** | README.md | User acknowledges brick risk before use |
-| **confirm_dangerous_action()** | rawmode.py | Requires typing "DANGER" to enable dangerous features |
 | **Explicit Permitted Uses** | README.md | Lists allowed: research, repair, education |
 | **Explicit Prohibited Uses** | README.md | Lists prohibited: unauthorized access, malicious use |
-| **Audit Logging** | rawmode.py | Records all privilege escalations |
 | **Legal Notice** | LEGAL_NOTICE.md | Complete legal framework |
 | **Ethical Framework** | ETHICAL_FRAMEWORK.md | Ethical guidelines for users |
 
