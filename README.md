@@ -28,43 +28,9 @@ QSLCL runs in:
 
 ---
 
-# What's New in **v0.6.5 / v2.0.2** 🔐
+### Whats New in **2.0.3**
 
-## QSLCLENC - Future-Proof Encryption Layer
-
-**Problem:** Apple may add USB encryption to DFU mode in A18+ and newer devices, breaking all existing tools.
-
-**Solution:** Added QSLCLENC - a universal encryption layer that supports **ChaCha20-Poly1305** and **AES-256-GCM** ciphers.
-
-### New Features:
-
-| Feature | Description |
-|---------|-------------|
-| **Dynamic Cipher Negotiation** | Automatically selects best available cipher |
-| **Perfect Forward Secrecy** | Session keys never reuse |
-| **Anti-Replay Protection** | Nonce-based frame verification |
-| **Zero Overwrite Injection** | Encrypts at EOF, preserves all existing blocks |
-| **Micro-VM Crypto Routines** | Architecture-neutral encryption |
-
-### Supported Encryption Algorithms:
-
-```python
-# QSLCLENC automatically supports:
-✅ ChaCha20-Poly1305  (Apple's likely choice for A18+)
-✅ AES-256-GCM        (Fallback for compatibility)
-✅ Session Key Exchange (No hardcoded keys)
-✅ HMAC Integrity Check (Prevents tampering)
-```
-
-### New Commands:
-
-```bash
-# Display encryption layer information
-python qslcl.py encryption --loader=qslcl.bin
-
-# Build with encryption support
-python build.py qslcl.bin --encrypt
-```
+-- improve detect_device_handle for accurate detection.
 
 ### New Block Type: QSLCLENC
 

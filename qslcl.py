@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qslcl.py — Universal QSLCL Tool v2.0.1 
+# qslcl.py — Universal QSLCL Tool v2.0.3
 # Author: Sharif — QSLCL Creator
 # Works on all SOC
 # Fixed: Frame parsing, CRC validation, QSLCLBIN header parsing, error handling
@@ -1726,20 +1726,382 @@ def recv(handle, serial_mode, timeout=3.0):
     
     return None, None
 
-def detect_device_type(handle):
+def detect_device_type(handle, timeout: float = 0.5):
+    """
+    Universal device type detection for ANY SOC.
+    Works with: Qualcomm, MediaTek, Apple, Samsung, Rockchip, Allwinner, Amlogic, etc.
+    
+    Args:
+        handle: USB or serial device handle
+        timeout: Read timeout in seconds
+    
+    Returns:
+        str: Device type (QUALCOMM, MTK, APPLE_DFU, SAMSUNG, ROCKCHIP, 
+             ALLWINNER, AMLOGIC, GENERIC_DFU, or GENERIC)
+    """
+    import usb.util
+    import time
+    
+    # ============================================================
+    # METHOD 1: USB Descriptor Parsing (Most Reliable)
+    # ============================================================
+    try:
+        # Check if it's a USB device with proper descriptors
+        if hasattr(handle, 'bDeviceClass') or hasattr(handle, 'idVendor'):
+            # Get device descriptors
+            vid = getattr(handle, 'idVendor', None)
+            pid = getattr(handle, 'idProduct', None)
+            
+            # Vendor ID-based detection (works for all USB devices)
+            VENDOR_MAP = {
+                0x05AC: "APPLE_DFU",      # Apple
+                0x05C6: "QUALCOMM",       # Qualcomm
+                0x0E8D: "MTK",            # MediaTek
+                0x04E8: "SAMSUNG",        # Samsung
+                0x2207: "ROCKCHIP",       # Rockchip
+                0x1F3A: "ALLWINNER",      # Allwinner
+                0x1B8E: "AMLOGIC",        # Amlogic
+                0x10CE: "SILICON_LABS",   # Silicon Labs
+                0x067B: "PROLIFIC",       # Prolific
+                0x0403: "FTDI",           # FTDI
+            }
+            
+            if vid in VENDOR_MAP:
+                return VENDOR_MAP[vid]
+            
+            # Check interface class for DFU (Universal)
+            try:
+                cfg = handle.get_active_configuration()
+                for intf in cfg:
+                    # DFU Class 0xFE = Application Specific
+                    # Subclass 0x01 = Device Firmware Upgrade
+                    if (intf.bInterfaceClass == 0xFE and 
+                        intf.bInterfaceSubClass == 0x01):
+                        return "DFU_MODE"
+            except:
+                pass
+    
+    except Exception as e:
+        if _DEBUG:
+            print(f"[!] USB descriptor detection failed: {e}")
+    
+    # ============================================================
+    # METHOD 2: Protocol Handshake (SOC-Specific)
+    # ============================================================
+    
+    # Try to read initial data (non-destructive)
+    original_timeout = None
+    try:
+        if hasattr(handle, 'timeout'):
+            original_timeout = handle.timeout
+            handle.timeout = timeout
+    except:
+        pass
+    
+    try:
+        # Try to read any pending data
+        data = handle.read(64) if hasattr(handle, 'read') else b''
+    except:
+        data = b''
+    
+    # Restore original timeout
+    try:
+        if original_timeout is not None and hasattr(handle, 'timeout'):
+            handle.timeout = original_timeout
+    except:
+        pass
+    
+    if data:
+        text = data.decode('ascii', errors='ignore').upper()
+        
+        # MediaTek BROM detection
+        if b'\xA0' in data or "BOOTROM" in text or "BR" in text:
+            return "MTK"
+        
+        # Qualcomm EDL detection
+        if "EDL" in text or "SAHARA" in text or "FIREHOSE" in text:
+            return "QUALCOMM"
+        
+        # Apple DFU detection (via response)
+        if "DFU" in text or "IBOOT" in text or "APPLE" in text:
+            return "APPLE_DFU"
+        
+        # Samsung detection
+        if "SAMSUNG" in text or "EXYNOS" in text:
+            return "SAMSUNG"
+    
+    # ============================================================
+    # METHOD 3: Active Probing (For Unresponsive Devices)
+    # ============================================================
+    
+    # Try to get device descriptor via USB control transfer
+    try:
+        if hasattr(handle, 'ctrl_transfer'):
+            # Standard GET_DESCRIPTOR request
+            desc = handle.ctrl_transfer(0x80, 0x06, 0x0100, 0, 18, timeout=int(timeout * 1000))
+            if len(desc) >= 18:
+                vid = desc[8] | (desc[9] << 8)
+                pid = desc[10] | (desc[11] << 8)
+                
+                # Check against vendor map
+                VENDOR_MAP = {
+                    0x05AC: "APPLE_DFU",
+                    0x05C6: "QUALCOMM", 
+                    0x0E8D: "MTK",
+                    0x04E8: "SAMSUNG",
+                    0x2207: "ROCKCHIP",
+                }
+                if vid in VENDOR_MAP:
+                    return VENDOR_MAP[vid]
+    except:
+        pass
+    
+    # ============================================================
+    # METHOD 4: Serial Port Probing (For UART)
+    # ============================================================
+    
+    # Send break signal to identify bootloader
+    try:
+        if hasattr(handle, 'send_break'):
+            handle.send_break()
+            time.sleep(0.1)
+            response = handle.read(64) if hasattr(handle, 'read') else b''
+            
+            if b'\xA0' in response:
+                return "MTK"
+            if b"EDL" in response or b"Sahara" in response:
+                return "QUALCOMM"
+    except:
+        pass
+    
+    return "GENERIC"
+
+
+def enhanced_device_scan(handle, timeout: float = 1.0):
+    """
+    Enhanced device scanning that returns full device info.
+    Works on ANY SOC architecture.
+    """
+    device_info = {
+        'type': 'GENERIC',
+        'vendor': 'Unknown',
+        'product': 'Unknown',
+        'vid': None,
+        'pid': None,
+        'usb_class': None,
+        'usb_subclass': None,
+        'interfaces': [],
+        'capabilities': [],
+    }
+    
+    # Get USB descriptors if available
+    try:
+        if hasattr(handle, 'idVendor'):
+            device_info['vid'] = handle.idVendor
+            device_info['pid'] = handle.idProduct
+            
+            # Vendor name lookup
+            VENDOR_NAMES = {
+                0x05AC: "Apple Inc.",
+                0x05C6: "Qualcomm Inc.",
+                0x0E8D: "MediaTek Inc.",
+                0x04E8: "Samsung Electronics",
+                0x2207: "Rockchip Electronics",
+                0x1F3A: "Allwinner Technology",
+                0x1B8E: "Amlogic",
+            }
+            device_info['vendor'] = VENDOR_NAMES.get(device_info['vid'], f"VID_{device_info['vid']:04X}")
+        
+        # Get configuration and interface info
+        if hasattr(handle, 'get_active_configuration'):
+            cfg = handle.get_active_configuration()
+            for intf in cfg:
+                iface_info = {
+                    'class': intf.bInterfaceClass,
+                    'subclass': intf.bInterfaceSubClass,
+                    'protocol': intf.bInterfaceProtocol,
+                    'endpoints': intf.bNumEndpoints,
+                }
+                device_info['interfaces'].append(iface_info)
+                
+                # Detect DFU mode (universal)
+                if iface_info['class'] == 0xFE and iface_info['subclass'] == 0x01:
+                    device_info['capabilities'].append('DFU_MODE')
+                    device_info['type'] = 'DFU_MODE'
+                
+                # Detect CDC/Serial
+                if iface_info['class'] == 0x02 or iface_info['class'] == 0x0A:
+                    device_info['capabilities'].append('CDC_SERIAL')
+                
+                # Detect Mass Storage
+                if iface_info['class'] == 0x08:
+                    device_info['capabilities'].append('MASS_STORAGE')
+        
+        # Try to get product string
+        if hasattr(handle, 'iProduct') and handle.iProduct:
+            try:
+                device_info['product'] = usb.util.get_string(handle, handle.iProduct)
+            except:
+                pass
+    
+    except Exception as e:
+        if _DEBUG:
+            print(f"[!] Enhanced scan failed: {e}")
+    
+    # Fallback to basic detection
+    if device_info['type'] == 'GENERIC':
+        device_info['type'] = detect_device_type(handle, timeout)
+    
+    return device_info
+
+
+# ============================================================
+# SOC-Specific Detection (Extended)
+# ============================================================
+
+SOC_DETECTION_RULES = {
+    # Qualcomm
+    "QUALCOMM": {
+        "vid": [0x05C6],
+        "pid_ranges": [(0x9000, 0x90FF), (0x9008, 0x9008)],  # EDL mode
+        "strings": ["EDL", "SAHARA", "FIREHOSE", "QDL"],
+        "magic": [b"\x7E", b"\x7D"],  # HDLC framing
+    },
+    
+    # MediaTek
+    "MTK": {
+        "vid": [0x0E8D],
+        "pid_ranges": [(0x2000, 0x20FF)],
+        "strings": ["BOOTROM", "META", "PRELOADER", "DA"],
+        "magic": [b"\xA0"],
+    },
+    
+    # Apple DFU
+    "APPLE_DFU": {
+        "vid": [0x05AC],
+        "pid_ranges": [(0x1200, 0x12FF), (0x1300, 0x13FF), (0x8000, 0x8FFF)],
+        "strings": ["DFU", "IBOOT", "APPLE"],
+        "class": (0xFE, 0x01),  # DFU class/subclass
+    },
+    
+    # Samsung
+    "SAMSUNG": {
+        "vid": [0x04E8],
+        "strings": ["SAMSUNG", "EXYNOS", "ODIN"],
+        "class": (0xFF, 0xFF),
+    },
+    
+    # Rockchip
+    "ROCKCHIP": {
+        "vid": [0x2207],
+        "strings": ["ROCKUSB", "LOADER", "MASKROM"],
+        "magic": [b"RK"],
+    },
+    
+    # Allwinner
+    "ALLWINNER": {
+        "vid": [0x1F3A],
+        "strings": ["FEL", "PHOENIX", "ALLWINNER"],
+        "magic": [b"FEL"],
+    },
+}
+
+def detect_soc_by_rules(handle) -> str:
+    """
+    Detect SOC using comprehensive rule-based system.
+    Works across ALL manufacturers.
+    """
+    import usb.util
+    
+    try:
+        # Get VID/PID
+        vid = getattr(handle, 'idVendor', None)
+        pid = getattr(handle, 'idProduct', None)
+        
+        # Method 1: VID/PID matching
+        for soc_type, rules in SOC_DETECTION_RULES.items():
+            if vid in rules.get('vid', []):
+                # Check PID ranges
+                for start, end in rules.get('pid_ranges', []):
+                    if start <= pid <= end:
+                        if _DEBUG:
+                            print(f"[*] Detected {soc_type} by VID/PID: 0x{vid:04X}:0x{pid:04X}")
+                        return soc_type
+        
+        # Method 2: USB Class matching (DFU universal)
+        try:
+            cfg = handle.get_active_configuration()
+            for intf in cfg:
+                for soc_type, rules in SOC_DETECTION_RULES.items():
+                    if 'class' in rules:
+                        expected_class, expected_subclass = rules['class']
+                        if (intf.bInterfaceClass == expected_class and 
+                            intf.bInterfaceSubClass == expected_subclass):
+                            if _DEBUG:
+                                print(f"[*] Detected {soc_type} by USB class: {expected_class:02X}:{expected_subclass:02X}")
+                            return soc_type
+        except:
+            pass
+        
+        # Method 3: String matching (from device descriptors)
+        try:
+            if hasattr(handle, 'iProduct') and handle.iProduct:
+                product = usb.util.get_string(handle, handle.iProduct) or ""
+                product_upper = product.upper()
+                
+                for soc_type, rules in SOC_DETECTION_RULES.items():
+                    for s in rules.get('strings', []):
+                        if s in product_upper:
+                            if _DEBUG:
+                                print(f"[*] Detected {soc_type} by product string: {product}")
+                            return soc_type
+        except:
+            pass
+    
+    except Exception as e:
+        if _DEBUG:
+            print(f"[!] SOC detection error: {e}")
+    
+    return "GENERIC"
+
+
+# ============================================================
+# Replace the original function with enhanced version
+# ============================================================
+
+# If you want to completely replace the old function:
+def detect_device_type(handle, timeout: float = 0.5):
+    """
+    REPLACEMENT: Universal device type detection for ANY SOC.
+    Uses multiple detection methods for maximum compatibility.
+    """
+    # First try rule-based SOC detection
+    soc_type = detect_soc_by_rules(handle)
+    if soc_type != "GENERIC":
+        return soc_type
+    
+    # Fallback to original logic
     try:
         data = handle.read(64)
     except:
         return "GENERIC"
+    
     if not data:
         return "GENERIC"
+    
     text = data.decode(errors="ignore").upper()
+    
     if "BOOTROM" in text or "BR" in text or data.startswith(b"\xA0"):
         return "MTK"
     if "EDL" in text or "SAHARA" in text or "FIREHOSE" in text:
         return "QUALCOMM"
     if "DFU" in text or b"\x12\x01" in data[:4]:
         return "APPLE_DFU"
+    if "SAMSUNG" in text or "EXYNOS" in text:
+        return "SAMSUNG"
+    if "ROCKUSB" in text or "LOADER" in text:
+        return "ROCKCHIP"
+    
     return "GENERIC"
 
 # =============================================================================
