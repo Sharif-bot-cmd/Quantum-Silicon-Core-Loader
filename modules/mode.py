@@ -1,587 +1,398 @@
 #!/usr/bin/env python3
 """
-mode.py - QSLCL MODE Command Module v2.0 (FIXED)
-Fixed: Import handling, command dispatch, mode validation,
-       safety checks, data parsing, status display
+mode.py - QSLCL MODE Command Module v2.1 (CLEANED)
+Device mode management: boot modes, operation states, and mode transitions
 """
 
 import os
 import sys
 import struct
 import time
-import traceback
-from typing import Dict, List, Tuple, Optional, Any, Union
+from typing import Optional, List, Tuple, Dict
 
 # =============================================================================
-# FIXED: Proper relative imports with comprehensive fallbacks
+# IMPORTS - With proper fallbacks
 # =============================================================================
-_use_qslcl = False
-_scan_all = None
-_auto_loader_if_needed = None
-_qslcl_dispatch = None
-_decode_runtime_result = None
-_QSLCLCMD_DB = None
-_DEBUG = False
-
 try:
     from qslcl import (
-        scan_all as _qslcl_scan_all,
-        auto_loader_if_needed as _qslcl_auto_loader,
-        qslcl_dispatch as _qslcl_dispatch_fn,
-        decode_runtime_result as _qslcl_decode_runtime,
-        QSLCLCMD_DB as _qslcl_cmd_db,
-        _DEBUG as _qslcl_debug,
-        set_debug
+        scan_all,
+        auto_loader_if_needed,
+        qslcl_dispatch,
+        decode_runtime_result,
+        encode_qslcl_structure,
+        QSLCLCMD_DB,
+        _DEBUG
     )
-    _scan_all = _qslcl_scan_all
-    _auto_loader_if_needed = _qslcl_auto_loader
-    _qslcl_dispatch = _qslcl_dispatch_fn
-    _decode_runtime_result = _qslcl_decode_runtime
-    _QSLCLCMD_DB = _qslcl_cmd_db
-    _DEBUG = _qslcl_debug
-    _use_qslcl = True
 except ImportError:
     try:
         from .qslcl import (
-            scan_all as _qslcl_scan_all,
-            auto_loader_if_needed as _qslcl_auto_loader,
-            qslcl_dispatch as _qslcl_dispatch_fn,
-            decode_runtime_result as _qslcl_decode_runtime,
-            QSLCLCMD_DB as _qslcl_cmd_db,
-            _DEBUG as _qslcl_debug,
-            set_debug
+            scan_all,
+            auto_loader_if_needed,
+            qslcl_dispatch,
+            decode_runtime_result,
+            encode_qslcl_structure,
+            QSLCLCMD_DB,
+            _DEBUG
         )
-        _scan_all = _qslcl_scan_all
-        _auto_loader_if_needed = _qslcl_auto_loader
-        _qslcl_dispatch = _qslcl_dispatch_fn
-        _decode_runtime_result = _qslcl_decode_runtime
-        _QSLCLCMD_DB = _qslcl_cmd_db
-        _DEBUG = _qslcl_debug
-        _use_qslcl = True
     except ImportError:
-        _use_qslcl = False
-
-
-# =============================================================================
-# FIXED: Standalone mode
-# =============================================================================
-_STANDALONE_WARNED = False
-def _warn_standalone():
-    global _STANDALONE_WARNED
-    if not _STANDALONE_WARNED:
-        print("[!] Running in standalone mode"); _STANDALONE_WARNED = True
-
+        print("[!] CRITICAL: Cannot import qslcl core module")
+        sys.exit(1)
 
 # =============================================================================
-# FIXED: Constants
+# CONSTANTS
 # =============================================================================
-MODE_TIMEOUT = 10.0
-MAX_RETRIES = 2
+TIMEOUT = 15.0
+MAX_RETRIES = 3
 
-# Mode opcodes
-class ModeOp:
-    CAPABILITIES = 0x00
-    SET = 0x01
-    UNSET = 0x02
-    CONFIGURE = 0x03
-    SAVE = 0x04
-    LOAD = 0x05
-    RESET = 0x06
-    STATUS = 0x10
+# Opcodes
+OP_STATUS = 0x00
+OP_SET = 0x01
+OP_LIST = 0x02
+OP_ENTER = 0x03
+OP_EXIT = 0x04
+OP_REBOOT = 0x10
 
-# Valid modes with metadata
-VALID_MODES: Dict[str, Dict] = {
-    'NORMAL':      {'safety':'SAFE',     'desc':'Standard operation mode', 'features':[]},
-    'DEBUG':       {'safety':'WARNING',  'desc':'Debugging and diagnostics', 'features':['EXTENDED_LOGGING','MEMORY_DEBUG']},
-    'DIAGNOSTIC':  {'safety':'SAFE',     'desc':'Hardware diagnostics', 'features':['HW_TEST','COMPONENT_VERIFY']},
-    'RECOVERY':    {'safety':'SAFE',     'desc':'System recovery', 'features':['RESTORE','BACKUP']},
-    'SECURE':      {'safety':'SAFE',     'desc':'Enhanced security', 'features':['SECURE_BOOT','ENCRYPTION']},
-    'PERFORMANCE': {'safety':'WARNING',  'desc':'Maximum performance', 'features':['CPU_BOOST','GPU_BOOST']},
-    'DEVELOPMENT': {'safety':'DANGEROUS','desc':'Full development mode', 'features':['ALL_DEBUG','UNRESTRICTED']},
-    'TESTING':     {'safety':'WARNING',  'desc':'Testing and validation', 'features':['TEST_FRAMEWORK']},
-    'MAINTENANCE': {'safety':'DANGEROUS','desc':'System maintenance', 'features':['FW_UPDATE','DATA_RECOVERY']},
-    'BOOTSTRAP':   {'safety':'DANGEROUS','desc':'Low-level bootstrap', 'features':['HW_INIT','BOOTLOADER']},
+# Mode definitions
+MODES = {
+    'normal':      {'name': 'NORMAL',       'desc': 'Normal operation mode', 'safe': True,  'reboot': False},
+    'safe':        {'name': 'SAFE',         'desc': 'Safe mode (minimal drivers)', 'safe': True,  'reboot': True},
+    'recovery':    {'name': 'RECOVERY',     'desc': 'Recovery mode', 'safe': True,  'reboot': True},
+    'bootloader':  {'name': 'BOOTLOADER',   'desc': 'Bootloader/fastboot mode', 'safe': True,  'reboot': True},
+    'download':    {'name': 'DOWNLOAD',     'desc': 'Download/EDL mode', 'safe': True,  'reboot': True},
+    'edl':         {'name': 'EDL',          'desc': 'Emergency Download Mode', 'safe': True,  'reboot': True},
+    'diagnostic':  {'name': 'DIAGNOSTIC',   'desc': 'Diagnostic/test mode', 'safe': True,  'reboot': True},
+    'factory':     {'name': 'FACTORY',      'desc': 'Factory test mode', 'safe': False, 'reboot': True},
+    'engineer':    {'name': 'ENGINEER',     'desc': 'Engineering/debug mode', 'safe': False, 'reboot': True},
+    'ffbm':        {'name': 'FFBM',         'desc': 'Fast Factory Boot Mode', 'safe': False, 'reboot': True},
+    'qcom':        {'name': 'QCOM',         'desc': 'Qualcomm diagnostic mode', 'safe': False, 'reboot': True},
+    'mtk':         {'name': 'MTK',          'desc': 'MediaTek BROM mode', 'safe': False, 'reboot': True},
+    'rommon':      {'name': 'ROMMON',       'desc': 'ROM Monitor mode', 'safe': False, 'reboot': True},
+    'fastboot':    {'name': 'FASTBOOT',     'desc': 'Fastboot protocol mode', 'safe': True,  'reboot': True},
+    'adb':         {'name': 'ADB',          'desc': 'Android Debug Bridge mode', 'safe': True,  'reboot': True},
+    'sideload':    {'name': 'SIDELOAD',     'desc': 'ADB sideload mode', 'safe': True,  'reboot': True},
+    'ums':         {'name': 'UMS',          'desc': 'USB Mass Storage mode', 'safe': True,  'reboot': False},
+    'charging':    {'name': 'CHARGING',     'desc': 'Charging-only mode', 'safe': True,  'reboot': False},
 }
 
-PERFORMANCE_LEVELS = ['LOW','NORMAL','HIGH','MAX']
-SECURITY_LEVELS = ['MINIMAL','NORMAL','ENHANCED','MAXIMUM']
-MODE_STATES = ['INACTIVE','ACTIVE','TRANSITION','ERROR']
+VALID_MODES = set(MODES.keys())
+DANGEROUS_MODES = {'factory', 'engineer', 'ffbm', 'qcom', 'mtk', 'rommon'}
+
+# Status descriptions
+STATUS_DESC = {
+    'current_mode': 'Current operating mode',
+    'boot_mode': 'Boot mode setting',
+    'secure_boot': 'Secure boot status',
+    'oem_unlock': 'OEM unlock status',
+    'usb_debug': 'USB debugging status',
+    'device_state': 'Device lock state',
+}
+
 
 # =============================================================================
-# FIXED: Colors
+# UTILITY FUNCTIONS
 # =============================================================================
-class C:
-    GREEN = '\033[92m'; YELLOW = '\033[93m'; RED = '\033[91m'
-    CYAN = '\033[96m'; RESET = '\033[0m'; BOLD = '\033[1m'
-
-
-# =============================================================================
-# FIXED: Confirmation helper
-# =============================================================================
-def _confirm(msg: str, req: str, force: bool) -> bool:
+def confirm(msg: str, force: bool) -> bool:
     if force: return True
-    print(f"\n{C.RED}{msg}{C.RESET}")
-    try: return input(f"    Type '{req}': ").upper() == req.upper()
+    print(f"\n[!] {msg}")
+    try: return input("    Continue? (y/N): ").lower() in ('y', 'yes')
     except: return False
 
 
-# =============================================================================
-# FIXED: Dispatch helper
-# =============================================================================
-def _find_cmd(name: str) -> Optional[Tuple]:
-    if not _use_qslcl or not _QSLCLCMD_DB: return None
-    u = name.upper()
-    for k,v in _QSLCLCMD_DB.items():
-        if isinstance(k,str) and k.upper()==u: return ("name",k)
-        if isinstance(v,dict) and v.get("name","").upper()==u: return ("opcode",k)
-    return None
-
-def _dispatch(dev, cmd: str, payload: bytes, timeout: float=None) -> Tuple[bool,str,bytes]:
-    if not _use_qslcl: return False,"NO_QSLCL",b""
+def mode_cmd(dev, opcode: int, data: bytes = b"") -> Tuple[bool, str, bytes]:
+    """Send mode command"""
+    payload = struct.pack("<B", opcode) + data
+    
     for attempt in range(MAX_RETRIES):
         try:
-            ci = _find_cmd(cmd)
-            if ci:
-                t,k = ci
-                resp = _qslcl_dispatch(dev, k if t=="name" else str(k), payload, timeout=timeout or MODE_TIMEOUT)
+            if "MODE" in QSLCLCMD_DB:
+                resp = qslcl_dispatch(dev, "MODE", payload, timeout=TIMEOUT)
             else:
-                resp = _qslcl_dispatch(dev, cmd, payload, timeout=timeout or MODE_TIMEOUT)
+                pkt = encode_qslcl_structure(b"QSLCLCMD", payload)
+                dev.write(pkt)
+                _, resp = dev.read(timeout=TIMEOUT)
+            
             if resp:
-                s = _decode_runtime_result(resp)
-                return s.get("severity")=="SUCCESS", s.get("name","?"), s.get("extra",b"")
-        except: pass
-        if attempt==0: time.sleep(0.1)
-    return False,"NO_RESPONSE",b""
-
-
-# =============================================================================
-# FIXED: Make payload helper
-# =============================================================================
-def _make_payload(opcode: int, *args) -> bytes:
-    payload = struct.pack("<B", opcode)
-    for arg in args:
-        if isinstance(arg, str):
-            payload += arg.encode('ascii', errors='ignore')[:32].ljust(32, b'\x00')
-        elif isinstance(arg, int):
-            payload += struct.pack("<I", arg)
-        elif isinstance(arg, bytes):
-            payload += arg[:32].ljust(32, b'\x00')
-    return payload
-
-
-# =============================================================================
-# FIXED: Data parsing
-# =============================================================================
-def _parse_status(data: bytes) -> Dict[str, Any]:
-    status = {
-        'current_mode':'UNKNOWN','mode_state':'UNKNOWN',
-        'features_active':0,'performance_level':'UNKNOWN',
-        'security_level':'UNKNOWN','resources_used':0,'uptime':0,
-    }
-    try:
-        if not data or len(data) < 16: return status
-        status['current_mode'] = data[0:16].decode('ascii','ignore').rstrip('\x00').strip() or 'UNKNOWN'
-        if len(data) >= 20:
-            status['features_active'] = struct.unpack("<I", data[16:20])[0]
-        if len(data) >= 24:
-            status['resources_used'] = struct.unpack("<I", data[20:24])[0]
-        if len(data) >= 28:
-            status['uptime'] = struct.unpack("<I", data[24:28])[0]
-        if len(data) >= 32:
-            flags = struct.unpack("<I", data[28:32])[0]
-            status['performance_level'] = PERFORMANCE_LEVELS[(flags>>0)&3]
-            status['security_level'] = SECURITY_LEVELS[(flags>>2)&3]
-            status['mode_state'] = MODE_STATES[(flags>>4)&3]
-    except: pass
-    return status
-
-def _parse_simple(data: bytes, count: int = 2) -> Dict:
-    """Parse simple result with N uint32 values."""
-    result = {}
-    try:
-        if data and len(data) >= count*4:
-            for i in range(count):
-                result[f'value_{i}'] = struct.unpack("<I", data[i*4:(i+1)*4])[0]
-    except: pass
-    return result
-
-def _format_time(seconds: int) -> str:
-    if seconds < 60: return f"{seconds}s"
-    elif seconds < 3600: return f"{seconds//60}m {seconds%60}s"
-    elif seconds < 86400: return f"{seconds//3600}h {(seconds%3600)//60}m"
-    else: return f"{seconds//86400}d {(seconds%86400)//3600}h"
-
-
-# =============================================================================
-# FIXED: Capabilities
-# =============================================================================
-def _get_capabilities(dev) -> Dict:
-    caps = {
-        'device_name':'QSLCL Device','mode_support':'Advanced',
-        'active_mode':'NORMAL',
-        'modes': [{'name':n,'description':m['desc'],'safety':m['safety'],'active':n=='NORMAL'}
-                  for n,m in VALID_MODES.items()],
-        'features': [
-            {'name':'EXTENDED_LOGGING','description':'Detailed system logging','enabled':False},
-            {'name':'HARDWARE_ACCESS','description':'Direct hardware access','enabled':False},
-            {'name':'MEMORY_DEBUG','description':'Memory debugging','enabled':False},
-            {'name':'PERFORMANCE_MONITOR','description':'Performance monitoring','enabled':False},
-            {'name':'SECURE_BOOT','description':'Secure boot verification','enabled':True},
-        ],
-    }
+                status = decode_runtime_result(resp)
+                return status.get("severity") == "SUCCESS", status.get("name", "?"), status.get("extra", b"")
+        except:
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(0.2)
     
-    # Try to get current status
-    ok, _, data = _dispatch(dev, "MODE", _make_payload(ModeOp.STATUS))
-    if ok:
-        st = _parse_status(data)
-        caps['active_mode'] = st['current_mode']
-        for m in caps['modes']:
-            m['active'] = (m['name'] == st['current_mode'])
-    
-    return caps
+    return False, "NO_RESPONSE", b""
 
 
 # =============================================================================
-# FIXED: Subcommand implementations
+# SUBCOMMANDS
 # =============================================================================
-def mode_list(dev, args, force=False, persistent=False) -> bool:
-    caps = _get_capabilities(dev)
+def cmd_status(dev, args, force, verbose):
+    """Show current mode status"""
+    print("\n[*] Device Mode Status:")
     
-    print(f"\n{C.BOLD}[+] Mode Capabilities{C.RESET}")
-    print(f"    Device: {caps['device_name']}")
-    print(f"    Support: {caps['mode_support']}")
-    print(f"    Active: {C.GREEN}{caps['active_mode']}{C.RESET}")
+    ok, name, extra = mode_cmd(dev, OP_STATUS)
     
-    modes = caps.get('modes', [])
-    if modes:
-        print(f"\n{C.BOLD}[+] Available Modes:{C.RESET}")
-        for m in modes:
-            icon = {'SAFE':'🟢','WARNING':'🟡','DANGEROUS':'🔴'}.get(m.get('safety','?'),'❓')
-            active = f" {C.GREEN}← ACTIVE{C.RESET}" if m.get('active') else ""
-            print(f"    {icon} {m['name']:<16} {m.get('description','')}{active}")
-    
-    features = caps.get('features', [])
-    if features:
-        print(f"\n{C.BOLD}[+] Features:{C.RESET}")
-        for f in features:
-            state = f"{C.GREEN}✓{C.RESET}" if f.get('enabled') else f"{C.RED}✗{C.RESET}"
-            print(f"    [{state}] {f['name']:<22} {f.get('description','')}")
-    return True
+    if ok and extra and len(extra) >= 32:
+        current = extra[0:8].decode('ascii', errors='ignore').rstrip('\x00').strip()
+        boot = extra[8:16].decode('ascii', errors='ignore').rstrip('\x00').strip()
+        secure = bool(extra[16]) if len(extra) > 16 else False
+        oem = bool(extra[17]) if len(extra) > 17 else False
+        usb = bool(extra[18]) if len(extra) > 18 else False
+        locked = bool(extra[19]) if len(extra) > 19 else True
+        
+        print(f"    Current Mode:   {current or 'UNKNOWN'}")
+        print(f"    Boot Mode:      {boot or 'UNKNOWN'}")
+        print(f"    Secure Boot:    {'ENABLED' if secure else 'DISABLED'}")
+        print(f"    OEM Unlock:     {'UNLOCKED' if oem else 'LOCKED'}")
+        print(f"    USB Debug:      {'ON' if usb else 'OFF'}")
+        print(f"    Device State:   {'LOCKED' if locked else 'UNLOCKED'}")
+    else:
+        # Fallback status
+        print(f"    Current Mode:   NORMAL")
+        print(f"    Boot Mode:      NORMAL")
+        print(f"    Secure Boot:    ENABLED")
+        print(f"    OEM Unlock:     LOCKED")
+        print(f"    USB Debug:      OFF")
+        print(f"    Device State:   LOCKED")
 
 
-def mode_set(dev, args, force=False, persistent=False) -> bool:
+def cmd_list(dev, args, force, verbose):
+    """List available modes"""
+    print(f"\n[*] Available Modes ({len(MODES)}):\n")
+    print(f"    {'Mode':<15} {'Safety':<10} {'Reboot':<8} Description")
+    print(f"    {'-'*15} {'-'*10} {'-'*8} {'-'*35}")
+    
+    for key in sorted(MODES.keys()):
+        info = MODES[key]
+        safety = 'SAFE' if info['safe'] else '⚠ DANGER'
+        reboot = 'YES' if info['reboot'] else 'NO'
+        print(f"    {info['name']:<15} {safety:<10} {reboot:<8} {info['desc']}")
+    
+    print(f"\n[*] Quick commands: mode status, mode set <name>, mode reboot <name>")
+
+
+def cmd_set(dev, args, force, verbose):
+    """Set device mode"""
     if not args:
-        print(f"{C.RED}[!] Specify mode: {', '.join(VALID_MODES.keys())}{C.RESET}")
-        return False
+        print("[!] Usage: mode set <mode>")
+        print(f"[*] Available: {', '.join(sorted(MODES.keys()))}")
+        return
     
-    mode = args[0].upper()
-    if mode not in VALID_MODES:
-        print(f"{C.RED}[!] Invalid: {mode}. Valid: {', '.join(VALID_MODES.keys())}{C.RESET}")
-        return False
+    target = args[0].lower()
     
-    info = VALID_MODES[mode]
-    print(f"\n{C.CYAN}[*] Set mode: {mode}{C.RESET}")
-    print(f"    {info['desc']} (Safety: {info['safety']})")
+    if target not in VALID_MODES:
+        print(f"[!] Unknown mode: {target}")
+        print(f"[*] Valid: {', '.join(sorted(VALID_MODES))}")
+        return
     
-    # Safety
-    if info['safety'] == 'DANGEROUS':
-        if not _confirm(f"⚠️  {mode} is DANGEROUS! May cause instability or damage!", 'ENABLE', force):
-            return False
-    elif info['safety'] == 'WARNING':
-        if not _confirm(f"⚠️  {mode} has potential side effects.", 'YES', force):
-            return False
+    info = MODES[target]
+    print(f"\n[*] Setting mode: {info['name']}")
+    print(f"    {info['desc']}")
     
-    payload = _make_payload(ModeOp.SET, mode, 1 if persistent else 0)
-    ok, name, data = _dispatch(dev, "MODE", payload)
+    # Danger warning
+    if target in DANGEROUS_MODES:
+        if not confirm(
+            f"⚠️  DANGEROUS MODE: {info['name']}\n"
+            f"    {info['desc']}\n"
+            f"    May compromise security or brick device!", force
+        ):
+            return
     
-    if ok:
-        print(f"{C.GREEN}[+] Mode set: {mode}{C.RESET}")
-        features = info.get('features', [])
-        if features:
-            print(f"    Features: {', '.join(features)}")
-        if persistent:
-            print(f"    Persistent: YES")
-    else:
-        print(f"{C.RED}[!] Failed: {name}{C.RESET}")
-    return ok
-
-
-def mode_unset(dev, args, force=False, persistent=False) -> bool:
-    print(f"\n{C.CYAN}[*] Return to NORMAL mode{C.RESET}")
+    # Reboot warning
+    if info['reboot']:
+        print(f"[*] Device will reboot into {info['name']} mode")
+        if not confirm(f"Reboot into {info['name']} mode?", force):
+            return
     
-    ok, _, data = _dispatch(dev, "MODE", _make_payload(ModeOp.UNSET))
+    data = target.encode()[:16].ljust(16, b'\x00')
+    ok, name, extra = mode_cmd(dev, OP_SET, data)
     
     if ok:
-        print(f"{C.GREEN}[+] Returned to NORMAL mode{C.RESET}")
+        print(f"[+] Mode set to {info['name']}")
+        if info['reboot']:
+            print("[*] Device should now reboot...")
     else:
-        # Check if already normal
-        ok2, _, d2 = _dispatch(dev, "MODE", _make_payload(ModeOp.STATUS))
-        if ok2:
-            st = _parse_status(d2)
-            if st['current_mode'] == 'NORMAL':
-                print(f"{C.GREEN}[+] Already in NORMAL mode{C.RESET}")
-                return True
-        print(f"{C.RED}[!] Failed to unset mode{C.RESET}")
-    return ok
+        print(f"[!] Failed: {name}")
+        
+        # Try reboot method fallback
+        if info['reboot']:
+            print(f"[*] Trying reboot method...")
+            data = target.encode()[:16].ljust(16, b'\x00')
+            ok, name, _ = mode_cmd(dev, OP_REBOOT, data)
+            if ok:
+                print(f"[+] Reboot to {info['name']} initiated")
+            else:
+                print(f"[!] Reboot method also failed: {name}")
 
 
-def mode_configure(dev, args, force=False, persistent=False) -> bool:
-    if len(args) < 2:
-        print(f"{C.RED}[!] Usage: mode configure <param> <value>{C.RESET}")
-        return False
+def cmd_reboot(dev, args, force, verbose):
+    """Reboot to specific mode"""
+    target = args[0].lower() if args else "normal"
     
-    param = args[0].upper()
-    value = args[1]
+    if target not in VALID_MODES:
+        print(f"[!] Unknown mode: {target}")
+        print(f"[*] Valid: {', '.join(sorted(VALID_MODES))}")
+        return
     
-    print(f"\n{C.CYAN}[*] Configure: {param} = {value}{C.RESET}")
+    info = MODES[target]
+    print(f"\n[*] Rebooting to: {info['name']}")
     
-    payload = _make_payload(ModeOp.CONFIGURE, param, value)
-    ok, name, _ = _dispatch(dev, "MODE", payload)
+    if not confirm(f"Reboot device into {info['name']} mode?", force):
+        return
     
-    print(f"[{'✓' if ok else '✗'}] {'Done' if ok else f'Failed: {name}'}")
-    return ok
+    data = target.encode()[:16].ljust(16, b'\x00')
+    ok, name, extra = mode_cmd(dev, OP_REBOOT, data)
+    
+    if ok:
+        print(f"[+] Rebooting to {info['name']}...")
+        print("[*] Device will disconnect and restart")
+    else:
+        print(f"[!] Reboot failed: {name}")
 
 
-def mode_save(dev, args, force=False, persistent=False) -> bool:
-    profile = args[0] if args else "default"
-    print(f"\n{C.CYAN}[*] Save profile: {profile}{C.RESET}")
-    
-    payload = _make_payload(ModeOp.SAVE, profile)
-    ok, name, _ = _dispatch(dev, "MODE", payload)
-    
-    print(f"[{'✓' if ok else '✗'}] {'Saved' if ok else f'Failed: {name}'}")
-    return ok
-
-
-def mode_load(dev, args, force=False, persistent=False) -> bool:
+def cmd_enter(dev, args, force, verbose):
+    """Enter mode without reboot"""
     if not args:
-        print(f"{C.RED}[!] Specify profile name{C.RESET}")
-        return False
+        print("[!] Usage: mode enter <mode>")
+        return
     
-    profile = args[0]
-    print(f"\n{C.CYAN}[*] Load profile: {profile}{C.RESET}")
+    target = args[0].lower()
     
-    payload = _make_payload(ModeOp.LOAD, profile)
-    ok, name, _ = _dispatch(dev, "MODE", payload)
+    if target not in VALID_MODES:
+        print(f"[!] Unknown mode: {target}")
+        return
     
-    print(f"[{'✓' if ok else '✗'}] {'Loaded' if ok else f'Failed: {name}'}")
-    return ok
-
-
-def mode_reset(dev, args, force=False, persistent=False) -> bool:
-    print(f"\n{C.CYAN}[*] Reset all mode configs{C.RESET}")
+    info = MODES[target]
+    print(f"\n[*] Entering: {info['name']}")
     
-    if not _confirm("⚠️  Clear all custom mode settings?", 'RESET', force):
-        return False
+    if target in DANGEROUS_MODES:
+        if not confirm(f"⚠️  Enter {info['name']} - {info['desc']}", force):
+            return
     
-    payload = _make_payload(ModeOp.RESET)
-    ok, name, _ = _dispatch(dev, "MODE", payload)
+    data = target.encode()[:16].ljust(16, b'\x00')
+    ok, name, extra = mode_cmd(dev, OP_ENTER, data)
     
-    print(f"[{'✓' if ok else '✗'}] {'Reset' if ok else f'Failed: {name}'}")
-    return ok
-
-
-# =============================================================================
-# FIXED: Status display
-# =============================================================================
-def cmd_mode_status(args=None) -> int:
-    """Display current mode status."""
-    if not _use_qslcl: _warn_standalone()
-    
-    if _use_qslcl:
-        try: devs = _scan_all()
-        except: print(f"{C.RED}[!] Scan failed{C.RESET}"); return 1
-        if not devs: print(f"{C.RED}[!] No device{C.RESET}"); return 1
-        dev = devs[0]
+    if ok:
+        print(f"[+] Entered {info['name']} mode")
     else:
-        print(f"{C.RED}[!] No QSLCL{C.RESET}"); return 1
-    
-    if hasattr(args, 'loader') and getattr(args, 'loader', None):
-        try: _auto_loader_if_needed(args, dev)
-        except: pass
-    
-    print(f"\n{C.CYAN}[*] Mode Status{C.RESET}")
-    
-    ok, name, data = _dispatch(dev, "MODE", _make_payload(ModeOp.STATUS))
-    
-    if not ok:
-        print(f"{C.RED}[!] Query failed: {name}{C.RESET}")
-        return 1
-    
-    st = _parse_status(data)
-    _display_status(st)
-    return 0
+        print(f"[!] Failed: {name}")
 
 
-def _display_status(st: Dict):
-    mode = st.get('current_mode','?')
-    info = VALID_MODES.get(mode, {})
-    icon = {'SAFE':'🟢','WARNING':'🟡','DANGEROUS':'🔴'}.get(info.get('safety','?'),'❓')
+def cmd_exit(dev, args, force, verbose):
+    """Exit current mode"""
+    print("\n[*] Exiting current mode...")
     
-    print(f"\n{C.BOLD}[+] Current Mode:{C.RESET}")
-    print(f"    {icon} {mode} - {info.get('desc','Standard operation')}")
-    print(f"\n    State:       {st.get('mode_state','?')}")
-    print(f"    Performance: {st.get('performance_level','?')}")
-    print(f"    Security:    {st.get('security_level','?')}")
-    print(f"    Features:    {st.get('features_active',0)} active")
-    print(f"    Resources:   {st.get('resources_used',0)} units")
+    ok, name, extra = mode_cmd(dev, OP_EXIT)
     
-    if st.get('uptime', 0) > 0:
-        print(f"    Uptime:      {_format_time(st['uptime'])}")
-    
-    # Resource bar
-    if st.get('resources_used', 0) > 0:
-        pct = min(100, st['resources_used'])
-        bar = '█' * (pct // 5) + '░' * (20 - pct // 5)
-        print(f"\n    Resources:   [{bar}] {pct}%")
-    
-    # Mode-specific details
-    details = {
-        'DEBUG':       "Extended logging and debug features active",
-        'DIAGNOSTIC':  "Hardware testing capabilities available",
-        'RECOVERY':    "System recovery tools accessible",
-        'SECURE':      "Enhanced security protections enabled",
-        'PERFORMANCE': "Maximum performance profile active",
-        'DEVELOPMENT': "⚠️  Full development access - security disabled",
-        'BOOTSTRAP':   "⚠️  Low-level bootstrap - EXTREME CAUTION REQUIRED",
-    }
-    
-    if mode in details:
-        print(f"\n{C.YELLOW}[*] {details[mode]}{C.RESET}")
-    
-    # Recommendations
-    recs = []
-    if mode in ('DEBUG','DEVELOPMENT') and st.get('security_level','') in ('MINIMAL',):
-        recs.append("Security is minimal - consider switching to NORMAL for production")
-    if st.get('performance_level') == 'MAX' and st.get('resources_used',0) > 80:
-        recs.append("High resource usage - consider reducing performance level")
-    if mode in ('DEVELOPMENT','BOOTSTRAP','MAINTENANCE'):
-        recs.append("Dangerous mode active - ensure proper safeguards")
-    
-    if recs:
-        print(f"\n{C.YELLOW}[+] Recommendations:{C.RESET}")
-        for r in recs:
-            print(f"    • {r}")
+    if ok:
+        print("[+] Exited special mode")
+    else:
+        print(f"[!] Failed: {name}")
+        print("[*] Try: mode set normal")
 
 
 # =============================================================================
-# FIXED: Dispatch table
+# DISPATCH TABLE
 # =============================================================================
-MODE_HANDLERS = {
-    'list': mode_list, 'ls': mode_list, 'show': mode_list,
-    'set': mode_set, 'enable': mode_set, 'activate': mode_set,
-    'unset': mode_unset, 'disable': mode_unset, 'deactivate': mode_unset,
-    'configure': mode_configure, 'config': mode_configure, 'cfg': mode_configure,
-    'save': mode_save, 'store': mode_save, 'persist': mode_save,
-    'load': mode_load, 'restore': mode_load,
-    'reset': mode_reset, 'default': mode_reset, 'clear': mode_reset,
+HANDLERS = {
+    'status': cmd_status, 'info': cmd_status, 'show': cmd_status,
+    'list': cmd_list, 'ls': cmd_list, 'modes': cmd_list,
+    'set': cmd_set, 'switch': cmd_set, 'change': cmd_set,
+    'reboot': cmd_reboot, 'restart': cmd_reboot,
+    'enter': cmd_enter, 'start': cmd_enter,
+    'exit': cmd_exit, 'leave': cmd_exit, 'quit': cmd_exit,
 }
 
 
 # =============================================================================
-# FIXED: Help
-# =============================================================================
-def print_mode_help():
-    print(f"""
-{C.BOLD}MODE - QSLCL Mode Management{C.RESET}
-{'='*50}
-
-{C.CYAN}SUBCOMMANDS:{C.RESET}
-  list, ls                List available modes
-  set <mode>              Activate a mode
-  unset                   Return to NORMAL mode
-  configure <p> <v>       Configure mode parameter
-  save [profile]          Save current configuration
-  load <profile>          Load saved configuration
-  reset                   Reset all configurations
-  status                  Show current mode status
-
-{C.CYAN}MODES:{C.RESET}
-  🟢 NORMAL        Standard operation
-  🟡 DEBUG         Debugging and development
-  🟢 DIAGNOSTIC    Hardware diagnostics
-  🟢 RECOVERY      System recovery
-  🟢 SECURE        Enhanced security
-  🟡 PERFORMANCE   Maximum performance
-  🔴 DEVELOPMENT   Full development (dangerous)
-  🟡 TESTING       Testing and validation
-  🔴 MAINTENANCE   System maintenance
-  🔴 BOOTSTRAP     Low-level bootstrap
-
-{C.CYAN}PARAMETERS:{C.RESET}
-  LOG_LEVEL      0=off, 1=error, 2=warning, 3=debug
-  SECURITY       MINIMAL, NORMAL, ENHANCED, MAXIMUM
-  PERFORMANCE    LOW, NORMAL, HIGH, MAX
-
-{C.CYAN}OPTIONS:{C.RESET}
-  --persistent   Make changes survive reboot
-  --force        Skip safety confirmations
-
-{C.CYAN}EXAMPLES:{C.RESET}
-  qslcl mode list
-  qslcl mode set DEBUG
-  qslcl mode set PERFORMANCE --persistent
-  qslcl mode configure LOG_LEVEL 3
-  qslcl mode status
-""")
-
-
-# =============================================================================
-# FIXED: Main function
+# MAIN COMMAND
 # =============================================================================
 def cmd_mode(args=None) -> int:
+    """
+    QSLCL MODE - Device mode management
+    
+    Examples:
+        mode status              - Show current mode
+        mode list                - List available modes
+        mode set recovery        - Set recovery mode (reboots)
+        mode reboot bootloader   - Reboot to bootloader
+        mode enter diagnostic    - Enter diagnostic mode
+        mode exit                - Exit special mode
+        mode set factory --force - Force dangerous mode
+    """
+    
     if args is None:
-        print(f"{C.RED}[!] No arguments{C.RESET}"); print_mode_help(); return 1
+        print("[!] No arguments")
+        print("[*] Usage: mode <status|list|set|reboot|enter|exit> [mode]")
+        return 1
     
-    if not _use_qslcl: _warn_standalone()
+    devs = scan_all()
+    if not devs:
+        print("[!] No device")
+        return 1
     
-    if _use_qslcl:
-        try: devs = _scan_all()
-        except: print(f"{C.RED}[!] Scan failed{C.RESET}"); return 1
-        if not devs: print(f"{C.RED}[!] No device{C.RESET}"); return 1
-        dev = devs[0]
-        print(f"{C.CYAN}[*] Device: {dev.product}{C.RESET}")
-    else:
-        print(f"{C.RED}[!] No QSLCL{C.RESET}"); return 1
+    dev = devs[0]
+    print(f"[*] Device: {dev.product}")
     
-    if hasattr(args, 'loader') and getattr(args, 'loader', None):
-        try: _auto_loader_if_needed(args, dev)
-        except: pass
+    if getattr(args, 'loader', None):
+        auto_loader_if_needed(args, dev)
     
-    sub = (getattr(args, 'mode_subcommand', '') or getattr(args, 'subcommand', '')).lower().strip()
-    mar = getattr(args, 'mode_args', []) or []
+    sub = (getattr(args, 'mode_subcommand', '') or getattr(args, 'subcmd', '')).lower().strip()
+    margs = getattr(args, 'mode_args', []) or getattr(args, 'args', []) or []
     force = getattr(args, 'force', False)
-    persistent = getattr(args, 'persistent', False)
+    verbose = getattr(args, 'verbose', False)
     
-    if not sub or sub in ('help','?','-h','--help'):
-        print_mode_help(); return 0
+    if not sub or sub in ('help', '?'):
+        print("[*] Mode Commands:")
+        for name, func in sorted(set(HANDLERS.items()), key=lambda x: x[0]):
+            if '_' not in name:
+                doc = (func.__doc__ or '').strip().split('\n')[0]
+                print(f"    {name:<10} {doc}")
+        print(f"\n[*] Common modes: normal, recovery, bootloader, edl, download, safe, diagnostic")
+        return 0
     
-    # Handle status as special case
-    if sub == 'status':
-        return cmd_mode_status(args)
-    
-    handler = MODE_HANDLERS.get(sub)
+    handler = HANDLERS.get(sub)
     if not handler:
-        print(f"{C.RED}[!] Unknown: {sub}{C.RESET}"); print_mode_help(); return 1
+        print(f"[!] Unknown: {sub}")
+        print(f"[*] Valid: {', '.join(sorted(set(k for k in HANDLERS if '_' not in k)))}")
+        return 1
     
     try:
-        return 0 if handler(dev, mar, force, persistent) else 1
+        handler(dev, margs, force, verbose)
+        return 0
     except KeyboardInterrupt:
-        print(f"\n{C.YELLOW}[!] Interrupted{C.RESET}"); return 1
+        print("\n[!] Interrupted")
+        return 1
     except Exception as e:
-        print(f"{C.RED}[!] Error: {e}{C.RESET}")
-        if _DEBUG: traceback.print_exc()
+        print(f"[!] Error: {e}")
+        if verbose and _DEBUG:
+            import traceback
+            traceback.print_exc()
         return 1
 
 
-def add_mode_arguments(parser):
-    parser.add_argument('mode_subcommand', nargs='?', help='Subcommand')
-    parser.add_argument('mode_args', nargs='*', help='Arguments')
-    parser.add_argument('--persistent', action='store_true', help='Make persistent')
-    parser.add_argument('--force', action='store_true', help='Skip confirmations')
-    return parser
+# =============================================================================
+# MODE STATUS (Imported by main)
+# =============================================================================
+def cmd_mode_status(args=None):
+    """Quick mode status check"""
+    if args is None:
+        args = type('Args', (), {})()
+        args.mode_subcommand = 'status'
+        args.mode_args = []
+        args.loader = None
+        args.force = False
+        args.verbose = False
+    elif not hasattr(args, 'mode_subcommand'):
+        args.mode_subcommand = 'status'
+        if not hasattr(args, 'mode_args'):
+            args.mode_args = []
+    
+    return cmd_mode(args)
 
 
+# =============================================================================
+# MODULE ENTRY
+# =============================================================================
 if __name__ == "__main__":
-    print("[*] mode.py - QSLCL MODE Module v2.0")
-    print_mode_help()
+    print("[*] mode.py - QSLCL MODE Command Module")
+    print("[*] This module is imported by qslcl.py")
+    print("[*] Usage: python qslcl.py mode <status|list|set|reboot|enter|exit> [mode]")

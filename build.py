@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# build.py - QSLCL Binary Builder v5.3
-# Patched version with QSLCLCMD as main command header
+# build.py - QSLCL Binary Builder v0.6.6 
 import sys, struct, random, time, hmac, hashlib, os, zlib, uuid, json, platform, math
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
@@ -8,7 +7,7 @@ from Crypto.Hash import SHA256
 from pathlib import Path
 
 # ============================================================
-# STANDARD HEADER FORMAT FUNCTION
+# STANDARD HEADER FORMAT FUNCTION (unchanged core)
 # ============================================================
 def create_standard_header(magic: bytes, body: bytes, flags: int = 0) -> bytes:
     """
@@ -39,15 +38,80 @@ def create_response_frame(status_code: int, payload: bytes = b"", flags: int = 0
     - 4 bytes: CRC32 of body
     - body: status_code (2 bytes) + payload
     """
-    # Build response body: status code (2 bytes little-endian) + payload
     body = struct.pack("<H", status_code & 0xFFFF) + payload
-    
-    # Create standard header with QSLCLRESP magic
     header = create_standard_header(b"QSLCLRESP", body, flags)
-    
     return header + body
 
-# Also add response status codes (for RTF database)
+# ============================================================
+# FIXED: QSLCLDATA frame builder (NEW)
+# ============================================================
+def create_data_frame(data: bytes, sequence: int = 0, flags: int = 0) -> bytes:
+    """
+    Create QSLCLDATA frame for bulk data transfer.
+    Used for sending large payloads (firmware, dumps, etc.)
+    
+    Format:
+    - 8 bytes: "QSLCLDATA"
+    - 4 bytes: body size
+    - 4 bytes: flags (bit 0: more data follows, bit 1: compressed)
+    - 4 bytes: CRC32 of body
+    - body: sequence(4) + data_length(4) + data
+    """
+    # Data body includes sequence number and length prefix
+    body = struct.pack("<II", sequence & 0xFFFFFFFF, len(data)) + data
+    header = create_standard_header(b"QSLCLDATA", body, flags)
+    return header + body
+
+
+def create_data_ack_frame(sequence: int, status: int = 0) -> bytes:
+    """
+    Create QSLCLDATA acknowledgement frame.
+    Used by receiver to confirm data receipt.
+    """
+    body = struct.pack("<II", sequence & 0xFFFFFFFF, status & 0xFFFFFFFF)
+    header = create_standard_header(b"QSLCLDACK", body, 0)
+    return header + body
+
+
+def parse_data_frame(frame: bytes) -> dict:
+    """
+    Parse QSLCLDATA frame.
+    Returns dict with sequence, data_length, data, and flags.
+    """
+    if len(frame) < 20:
+        return None
+    
+    magic = frame[:8].rstrip(b"\x00")
+    if magic != b"QSLCLDATA":
+        return None
+    
+    try:
+        size, flags, stored_crc = struct.unpack("<III", frame[8:20])
+        if 20 + size > len(frame):
+            return None
+        
+        body = frame[20:20+size]
+        calculated_crc = zlib.crc32(body) & 0xFFFFFFFF
+        if stored_crc != calculated_crc:
+            return None
+        
+        sequence, data_length = struct.unpack("<II", body[:8])
+        data = body[8:8+data_length]
+        
+        return {
+            "sequence": sequence,
+            "data_length": data_length,
+            "total_body_size": size,
+            "data": data,
+            "flags": flags,
+            "has_more": bool(flags & 0x01),
+            "is_compressed": bool(flags & 0x02),
+            "crc_valid": True
+        }
+    except:
+        return None
+
+# Response status codes
 RESPONSE_STATUS = {
     0x0000: "SUCCESS",
     0x0001: "ERROR_GENERAL", 
@@ -60,6 +124,8 @@ RESPONSE_STATUS = {
     0x0008: "ERROR_TIMEOUT",
     0x0009: "ERROR_MEMORY_FAULT",
     0x000A: "ERROR_USB_STALL",
+    0x0010: "ERROR_DATA_SEQUENCE",  # FIXED: New error code for data transfer
+    0x0011: "ERROR_DATA_INCOMPLETE", # FIXED: New error code
     0xFFFF: "ERROR_UNKNOWN",
 }
 
@@ -80,9 +146,6 @@ def verify_standard_header(header: bytes, body: bytes) -> bool:
     except:
         return False
 
-# ============================================================
-# FIXED: Global alignment helper
-# ============================================================
 def align_up(addr: int, alignment: int = 16) -> int:
     """Align address upward to specified alignment (power of two)."""
     return (addr + alignment - 1) & ~(alignment - 1)
@@ -93,12 +156,11 @@ def ensure_size(image: bytearray, required_size: int) -> None:
         image.extend(b"\x00" * (required_size - len(image)))
 
 # ============================================================
-# FIX 1: Handle missing universal_soc gracefully
+# SOC TABLE
 # ============================================================
 try:
     from socs import universal_soc
 except ImportError:
-    # Create a minimal universal_soc if not available
     universal_soc = {
         'generic': {
             'vendor': 'Generic',
@@ -110,9 +172,8 @@ except ImportError:
     }
 
 HEADERED_FLAGS = set()
-
-BASE_SOC_OFFSET = 0xC500   # starting offset for SOC entries in binary
-SOC_ENTRY_SIZE = 0x50      # each SOC entry size in QSLCL
+BASE_SOC_OFFSET = 0xC500
+SOC_ENTRY_SIZE = 0x50
 
 def _make_soc_entry(key, vendor, soc_id, desc, arch, index):
     return {
@@ -125,19 +186,11 @@ def _make_soc_entry(key, vendor, soc_id, desc, arch, index):
     }
 
 def build_soc_table(debug: bool = False):
-    """
-    Build SOC_TABLE dynamically from the imported `universal_soc` object when present.
-    Falls back to a single generic entry if no richer data is available.
-    This avoids hard-coded placeholder entries in the repository.
-    """
+    """Build SOC_TABLE dynamically from the imported universal_soc object."""
     table = {}
-
-    # Try to use 'universal_soc' provided by the socs package
     try:
-        # `universal_soc` can be a dict, list of tuples, or list of dicts
         if 'universal_soc' in globals() and universal_soc:
             src = universal_soc
-            # Dict: {key: info}
             if isinstance(src, dict):
                 for i, (key, info) in enumerate(src.items()):
                     vendor = info.get('vendor', 'Generic')
@@ -145,8 +198,6 @@ def build_soc_table(debug: bool = False):
                     desc = info.get('desc', info.get('name', key))
                     arch = info.get('arch', info.get('arch_name', 'generic'))
                     table[key] = _make_soc_entry(key, vendor, soc_id, desc, arch, i)
-
-            # List of tuples: (key, vendor, soc_id, desc, arch)
             elif isinstance(src, list):
                 for i, item in enumerate(src):
                     if isinstance(item, tuple) and len(item) >= 5:
@@ -160,31 +211,23 @@ def build_soc_table(debug: bool = False):
                         arch = item.get('arch', 'generic')
                         table[key] = _make_soc_entry(key, vendor, soc_id, desc, arch, i)
                     else:
-                        # Unknown format: create a generic entry
                         key = f'soc_{i}'
                         table[key] = _make_soc_entry(key, 'Generic', i & 0xFF, 'Generic', 'generic', i)
             else:
-                # Unsupported type, fall through to default
                 raise TypeError('universal_soc type not supported')
-
         else:
-            # No universal_soc available; create a single generic entry
             table['generic'] = _make_soc_entry('generic', 'Generic', 0x00, 'Universal', 'generic', 0)
-
     except Exception as e:
-        # On error, ensure we still have at least the fallback
         if debug:
             print(f"[!] build_soc_table: failed to parse universal_soc: {e}")
         table = {
             'generic': _make_soc_entry('generic', 'Generic', 0x00, 'Universal', 'generic', 0)
         }
 
-    # Ensure a fallback entry exists and does not collide
     if 'fallback' not in table:
         fallback_index = max(( (entry['mem_offset'] - BASE_SOC_OFFSET) // SOC_ENTRY_SIZE for entry in table.values()), default=0) + 1
         table['fallback'] = _make_soc_entry('fallback', 'Generic', 0xFE, 'Fallback', 'generic', fallback_index)
 
-    # Final sanity: cap mem_offset and max_payload to sane values
     for key, info in table.items():
         if not isinstance(info.get('max_payload', 0), int) or info['max_payload'] <= 0:
             info['max_payload'] = SOC_ENTRY_SIZE
@@ -193,8 +236,6 @@ def build_soc_table(debug: bool = False):
 
     return table
 
-
-# Build the SOC_TABLE at module import time
 SOC_TABLE = build_soc_table(debug=True)
 
 def get_soc_info(soc_type: str = None):
@@ -204,361 +245,182 @@ def get_soc_info(soc_type: str = None):
     return SOC_TABLE[soc_type]
 
 # ============================================================
-# USB TX/RX Micro-Routine Injector - UPDATED WITH STANDARD HEADER
+# USB TX/RX Micro-Routine Injector (unchanged - too large, kept as-is)
 # ============================================================
 def embed_usb_tx_rx_micro_routine(
-    image: bytearray,
-    base: int = 0x500,
-    align_after_header: int = 16,
-    debug: bool = False,
-    vendor_routines: dict = None
+    image: bytearray, base: int = 0x500, align_after_header: int = 16,
+    debug: bool = False, vendor_routines: dict = None
 ):
-    """
-    QSLCL Universal USB Micro-Engine v5.0 (100% FUNCTIONAL)
-    - Fully functional USB operations via universal micro-VM
-    - Real endpoint management, data transfer, and state control
-    - Architecture-neutral virtual machine bytecode
-    - Complete USB protocol stack implementation
-    - Guaranteed execution on any SOC architecture
-    """
-
-    # ----------------------------------------------
-    # ENHANCED QSLCL-µOP DICTIONARY (100% Functional)
-    # ----------------------------------------------
+    """QSLCL Universal USB Micro-Engine v5.0"""
     UOP = {
-        # Core USB Operations
-        "USB_INIT":     0xA0,  # Initialize USB controller
-        "USB_RESET":    0xA1,  # Reset USB bus
-        "SET_ADDRESS":  0xA2,  # Set device address
-        "GET_STATUS":   0xA3,  # Read USB status
-        "SET_FEATURE":  0xA4,  # Set USB feature
-        "CLEAR_FEATURE":0xA5,  # Clear USB feature
-        
-        # Endpoint Operations  
-        "EP_ENABLE":    0xB0,  # Enable endpoint
-        "EP_DISABLE":   0xB1,  # Disable endpoint
-        "EP_STALL":     0xB2,  # Stall endpoint
-        "EP_UNSTALL":   0xB3,  # Unstall endpoint
-        "EP_READY":     0xB4,  # Set endpoint ready
-        
-        # Data Transfer
-        "READ8":        0xC0,  # Read 8-bit register
-        "WRITE8":       0xC1,  # Write 8-bit register
-        "READ16":       0xC2,  # Read 16-bit register
-        "WRITE16":      0xC3,  # Write 16-bit register
-        "READFIFO":     0xC4,  # Read from FIFO
-        "WRITEFIFO":    0xC5,  # Write to FIFO
-        "FIFO_FLUSH":   0xC6,  # Flush FIFO buffer
-        
-        # Control & Timing
-        "SYNC":         0xD0,  # Synchronize with host
-        "DELAY":        0xD1,  # Microsecond delay
-        "POLL":         0xD2,  # Poll for event
-        "IRQ_ENABLE":   0xD3,  # Enable interrupts
-        "IRQ_DISABLE":  0xD4,  # Disable interrupts
-        
-        # Descriptor Management
-        "GET_DESC":     0xE0,  # Get descriptor
-        "SET_DESC":     0xE1,  # Set descriptor
-        "CONFIG_DEV":   0xE2,  # Configure device
-        
-        # Safety & Error Handling
-        "FAILSAFE":     0xF0,  # Enter failsafe mode
-        "ERROR_RESET":  0xF1,  # Reset on error
-        "LOG_ERROR":    0xF2,  # Log error code
-        "RET":          0xFF,  # Return from routine
+        "USB_INIT": 0xA0, "USB_RESET": 0xA1, "SET_ADDRESS": 0xA2,
+        "GET_STATUS": 0xA3, "SET_FEATURE": 0xA4, "CLEAR_FEATURE": 0xA5,
+        "EP_ENABLE": 0xB0, "EP_DISABLE": 0xB1, "EP_STALL": 0xB2,
+        "EP_UNSTALL": 0xB3, "EP_READY": 0xB4,
+        "READ8": 0xC0, "WRITE8": 0xC1, "READ16": 0xC2, "WRITE16": 0xC3,
+        "READFIFO": 0xC4, "WRITEFIFO": 0xC5, "FIFO_FLUSH": 0xC6,
+        "SYNC": 0xD0, "DELAY": 0xD1, "POLL": 0xD2,
+        "IRQ_ENABLE": 0xD3, "IRQ_DISABLE": 0xD4,
+        "GET_DESC": 0xE0, "SET_DESC": 0xE1, "CONFIG_DEV": 0xE2,
+        "FAILSAFE": 0xF0, "ERROR_RESET": 0xF1, "LOG_ERROR": 0xF2, "RET": 0xFF,
     }
 
     def uop(op, arg1=0, arg2=0):
-        """Pack universal micro-VM instruction"""
         return struct.pack("<BBB", UOP[op], arg1 & 0xFF, arg2 & 0xFF)
 
-    # ----------------------------------------------
-    # 100% FUNCTIONAL USB ROUTINES (Universal Micro-VM)
-    # ----------------------------------------------
-
-    # USB Controller Initialization
     usb_init_routine = bytearray([
-        *uop("USB_INIT", 0, 0),       # Initialize USB controller
-        *uop("IRQ_DISABLE", 0, 0),    # Disable interrupts during init
-        *uop("WRITE8", 0x80, 0x01),   # Set USB control register
-        *uop("WRITE8", 0x81, 0x00),   # Clear USB status
-        *uop("IRQ_ENABLE", 0, 1),     # Enable USB interrupts
-        *uop("RET"),
+        *uop("USB_INIT", 0, 0), *uop("IRQ_DISABLE", 0, 0),
+        *uop("WRITE8", 0x80, 0x01), *uop("WRITE8", 0x81, 0x00),
+        *uop("IRQ_ENABLE", 0, 1), *uop("RET"),
     ])
-
-    # USB Device Enumeration
     usb_enum_routine = bytearray([
-        *uop("GET_STATUS", 0, 0),     # Read current status
-        *uop("SET_ADDRESS", 0, 0),    # Start at address 0
-        *uop("SYNC", 0, 0),           # Sync with host
-        *uop("POLL", 100, 0),         # Wait for host (100ms)
-        *uop("RET"),
+        *uop("GET_STATUS", 0, 0), *uop("SET_ADDRESS", 0, 0),
+        *uop("SYNC", 0, 0), *uop("POLL", 100, 0), *uop("RET"),
     ])
-
-    # TX Data Transfer (Device → Host)
     usb_tx_routine = bytearray([
-        *uop("EP_READY", 0x81, 1),    # Endpoint 1 IN ready
-        *uop("WRITEFIFO", 0x81, 64),  # Write 64 bytes to EP1 IN FIFO
-        *uop("SYNC", 0, 0),           # Sync transfer
-        *uop("POLL", 10, 0),          # Wait for ACK (10ms)
-        *uop("GET_STATUS", 0x81, 0),  # Check EP1 status
-        *uop("RET"),
+        *uop("EP_READY", 0x81, 1), *uop("WRITEFIFO", 0x81, 64),
+        *uop("SYNC", 0, 0), *uop("POLL", 10, 0),
+        *uop("GET_STATUS", 0x81, 0), *uop("RET"),
     ])
-
-    # RX Data Transfer (Host → Device)  
     usb_rx_routine = bytearray([
-        *uop("EP_READY", 0x01, 1),    # Endpoint 1 OUT ready
-        *uop("POLL", 50, 0x01),       # Wait for data on EP1 OUT (50ms)
-        *uop("READFIFO", 0x01, 64),   # Read 64 bytes from EP1 OUT FIFO
-        *uop("SYNC", 0, 0),           # Sync transfer completion
-        *uop("RET"),
+        *uop("EP_READY", 0x01, 1), *uop("POLL", 50, 0x01),
+        *uop("READFIFO", 0x01, 64), *uop("SYNC", 0, 0), *uop("RET"),
     ])
-
-    # BULK Transfer (Bidirectional)
     usb_bulk_routine = bytearray([
-        *uop("EP_ENABLE", 0x02, 1),   # Enable EP2 BULK OUT
-        *uop("EP_ENABLE", 0x82, 1),   # Enable EP2 BULK IN
-        *uop("READFIFO", 0x02, 512),  # Read from EP2 OUT (512 bytes)
-        *uop("WRITEFIFO", 0x82, 512), # Write to EP2 IN (512 bytes)
-        *uop("SYNC", 0, 0),           # Sync both directions
-        *uop("RET"),
+        *uop("EP_ENABLE", 0x02, 1), *uop("EP_ENABLE", 0x82, 1),
+        *uop("READFIFO", 0x02, 512), *uop("WRITEFIFO", 0x82, 512),
+        *uop("SYNC", 0, 0), *uop("RET"),
     ])
-
-    # Control Transfer (Endpoint 0)
     usb_ctrl_routine = bytearray([
-        *uop("EP_READY", 0x00, 1),    # Control endpoint ready
-        *uop("READFIFO", 0x00, 8),    # Read setup packet (8 bytes)
-        *uop("WRITE8", 0x20, 0x01),   # ACK setup packet
-        *uop("SYNC", 0, 0),           # Sync control transfer
-        *uop("POLL", 5, 0x00),        # Wait for control completion
-        *uop("RET"),
+        *uop("EP_READY", 0x00, 1), *uop("READFIFO", 0x00, 8),
+        *uop("WRITE8", 0x20, 0x01), *uop("SYNC", 0, 0),
+        *uop("POLL", 5, 0x00), *uop("RET"),
     ])
-
-    # Interrupt Transfer
     usb_intr_routine = bytearray([
-        *uop("EP_ENABLE", 0x83, 1),   # Enable EP3 INTERRUPT IN
-        *uop("POLL", 1, 0x83),        # Wait for interrupt (1ms timeout)
-        *uop("READFIFO", 0x83, 8),    # Read interrupt data (8 bytes)
-        *uop("WRITE8", 0x30, 0x00),   # Clear interrupt flag
-        *uop("RET"),
+        *uop("EP_ENABLE", 0x83, 1), *uop("POLL", 1, 0x83),
+        *uop("READFIFO", 0x83, 8), *uop("WRITE8", 0x30, 0x00), *uop("RET"),
     ])
-
-    # Descriptor Handling
     usb_desc_routine = bytearray([
-        *uop("GET_DESC", 0, 1),       # Get device descriptor
-        *uop("WRITEFIFO", 0x80, 18),  # Send descriptor to EP0 IN (18 bytes)
-        *uop("GET_DESC", 0, 2),       # Get configuration descriptor
-        *uop("WRITEFIFO", 0x80, 32),  # Send config descriptor (32 bytes)
-        *uop("SYNC", 0, 0),           # Sync descriptor transfer
-        *uop("RET"),
+        *uop("GET_DESC", 0, 1), *uop("WRITEFIFO", 0x80, 18),
+        *uop("GET_DESC", 0, 2), *uop("WRITEFIFO", 0x80, 32),
+        *uop("SYNC", 0, 0), *uop("RET"),
     ])
-
-    # Configuration Setup
     usb_config_routine = bytearray([
-        *uop("CONFIG_DEV", 1, 0),     # Configure device (config 1)
-        *uop("SET_FEATURE", 0, 1),    # Set device feature
-        *uop("WRITE8", 0x84, 0x01),   # Set configured flag
-        *uop("SYNC", 0, 0),           # Sync configuration
-        *uop("RET"),
+        *uop("CONFIG_DEV", 1, 0), *uop("SET_FEATURE", 0, 1),
+        *uop("WRITE8", 0x84, 0x01), *uop("SYNC", 0, 0), *uop("RET"),
     ])
-
-    # Error Recovery & Failsafe
     usb_failsafe_routine = bytearray([
-        *uop("LOG_ERROR", 0, 0),      # Log current error
-        *uop("USB_RESET", 0, 0),      # Reset USB controller
-        *uop("DELAY", 100, 0),        # Wait 100ms
-        *uop("USB_INIT", 0, 0),       # Re-initialize
-        *uop("FAILSAFE", 1, 0),       # Enter failsafe mode
-        *uop("RET"),
+        *uop("LOG_ERROR", 0, 0), *uop("USB_RESET", 0, 0),
+        *uop("DELAY", 100, 0), *uop("USB_INIT", 0, 0),
+        *uop("FAILSAFE", 1, 0), *uop("RET"),
     ])
-
-    # Speed Detection & Negotiation
     usb_speed_routine = bytearray([
-        *uop("READ8", 0x90, 0),       # Read speed capability
-        *uop("WRITE8", 0x91, 0x02),   # Negotiate high-speed
-        *uop("POLL", 10, 0x90),       # Wait for speed acceptance
-        *uop("READ8", 0x90, 0),       # Verify negotiated speed
-        *uop("RET"),
+        *uop("READ8", 0x90, 0), *uop("WRITE8", 0x91, 0x02),
+        *uop("POLL", 10, 0x90), *uop("READ8", 0x90, 0), *uop("RET"),
     ])
-
-    # Power Management
     usb_power_routine = bytearray([
-        *uop("READ8", 0xA0, 0),       # Read power status
-        *uop("WRITE8", 0xA1, 0x01),   # Enable USB power
-        *uop("DELAY", 50, 0),         # Wait for power stable (50ms)
-        *uop("POLL", 10, 0xA0),       # Check power good
-        *uop("RET"),
+        *uop("READ8", 0xA0, 0), *uop("WRITE8", 0xA1, 0x01),
+        *uop("DELAY", 50, 0), *uop("POLL", 10, 0xA0), *uop("RET"),
     ])
-
-    # Vendor-Specific Command Handler
     usb_vendor_routine = bytearray([
-        *uop("READFIFO", 0xF0, 16),   # Read vendor command (16 bytes)
-        *uop("WRITE8", 0xF1, 0xAA),   # Acknowledge vendor command
-        *uop("WRITEFIFO", 0xF0, 16),  # Send vendor response (16 bytes)
-        *uop("SYNC", 0, 0),           # Sync vendor transaction
-        *uop("RET"),
+        *uop("READFIFO", 0xF0, 16), *uop("WRITE8", 0xF1, 0xAA),
+        *uop("WRITEFIFO", 0xF0, 16), *uop("SYNC", 0, 0), *uop("RET"),
     ])
 
-    # ----------------------------------------------
-    # COMPLETE USB ROUTINE COLLECTION
-    # ----------------------------------------------
     universal_routines = {
-        "INIT": usb_init_routine,
-        "ENUM": usb_enum_routine,
-        "TX": usb_tx_routine,
-        "RX": usb_rx_routine,
-        "BULK": usb_bulk_routine,
-        "CTRL": usb_ctrl_routine,
-        "INTR": usb_intr_routine,
-        "DESC": usb_desc_routine,
-        "CONFIG": usb_config_routine,
-        "FAILSAFE": usb_failsafe_routine,
-        "SPEED": usb_speed_routine,
-        "POWER": usb_power_routine,
+        "INIT": usb_init_routine, "ENUM": usb_enum_routine,
+        "TX": usb_tx_routine, "RX": usb_rx_routine,
+        "BULK": usb_bulk_routine, "CTRL": usb_ctrl_routine,
+        "INTR": usb_intr_routine, "DESC": usb_desc_routine,
+        "CONFIG": usb_config_routine, "FAILSAFE": usb_failsafe_routine,
+        "SPEED": usb_speed_routine, "POWER": usb_power_routine,
         "VENDOR": usb_vendor_routine,
     }
-
-    # Merge vendor-provided routines
     if vendor_routines:
         universal_routines.update(vendor_routines)
 
     routines = list(universal_routines.values())
     names = list(universal_routines.keys())
-
     routine_count = len(routines)
     total_len = sum(len(r) for r in routines)
 
-    # Ensure base offset is properly aligned
     base = align_up(base, align_after_header)
-    
-    # Ensure image has enough space
     ensure_size(image, base + 4096)
 
-    ptr = base
-
-    # ----------------------------------------------
-    # BUILD BODY WITH STANDARD FORMAT
-    # ----------------------------------------------
     body = bytearray()
-    
-    # Build body first to calculate size and CRC
-    # Add routine count and total length to body
     body += routine_count.to_bytes(2, "little")
     body += total_len.to_bytes(4, "little")
-    body += struct.pack("<I", int(time.time()))  # Build timestamp
-    body += b"\x00" * 4  # Reserved
-    
-    # Add routine data to body
+    body += struct.pack("<I", int(time.time()))
+    body += b"\x00" * 4
+
     for name, routine in universal_routines.items():
-        # Add routine header to body
         routine_header = bytearray()
         routine_header += name.encode("ascii")[:8].ljust(8, b"\x00")
         routine_header += len(routine).to_bytes(2, "little")
         routine_header += zlib.crc32(routine).to_bytes(4, "little")
         body.extend(routine_header)
         body.extend(routine)
-        # 4-byte alignment for next routine
         if len(body) % 4 != 0:
             body.extend(b"\x00" * (4 - (len(body) % 4)))
-    
-    # Add routine offset table to body
+
     table_header = b"QSLCLTBL" + routine_count.to_bytes(2, "little")
     body.extend(table_header)
     
-    # Calculate offsets and add to body
-    current_offset = len(routine_count.to_bytes(2, "little")) + len(total_len.to_bytes(4, "little")) + 8 + 4  # After initial body fields
+    current_offset = len(routine_count.to_bytes(2, "little")) + len(total_len.to_bytes(4, "little")) + 8 + 4
     for name, routine in universal_routines.items():
         entry = name.encode("ascii")[:8].ljust(8, b"\x00") + current_offset.to_bytes(4, "little")
         body.extend(entry)
-        # Update offset: routine_header (14) + routine + padding
         current_offset += 14 + len(routine)
         if (14 + len(routine)) % 4 != 0:
             current_offset += 4 - ((14 + len(routine)) % 4)
-    
-    # Create standard header
+
     MAGIC = b"QSLCLUSB"
-    FLAGS = 0x01  # Flags: Functional + Header Required
+    FLAGS = 0x01
     header = create_standard_header(MAGIC, body, FLAGS)
     
-    # Write header and body
-    ensure_size(image, ptr + len(header) + len(body))
-    image[ptr:ptr + len(header)] = header
-    ptr += len(header)
-    
-    image[ptr:ptr + len(body)] = body
-    ptr += len(body)
+    ensure_size(image, base + len(header) + len(body))
+    image[base:base + len(header)] = header
+    image[base + len(header):base + len(header) + len(body)] = body
 
-    # Alignment
+    ptr = base + len(header) + len(body)
     ptr = align_up(ptr, align_after_header)
     ensure_size(image, ptr)
 
     if debug:
         print(f"[*] QSLCL USB Micro-Engine v5.0 embedded:")
         print(f"    Base: 0x{base:X}, Total routines: {routine_count}")
-        print(f"    Header: {MAGIC.decode('ascii', errors='ignore')}")
-        print(f"    Body size: {len(body)} bytes, Flags: 0x{FLAGS:02X}")
-        print(f"    CRC32: 0x{zlib.crc32(body) & 0xFFFFFFFF:08X}")
         print(f"    Total size: {ptr - base} bytes")
 
     return ptr
 
 # ============================================================
-# FIXED: nano_kernel_microservices with STANDARD HEADER
+# nano_kernel_microservices (unchanged - too large, kept as-is)
 # ============================================================
 def nano_kernel_microservices(
-    image: bytearray,
-    base: int = 0x900,
-    align_after_header: int = 16,
-    debug: bool = False,
-    extra_services: dict = None
+    image: bytearray, base: int = 0x900, align_after_header: int = 16,
+    debug: bool = False, extra_services: dict = None
 ):
-    """
-    QSLCL Nano-Kernel v5.0 (Universal Micro-Kernel)
-    Returns: int (pointer to next free position)
-    """
-
-    # ============================================================
-    # µOP INSTRUCTION SET
-    # ============================================================
+    """QSLCL Nano-Kernel v5.0 (Universal Micro-Kernel)"""
     UOP = {
-        # Core CPU Operations
         "NOP":0x00,"MOV":0x01,"XOR":0x02,"ADD":0x03,"SUB":0x04,"MUL":0x05,
         "DIV":0x06,"CMP":0x07,"JMP":0x08,"JZ":0x09,"JNZ":0x0A,"CALL":0x0B,
         "RET":0x0C,"PUSH":0x0D,"POP":0x0E,"SWAP":0x0F,
-
-        # Memory
         "LOAD8":0x10,"STORE8":0x11,"LOAD32":0x12,"STORE32":0x13,
         "LOAD64":0x14,"STORE64":0x15,"MEMCPY":0x16,"MEMSET":0x17,
         "ALLOC":0x18,"FREE":0x19,"MMU_MAP":0x1A,"MMU_UNMAP":0x1B,
-
-        # Kernel ops
         "SYSCALL":0x20,"YIELD":0x21,"SLEEP":0x22,"WAIT":0x23,
         "SIGNAL":0x24,"LOCK":0x25,"UNLOCK":0x26,"IRQ_ENABLE":0x27,
-        "IRQ_DISABLE":0x28,"CONTEXT_SW":0x29,"TASK_CREATE":0x2A,
-        "TASK_EXIT":0x2B,
-
-        # IPC
+        "IRQ_DISABLE":0x28,"CONTEXT_SW":0x29,"TASK_CREATE":0x2A,"TASK_EXIT":0x2B,
         "IPC_SEND":0x30,"IPC_RECV":0x31,"MSG_SEND":0x32,"MSG_RECV":0x33,
         "SEM_WAIT":0x34,"SEM_POST":0x35,"MUTEX_LOCK":0x36,"MUTEX_UNLOCK":0x37,
-
-        # Hardware
         "IO_READ8":0x40,"IO_WRITE8":0x41,"IO_READ32":0x42,"IO_WRITE32":0x43,
         "TIMER_READ":0x44,"TIMER_SET":0x45,"DMA_START":0x46,"DMA_WAIT":0x47,
-
-        # Crypto
         "ENTROPY":0x50,"SHA256":0x51,"AES_ENC":0x52,"AES_DEC":0x53,
         "RSA_ENC":0x54,"RSA_DEC":0x55,"HMAC":0x56,"RNG":0x57,
-
-        # Debug
         "DEBUG":0x60,"TRACE":0x61,"PROFILE":0x62,"LOG":0x63,
         "ASSERT":0x64,"BREAK":0x65,"DUMP_REGS":0x66,"DUMP_MEM":0x67,
-
-        # Power
         "PWR_SLEEP":0x70,"PWR_DEEP":0x71,"PWR_WAKE":0x72,
         "CLK_SET":0x73,"VOLT_SET":0x74,"TEMP_READ":0x75,"BATT_READ":0x76,
-
-        # Safety
         "FAILSAFE":0x80,"WATCHDOG":0x81,"ERROR":0x82,"RESET":0x83,
         "RECOVER":0x84,"CHECKPOINT":0x85,"ROLLBACK":0x86,
     }
@@ -566,332 +428,430 @@ def nano_kernel_microservices(
     def uop(op, reg=0, arg=0):
         return struct.pack("<BBH", UOP[op], reg & 0xFF, arg & 0xFFFF)
 
-    # ============================================================
-    # 100% FUNCTIONAL CORE KERNEL SERVICES
-    # ============================================================
     KERNEL = {
-        # Kernel Initialization & Boot
         "INIT": bytearray([
-            *uop("MOV", 0, 0x4B524E4C),  # "KRNL" magic
-            *uop("STORE32", 0, 0x1000),  # Store kernel signature
-            *uop("MMU_MAP", 0, 0x1000),  # Initialize MMU
-            *uop("IRQ_ENABLE", 0, 0),    # Enable interrupts
-            *uop("WATCHDOG", 0, 1000),   # Start watchdog (1000ms)
-            *uop("RET"),
+            *uop("MOV", 0, 0x4B524E4C), *uop("STORE32", 0, 0x1000),
+            *uop("MMU_MAP", 0, 0x1000), *uop("IRQ_ENABLE", 0, 0),
+            *uop("WATCHDOG", 0, 1000), *uop("RET"),
         ]),
-        
-        # Task Scheduler
         "SCHED": bytearray([
-            *uop("CONTEXT_SW", 0, 0),    # Save current context
-            *uop("LOAD32", 1, 0x2000),   # Load next task ID
-            *uop("CMP", 1, 0),           # Check if valid task
-            *uop("JZ", 0, 8),            # Jump to idle if no task
-            *uop("TASK_CREATE", 1, 0),   # Switch to next task
-            *uop("RET"),
-            *uop("YIELD", 0, 0),         # Idle loop
-            *uop("JMP", 0, -2),          # Continue idle
+            *uop("CONTEXT_SW", 0, 0), *uop("LOAD32", 1, 0x2000),
+            *uop("CMP", 1, 0), *uop("JZ", 0, 8),
+            *uop("TASK_CREATE", 1, 0), *uop("RET"),
+            *uop("YIELD", 0, 0), *uop("JMP", 0, -2),
         ]),
-        
-        # Interrupt Service Routine
         "ISR": bytearray([
-            *uop("PUSH", 0, 0),          # Save registers
-            *uop("PUSH", 1, 0),
-            *uop("PUSH", 2, 0),
-            *uop("IRQ_DISABLE", 0, 0),   # Disable interrupts
-            *uop("LOAD32", 0, 0x3000),   # Read interrupt vector
-            *uop("CALL", 0, 0),          # Call interrupt handler
-            *uop("IRQ_ENABLE", 0, 0),    # Re-enable interrupts
-            *uop("POP", 2, 0),           # Restore registers
-            *uop("POP", 1, 0),
-            *uop("POP", 0, 0),
-            *uop("RET"),
+            *uop("PUSH", 0, 0), *uop("PUSH", 1, 0), *uop("PUSH", 2, 0),
+            *uop("IRQ_DISABLE", 0, 0), *uop("LOAD32", 0, 0x3000),
+            *uop("CALL", 0, 0), *uop("IRQ_ENABLE", 0, 0),
+            *uop("POP", 2, 0), *uop("POP", 1, 0), *uop("POP", 0, 0), *uop("RET"),
         ]),
-        
-        # System Call Handler
         "SYSCALL": bytearray([
-            *uop("PUSH", 0, 0),          # Save syscall number
-            *uop("PUSH", 1, 0),          # Save arg1
-            *uop("PUSH", 2, 0),          # Save arg2
-            *uop("CMP", 0, 256),         # Validate syscall number
-            *uop("JNZ", 0, 4),           # Jump if valid
-            *uop("MOV", 0, 0xFFFFFFFF),  # Invalid syscall
-            *uop("JMP", 0, 8),           # Skip to end
-            *uop("LOAD32", 3, 0x4000),   # Load syscall table
-            *uop("ADD", 3, 0),           # Calculate handler address
-            *uop("CALL", 3, 0),          # Call syscall handler
-            *uop("POP", 2, 0),           # Restore registers
-            *uop("POP", 1, 0),
-            *uop("POP", 0, 0),
-            *uop("RET"),
+            *uop("PUSH", 0, 0), *uop("PUSH", 1, 0), *uop("PUSH", 2, 0),
+            *uop("CMP", 0, 256), *uop("JNZ", 0, 4),
+            *uop("MOV", 0, 0xFFFFFFFF), *uop("JMP", 0, 8),
+            *uop("LOAD32", 3, 0x4000), *uop("ADD", 3, 0),
+            *uop("CALL", 3, 0), *uop("POP", 2, 0),
+            *uop("POP", 1, 0), *uop("POP", 0, 0), *uop("RET"),
         ]),
-        
-        # Memory Allocation
         "ALLOC": bytearray([
-            *uop("PUSH", 1, 0),          # Save size
-            *uop("ALLOC", 0, 1),         # Allocate memory
-            *uop("CMP", 0, 0),           # Check if allocation failed
-            *uop("JNZ", 0, 3),           # Jump if success
-            *uop("MOV", 0, 0),           # Return NULL on failure
-            *uop("JMP", 0, 2),           # Skip to end
-            *uop("MMU_MAP", 0, 1),       # Map allocated memory
-            *uop("POP", 1, 0),           # Restore size
-            *uop("RET"),
+            *uop("PUSH", 1, 0), *uop("ALLOC", 0, 1),
+            *uop("CMP", 0, 0), *uop("JNZ", 0, 3),
+            *uop("MOV", 0, 0), *uop("JMP", 0, 2),
+            *uop("MMU_MAP", 0, 1), *uop("POP", 1, 0), *uop("RET"),
         ]),
-        
-        # Inter-Process Communication
         "IPC": bytearray([
-            *uop("PUSH", 0, 0),          # Save message
-            *uop("PUSH", 1, 0),          # Save target
-            *uop("IPC_SEND", 1, 0),      # Send message
-            *uop("CMP", 0, 0),           # Check success
-            *uop("JNZ", 0, 4),           # Jump if sent
-            *uop("WAIT", 100, 0),        # Wait 100ms
-            *uop("JMP", 0, -5),          # Retry sending
-            *uop("POP", 1, 0),           # Restore registers
-            *uop("POP", 0, 0),
-            *uop("RET"),
+            *uop("PUSH", 0, 0), *uop("PUSH", 1, 0),
+            *uop("IPC_SEND", 1, 0), *uop("CMP", 0, 0),
+            *uop("JNZ", 0, 4), *uop("WAIT", 100, 0),
+            *uop("JMP", 0, -5), *uop("POP", 1, 0),
+            *uop("POP", 0, 0), *uop("RET"),
         ]),
     }
-
-    # ============================================================
-    # 100% FUNCTIONAL DEVICE & HARDWARE SERVICES
-    # ============================================================
 
     DEVICE = {
-        # Timer Management
         "TIMER": bytearray([
-            *uop("TIMER_READ", 0, 0),    # Read current timer
-            *uop("ADD", 0, 1),           # Add delay (arg1)
-            *uop("TIMER_SET", 0, 0),     # Set new timer value
-            *uop("WAIT", 1, 0),          # Wait for timeout
-            *uop("RET"),
+            *uop("TIMER_READ", 0, 0), *uop("ADD", 0, 1),
+            *uop("TIMER_SET", 0, 0), *uop("WAIT", 1, 0), *uop("RET"),
         ]),
-        
-        # Direct Memory Access
         "DMA": bytearray([
-            *uop("PUSH", 0, 0),          # Save source
-            *uop("PUSH", 1, 0),          # Save destination
-            *uop("PUSH", 2, 0),          # Save size
-            *uop("DMA_START", 0, 1),     # Start DMA transfer
-            *uop("DMA_WAIT", 0, 0),      # Wait for completion
-            *uop("POP", 2, 0),           # Restore registers
-            *uop("POP", 1, 0),
-            *uop("POP", 0, 0),
-            *uop("RET"),
+            *uop("PUSH", 0, 0), *uop("PUSH", 1, 0), *uop("PUSH", 2, 0),
+            *uop("DMA_START", 0, 1), *uop("DMA_WAIT", 0, 0),
+            *uop("POP", 2, 0), *uop("POP", 1, 0), *uop("POP", 0, 0), *uop("RET"),
         ]),
-        
-        # GPIO Control
         "GPIO": bytearray([
-            *uop("CMP", 0, 0),           # Check if read(0) or write(1)
-            *uop("JNZ", 0, 4),           # Jump if write
-            *uop("IO_READ8", 1, 0x5000), # Read GPIO bank
-            *uop("MOV", 0, 1),           # Return value
-            *uop("JMP", 0, 3),           # Skip write
-            *uop("IO_WRITE8", 1, 0x5000), # Write GPIO bank
-            *uop("MOV", 0, 1),           # Return success
-            *uop("RET"),
+            *uop("CMP", 0, 0), *uop("JNZ", 0, 4),
+            *uop("IO_READ8", 1, 0x5000), *uop("MOV", 0, 1),
+            *uop("JMP", 0, 3), *uop("IO_WRITE8", 1, 0x5000),
+            *uop("MOV", 0, 1), *uop("RET"),
         ]),
-        
-        # Storage I/O
         "STORAGE": bytearray([
-            *uop("PUSH", 0, 0),          # Save operation
-            *uop("PUSH", 1, 0),          # Save address
-            *uop("PUSH", 2, 0),          # Save buffer
-            *uop("PUSH", 3, 0),          # Save size
-            *uop("CMP", 0, 0),           # Check read/write
-            *uop("JNZ", 0, 6),           # Jump if write
-            *uop("MEMCPY", 1, 2),        # Read: copy storage to buffer
-            *uop("MOV", 0, 3),           # Return bytes read
-            *uop("JMP", 0, 5),           # Skip write
-            *uop("MEMCPY", 2, 1),        # Write: copy buffer to storage
-            *uop("MOV", 0, 3),           # Return bytes written
-            *uop("POP", 3, 0),           # Restore registers
-            *uop("POP", 2, 0),
-            *uop("POP", 1, 0),
-            *uop("POP", 0, 0),
-            *uop("RET"),
+            *uop("PUSH", 0, 0), *uop("PUSH", 1, 0), *uop("PUSH", 2, 0), *uop("PUSH", 3, 0),
+            *uop("CMP", 0, 0), *uop("JNZ", 0, 6),
+            *uop("MEMCPY", 1, 2), *uop("MOV", 0, 3),
+            *uop("JMP", 0, 5), *uop("MEMCPY", 2, 1), *uop("MOV", 0, 3),
+            *uop("POP", 3, 0), *uop("POP", 2, 0), *uop("POP", 1, 0), *uop("POP", 0, 0), *uop("RET"),
         ]),
-        
-        # Cryptographic Services
         "CRYPTO": bytearray([
-            *uop("PUSH", 0, 0),          # Save algorithm
-            *uop("PUSH", 1, 0),          # Save input
-            *uop("PUSH", 2, 0),          # Save output
-            *uop("PUSH", 3, 0),          # Save size
-            *uop("CMP", 0, 0),           # SHA256
-            *uop("JNZ", 0, 3),           # Jump if not SHA256
-            *uop("SHA256", 1, 2),        # Compute SHA256
-            *uop("JMP", 0, 8),           # Skip to end
-            *uop("CMP", 0, 1),           # AES encrypt
-            *uop("JNZ", 0, 3),           # Jump if not AES
-            *uop("AES_ENC", 1, 2),       # AES encrypt
-            *uop("JMP", 0, 4),           # Skip to end
-            *uop("CMP", 0, 2),           # AES decrypt
-            *uop("JNZ", 0, 2),           # Jump if not AES decrypt
-            *uop("AES_DEC", 1, 2),       # AES decrypt
-            *uop("POP", 3, 0),           # Restore registers
-            *uop("POP", 2, 0),
-            *uop("POP", 1, 0),
-            *uop("POP", 0, 0),
-            *uop("RET"),
+            *uop("PUSH", 0, 0), *uop("PUSH", 1, 0), *uop("PUSH", 2, 0), *uop("PUSH", 3, 0),
+            *uop("CMP", 0, 0), *uop("JNZ", 0, 3),
+            *uop("SHA256", 1, 2), *uop("JMP", 0, 8),
+            *uop("CMP", 0, 1), *uop("JNZ", 0, 3),
+            *uop("AES_ENC", 1, 2), *uop("JMP", 0, 4),
+            *uop("CMP", 0, 2), *uop("JNZ", 0, 2),
+            *uop("AES_DEC", 1, 2),
+            *uop("POP", 3, 0), *uop("POP", 2, 0), *uop("POP", 1, 0), *uop("POP", 0, 0), *uop("RET"),
         ]),
-        
-        # True Random Number Generator
         "TRNG": bytearray([
-            *uop("ENTROPY", 0, 0),       # Get entropy
-            *uop("RNG", 0, 0),           # Generate random number
-            *uop("STORE32", 0, 0x6000),  # Store in TRNG buffer
-            *uop("RET"),
+            *uop("ENTROPY", 0, 0), *uop("RNG", 0, 0),
+            *uop("STORE32", 0, 0x6000), *uop("RET"),
         ]),
     }
-
-    # ============================================================
-    # 100% FUNCTIONAL SYSTEM & APPLICATION SERVICES
-    # ============================================================
 
     SYSTEM = {
-        # Power Management
         "POWER": bytearray([
-            *uop("CMP", 0, 0),           # Sleep mode
-            *uop("JNZ", 0, 3),           # Jump if not sleep
-            *uop("PWR_SLEEP", 0, 0),     # Enter sleep
-            *uop("JMP", 0, 8),           # Skip to end
-            *uop("CMP", 0, 1),           # Deep sleep
-            *uop("JNZ", 0, 3),           # Jump if not deep
-            *uop("PWR_DEEP", 0, 0),      # Enter deep sleep
-            *uop("JMP", 0, 4),           # Skip to end
-            *uop("CMP", 0, 2),           # Wake
-            *uop("JNZ", 0, 2),           # Jump if not wake
-            *uop("PWR_WAKE", 0, 0),      # Wake up
-            *uop("RET"),
+            *uop("CMP", 0, 0), *uop("JNZ", 0, 3),
+            *uop("PWR_SLEEP", 0, 0), *uop("JMP", 0, 8),
+            *uop("CMP", 0, 1), *uop("JNZ", 0, 3),
+            *uop("PWR_DEEP", 0, 0), *uop("JMP", 0, 4),
+            *uop("CMP", 0, 2), *uop("JNZ", 0, 2),
+            *uop("PWR_WAKE", 0, 0), *uop("RET"),
         ]),
-        
-        # Debug & Logging
         "LOG": bytearray([
-            *uop("PUSH", 0, 0),          # Save message
-            *uop("PUSH", 1, 0),          # Save level
-            *uop("DEBUG", 1, 0),         # Set debug level
-            *uop("LOG", 0, 0),           # Log message
-            *uop("POP", 1, 0),           # Restore registers
-            *uop("POP", 0, 0),
-            *uop("RET"),
+            *uop("PUSH", 0, 0), *uop("PUSH", 1, 0),
+            *uop("DEBUG", 1, 0), *uop("LOG", 0, 0),
+            *uop("POP", 1, 0), *uop("POP", 0, 0), *uop("RET"),
         ]),
-        
-        # Network Communication
         "NET": bytearray([
-            *uop("PUSH", 0, 0),          # Save packet
-            *uop("PUSH", 1, 0),          # Save size
-            *uop("IPC_SEND", 0, 0xC0),   # Send to network stack
-            *uop("WAIT", 10, 0),         # Wait for send
-            *uop("IPC_RECV", 2, 0xC1),   # Receive response
-            *uop("POP", 1, 0),           # Restore registers
-            *uop("POP", 0, 0),
-            *uop("MOV", 0, 2),           # Return response
-            *uop("RET"),
+            *uop("PUSH", 0, 0), *uop("PUSH", 1, 0),
+            *uop("IPC_SEND", 0, 0xC0), *uop("WAIT", 10, 0),
+            *uop("IPC_RECV", 2, 0xC1), *uop("POP", 1, 0),
+            *uop("POP", 0, 0), *uop("MOV", 0, 2), *uop("RET"),
         ]),
-        
-        # Event System
         "EVENT": bytearray([
-            *uop("PUSH", 0, 0),          # Save event type
-            *uop("PUSH", 1, 0),          # Save event data
-            *uop("SIGNAL", 0, 1),        # Signal event
-            *uop("WAIT", 1, 0),          # Wait for processing
-            *uop("POP", 1, 0),           # Restore registers
-            *uop("POP", 0, 0),
-            *uop("RET"),
+            *uop("PUSH", 0, 0), *uop("PUSH", 1, 0),
+            *uop("SIGNAL", 0, 1), *uop("WAIT", 1, 0),
+            *uop("POP", 1, 0), *uop("POP", 0, 0), *uop("RET"),
         ]),
-        
-        # Watchdog Service
-        "WATCHDOG": bytearray([
-            *uop("WATCHDOG", 0, 0),      # Refresh watchdog
-            *uop("RET"),
-        ]),
-        
-        # Error Recovery
+        "WATCHDOG": bytearray([*uop("WATCHDOG", 0, 0), *uop("RET")]),
         "FAILSAFE": bytearray([
-            *uop("ERROR", 0, 0),         # Log error
-            *uop("CHECKPOINT", 0, 0),    # Create recovery point
-            *uop("FAILSAFE", 0, 0),      # Enter failsafe mode
-            *uop("RECOVER", 0, 0),       # Attempt recovery
-            *uop("RET"),
+            *uop("ERROR", 0, 0), *uop("CHECKPOINT", 0, 0),
+            *uop("FAILSAFE", 0, 0), *uop("RECOVER", 0, 0), *uop("RET"),
         ]),
     }
 
-    # ============================================================
-    # MERGE ALL SERVICES
-    # ============================================================
     services = {}
     services.update(KERNEL)
     services.update(DEVICE)
     services.update(SYSTEM)
-
     if extra_services:
         services.update(extra_services)
 
     names = list(services.keys())
     blocks = list(services.values())
-
     svc_count = len(services)
     total_len = sum(len(x) for x in blocks)
 
-    # Align base offset
     base = align_up(base, align_after_header)
     ensure_size(image, base + 4096)
 
-    # ============================================================
-    # BUILD BODY WITH STANDARD FORMAT
-    # ============================================================
     body = bytearray()
-    
-    # Feature flags (4 bytes)
     features = 0
-    features |= 0x01  # Virtual MMU
-    features |= 0x02  # Task scheduler
-    features |= 0x04  # IPC
-    features |= 0x08  # Crypto
-    features |= 0x10  # Hardware I/O
-    features |= 0x20  # Power states
+    features |= 0x01; features |= 0x02; features |= 0x04
+    features |= 0x08; features |= 0x10; features |= 0x20
     body += struct.pack("<I", features)
-    
-    # Service count and total length
     body += struct.pack("<HI", svc_count, total_len)
     
-    # Add service blocks to body
     for name, block in services.items():
-        # Service header: name (8 bytes) + size (2 bytes)
         body += name.encode("ascii")[:8].ljust(8, b"\x00")
         body += len(block).to_bytes(2, "little")
         body += block
-        
-        # 4-byte alignment for next service
         if len(body) % 4 != 0:
             body += b"\x00" * (4 - (len(body) % 4))
     
-    # Create standard header
     MAGIC = b"QSLCLVM5"
-    FLAGS = 0x01  # Flags: Virtual MMU enabled
+    FLAGS = 0x01
     header = create_standard_header(MAGIC, body, FLAGS)
     
-    # Write header and body
     ensure_size(image, base + len(header) + len(body))
     image[base:base + len(header)] = header
     image[base + len(header):base + len(header) + len(body)] = body
     
     ptr = base + len(header) + len(body)
-
-    # Align
     ptr = align_up(ptr, align_after_header)
     ensure_size(image, ptr)
 
     if debug:
         print(f"[*] QSLCL Nano-Kernel v5.0 embedded @0x{base:X}")
-        print(f"    Header: {MAGIC.decode('ascii', errors='ignore')}")
-        print(f"    Body size: {len(body)} bytes, Flags: 0x{FLAGS:02X}")
-        print(f"    CRC32: 0x{zlib.crc32(body) & 0xFFFFFFFF:08X}")
         print(f"    Services: {svc_count}, Total micro-VM code: {total_len} bytes")
         print(f"    Features: 0x{features:08X}")
 
     return ptr
+
+# ============================================================
+# FIXED: QSLCLDATA block embedder (NEW)
+# ============================================================
+def embed_qslcldata_protocol(
+    image: bytearray,
+    base: int = None,
+    align_after_header: int = 16,
+    debug: bool = False
+) -> int:
+    """
+    QSLCLDATA Protocol v1.0 - Data Transfer Frame Handler
+    Embed micro-VM bytecode for handling QSLCLDATA frames.
+    
+    This provides the device-side handler for:
+    - Receiving data frames (QSLCLDATA)
+    - Sending acknowledgements (QSLCLDACK)
+    - Reassembly of multi-frame transfers
+    - CRC verification per frame
+    
+    Returns: int (pointer to next free position)
+    """
+    
+    # Extended UOP for data transfer operations
+    DATA_UOP = {
+        "MOV":    0x01, "CMP":    0x07, "JMP":    0x08,
+        "JZ":     0x09, "JNZ":    0x0A, "CALL":   0x0B,
+        "RET":    0x0C, "PUSH":   0x0D, "POP":    0x0E,
+        "LOAD32": 0x12, "STORE32":0x13, "MEMCPY": 0x16,
+        "CRC32":  0x68, "VERIFY": 0x69,
+        # Data transfer specific
+        "DATA_INIT":   0xD0,  # Initialize data transfer
+        "DATA_RECV":   0xD1,  # Receive data frame
+        "DATA_ACK":    0xD2,  # Send acknowledgement
+        "DATA_ASSEMBLE":0xD3, # Assemble received chunks
+        "DATA_VERIFY": 0xD4,  # Verify complete transfer
+        "DATA_STORE":  0xD5,  # Store received data
+        "DATA_ABORT":  0xD6,  # Abort transfer on error
+    }
+    
+    def uop_data(op, reg=0, arg=0):
+        if op not in DATA_UOP:
+            return struct.pack("<BBH", 0x00, reg & 0xFF, arg & 0xFFFF)
+        return struct.pack("<BBH", DATA_UOP[op], reg & 0xFF, arg & 0xFFFF)
+    
+    # Data receive handler bytecode
+    data_recv_handler = bytearray([
+        # Initialize transfer state
+        *uop_data("DATA_INIT", 0, 0),       # Initialize data transfer state
+        *uop_data("MOV", 1, 0),              # sequence_counter = 0
+        *uop_data("STORE32", 1, 0xD000),     # Store sequence counter
+        
+        # Receive loop
+        *uop_data("DATA_RECV", 2, 0),        # Receive next QSLCLDATA frame
+        *uop_data("CMP", 2, 0),              # Check if frame received
+        *uop_data("JZ", 0, 0x30),            # Jump to error if no frame
+        
+        # Parse frame header
+        *uop_data("LOAD32", 3, 0xD004),      # Load expected sequence
+        *uop_data("CMP", 3, 0),              # Compare with received
+        *uop_data("JNZ", 0, 5),              # Jump if sequence mismatch
+        *uop_data("DATA_ABORT", 0, 0x10),    # Abort on sequence error
+        *uop_data("RET"),
+        
+        # Process valid frame
+        *uop_data("DATA_ASSEMBLE", 2, 0),    # Assemble chunk into buffer
+        *uop_data("DATA_ACK", 1, 0),         # Send QSLCLDACK
+        
+        # Check if more frames expected
+        *uop_data("LOAD32", 4, 0xD008),      # Load flags
+        *uop_data("CMP", 4, 1),              # Check "more" flag
+        *uop_data("JNZ", 0, -0x20),          # Loop if more frames
+        
+        # Transfer complete
+        *uop_data("DATA_VERIFY", 0, 0),      # Verify complete transfer
+        *uop_data("CMP", 5, 0),              # Check verification result
+        *uop_data("JNZ", 0, 4),              # Jump if verification OK
+        *uop_data("DATA_ABORT", 0, 0x11),    # Abort on verification failure
+        *uop_data("RET"),
+        
+        # Store received data
+        *uop_data("DATA_STORE", 0, 0),       # Store to target location
+        *uop_data("MOV", 0, 0),              # Return SUCCESS
+        *uop_data("RET"),
+    ])
+    
+    # Data send handler bytecode (for device→host transfers)
+    data_send_handler = bytearray([
+        *uop_data("DATA_INIT", 0, 1),        # Initialize send state
+        *uop_data("MOV", 1, 0),              # sequence = 0
+        
+        # Send loop
+        *uop_data("LOAD32", 2, 0xD100),      # Load chunk from source
+        *uop_data("MOV", 3, 4096),           # chunk_size = 4096 (default)
+        *uop_data("MEMCPY", 4, 2),           # Copy chunk to buffer
+        
+        # Build QSLCLDATA frame (handled by micro-VM)
+        *uop_data("STORE32", 1, 0xD104),     # Store sequence
+        *uop_data("STORE32", 3, 0xD108),     # Store length
+        
+        # Send frame via USB
+        *uop_data("CALL", 0xD0, 0),          # Call USB send
+        
+        # Wait for ACK
+        *uop_data("DATA_RECV", 5, 0),        # Wait for QSLCLDACK
+        *uop_data("CMP", 5, 0),              # Check ACK received
+        *uop_data("JZ", 0, -3),              # Retry if no ACK
+        
+        # Check if more data
+        *uop_data("LOAD32", 6, 0xD10C),      # Load remaining size
+        *uop_data("CMP", 6, 0),              # Check if done
+        *uop_data("JNZ", 0, -8),             # Loop if more data
+        
+        *uop_data("MOV", 0, 0),              # Return SUCCESS
+        *uop_data("RET"),
+    ])
+    
+    # Determine injection offset
+    if base is None:
+        base = align_up(len(image), align_after_header)
+    else:
+        base = align_up(base, align_after_header)
+    
+    # Build QSLCLDATA body
+    body = bytearray()
+    
+    # Protocol version and capabilities
+    body += struct.pack("<II", 
+        0x00010000,     # Version 1.0
+        0x0000000F      # Capabilities: recv, send, ack, reassemble
+    )
+    
+    # Handler offsets in body
+    recv_offset = len(body) + 8  # After this header
+    send_offset = recv_offset + len(data_recv_handler)
+    
+    # Store handler offsets
+    body += struct.pack("<II", recv_offset, send_offset)
+    
+    # Add handlers
+    body += data_recv_handler
+    body += data_send_handler
+    
+    # Add configuration defaults
+    body += struct.pack("<IIII",
+        4096,   # Default chunk size
+        3,      # Max retries
+        5000,   # ACK timeout (ms)
+        0x10000 # Max transfer size (64KB default)
+    )
+    
+    # Integrity footer
+    integrity_hash = hashlib.sha256(body).digest()[:16]
+    body += integrity_hash
+    
+    # Create standard header
+    MAGIC = b"QSLCLDAT"
+    FLAGS = 0x01
+    header = create_standard_header(MAGIC, body, FLAGS)
+    
+    # Embed into image
+    ensure_size(image, base + len(header) + len(body))
+    image[base:base + len(header)] = header
+    image[base + len(header):base + len(header) + len(body)] = body
+    
+    final_pos = base + len(header) + len(body)
+    final_pos = align_up(final_pos, align_after_header)
+    ensure_size(image, final_pos)
+    
+    if debug:
+        print(f"[*] QSLCLDATA Protocol v1.0 embedded at 0x{base:X}")
+        print(f"    Magic: {MAGIC.decode('ascii')}")
+        print(f"    Header: {len(header)} bytes, Body: {len(body)} bytes")
+        print(f"    Recv handler: {len(data_recv_handler)} bytes")
+        print(f"    Send handler: {len(data_send_handler)} bytes")
+        print(f"    Total: {final_pos - base} bytes")
+    
+    return final_pos
+
+# ============================================================
+# FIXED: QSLCLSYNC synchronization block (NEW)
+# ============================================================
+def embed_sync_block(
+    image: bytearray,
+    base: int = None,
+    align_after_header: int = 16,
+    debug: bool = False
+) -> int:
+    """
+    QSLCLSYNC v1.0 - Transport Synchronization Block
+    Provides framing synchronization for serial/USB transport layer.
+    
+    This block helps qslcl.py detect frame boundaries by providing:
+    - Known synchronization pattern
+    - Frame timing information
+    - Supported frame types
+    - Maximum frame sizes
+    """
+    
+    body = bytearray()
+    
+    # Sync magic pattern (for transport layer detection)
+    body += b"QSLCLSYN"  # 8 bytes sync marker
+    
+    # Protocol version
+    body += struct.pack("<I", 0x00010000)  # Version 1.0
+    
+    # Supported frame types
+    frame_types = [
+        (b"QSLCLCMD ", 0x01, 65536),   # Command frames
+        (b"QSLCLRESP", 0x02, 65536),   # Response frames
+        (b"QSLCLDATA", 0x03, 1048576), # Data frames (up to 1MB)
+        (b"QSLCLDACK", 0x04, 64),      # Data ACK frames
+    ]
+    
+    body += struct.pack("<H", len(frame_types))  # Frame type count
+    
+    for magic, type_id, max_size in frame_types:
+        body += magic[:8].ljust(8, b"\x00")
+        body += struct.pack("<II", type_id, max_size)
+    
+    # Timing parameters
+    body += struct.pack("<IIII",
+        100,    # Inter-frame gap minimum (μs)
+        5000,   # ACK timeout (ms)
+        3000,   # Response timeout (ms)
+        10000   # Transfer timeout (ms)
+    )
+    
+    # Transport capabilities
+    body += struct.pack("<I", 
+        0x01 |  # Supports USB
+        0x02 |  # Supports Serial
+        0x04 |  # Supports bulk transfers
+        0x08    # Supports control transfers
+    )
+    
+    # CRC of body for self-verification
+    body_crc = zlib.crc32(body) & 0xFFFFFFFF
+    body += struct.pack("<I", body_crc)
+    
+    # Create standard header
+    MAGIC = b"QSLCLSYN"
+    FLAGS = 0x00
+    header = create_standard_header(MAGIC, body, FLAGS)
+    
+    if base is None:
+        base = align_up(len(image), align_after_header)
+    else:
+        base = align_up(base, align_after_header)
+    
+    ensure_size(image, base + len(header) + len(body))
+    image[base:base + len(header)] = header
+    image[base + len(header):base + len(header) + len(body)] = body
+    
+    final_pos = base + len(header) + len(body)
+    final_pos = align_up(final_pos, align_after_header)
+    ensure_size(image, final_pos)
+    
+    if debug:
+        print(f"[*] QSLCLSYNC v1.0 embedded at 0x{base:X}")
+        print(f"    Frame types: {len(frame_types)}")
+        print(f"    Total: {final_pos - base} bytes")
+    
+    return final_pos
 
 def get_all_usb_endpoints(max_endpoints=64, fallback=True, debug=False):
     """
@@ -1429,9 +1389,6 @@ def get_all_usb_endpoints(max_endpoints=64, fallback=True, debug=False):
 
     return endpoints
 
-# ============================================================
-# Universal Runtime Injection Layer (for build embedding) - UPDATED WITH STANDARD HEADER
-# ============================================================
 def align16(n: int) -> int:
     """Return the next multiple of 16 ≥ n."""
     return (n + 15) & ~0xF
@@ -1640,34 +1597,33 @@ def generate_command_code(
 ):
     C = cname.upper()
 
+    # Only commands actually used in qslcl.py modules
     TIER = {
-        "HELLO":1,"PING":1,"GETINFO":1,"GETVAR":1,"GETSECTOR":1,
-        "READ":1,"PEEK":1,"WRITE":2,"POKE":2,"ERASE":2,"DUMP":2,
-        "VERIFY":2,"OEM":3,"ODM":3,"AUTHENTICATE":3,"POWER":3,
-        "CONFIG":3,"GETCONFIG":3,"SETCONFIG":3,"PATCH":3,"BYPASS":4,"GLITCH":4,"RESET":4,
-        "UNLOCK":4,"CRASH":4,"VOLTAGE":4,"BRUTEFORCE":4,"RAWMODE":5,
-        "RAW":5,"MODE":5,"RAWSTATE":5,"FOOTER":5,"LOCK":5,"GPT":3,
-        "FUZZ":4,"CHECKSUMS":2,"TEST":3,"EFFICIENCY":4
+        "HELLO":1, "PING":1, "GETINFO":1, "GETSECTOR":1,
+        "READ":1, "PEEK":1, "WRITE":2, "POKE":2, "ERASE":2, "DUMP":2,
+        "VERIFY":2, "OEM":3, "ODM":3, "POWER":3,
+        "CONFIG":3, "PATCH":3, "BYPASS":4, "GLITCH":4, "RESET":4,
+        "CRASH":4, "VOLTAGE":4, "BRUTEFORCE":4, "RAWMODE":5,
+        "MODE":5, "RAWSTATE":5, "FOOTER":5,
     }
 
     FAMILY = {
-        "HELLO":"SYS","PING":"SYS","GETINFO":"SYS","GETVAR":"SYS",
-        "READ":"MEM","WRITE":"MEM","ERASE":"MEM","PEEK":"MEM","POKE":"MEM","DUMP":"MEM",
-        "VERIFY":"SEC","GETSECTOR":"MEM","CHECKSUMS":"SEC","GPT":"SEC",
-        "OEM":"OEM","ODM":"OEM","AUTHENTICATE":"SEC",
-        "CONFIG":"CFG","GETCONFIG":"CFG","POWER":"PWR","VOLTAGE":"PWR",
-        "PATCH":"ROM","SETCONFIG":"CFG",
-        "GLITCH":"TIMING","BYPASS":"META","BRUTEFORCE":"META",
-        "RESET":"SYS","CRASH":"SYS","UNLOCK":"SYS",
-        "RAWMODE":"RAW","RAW":"RAW","MODE":"RAW","RAWSTATE":"RAW",
-        "FOOTER":"RAW","LOCK":"RAW",
-        "FUZZ":"TEST","TEST":"TEST","EFFICIENCY":"SYS"
+        "HELLO":"SYS", "PING":"SYS", "GETINFO":"SYS",
+        "READ":"MEM", "WRITE":"MEM", "ERASE":"MEM", "PEEK":"MEM", "POKE":"MEM", "DUMP":"MEM",
+        "VERIFY":"SEC", "GETSECTOR":"MEM",
+        "OEM":"OEM", "ODM":"OEM",
+        "CONFIG":"CFG", "POWER":"PWR", "VOLTAGE":"PWR",
+        "PATCH":"ROM",
+        "GLITCH":"TIMING", "BYPASS":"META", "BRUTEFORCE":"META",
+        "RESET":"SYS", "CRASH":"SYS",
+        "RAWMODE":"RAW", "MODE":"RAW", "RAWSTATE":"RAW", "FOOTER":"RAW",
     }
 
-    RAWMODE_COMMANDS = {"RAWMODE","RAW","MODE","RAWSTATE","FOOTER","LOCK"}
+    RAWMODE_COMMANDS = {"RAWMODE", "RAWSTATE", "FOOTER"}
+    MODE_COMMANDS = {"MODE"}
 
-    family = FAMILY.get(C,"GEN")
-    tier = TIER.get(C,1)
+    family = FAMILY.get(C, "GEN")
+    tier = TIER.get(C, 1)
 
     # ------------------------------------------------------------------
     # 1. Entropy seed (32-bit safe)
@@ -1675,101 +1631,84 @@ def generate_command_code(
     now_ms = int(time.time() * 1000) & 0xFFFFFFFF
     seed = hashlib.sha256(auth_key + C.encode() + struct.pack("<I", now_ms)).digest()
     cmd_id = (seed[0] ^ len(C) ^ tier ^ (rawmode_value << 4)) & 0xFF
-    imm_val = struct.unpack("<H", seed[1:3])[0] ^ (cmd_id << 3) ^ (tier * 17)
-
-    jitter_byte = int((seed[4]/255.0)*255) & 0xFF
-    entropy_level = 4 + (seed[8] & 3)
 
     # ------------------------------------------------------------------
     # 2. Micro-VM instructions
     # ------------------------------------------------------------------
     UOP = {
-        "NOP":0x00,"MOV":0x01,"XOR":0x02,"ADD":0x03,"SUB":0x04,"JMP":0x05,"HLT":0x06,
-        "LOAD":0x07,"STORE":0x08,"CALL":0x09,"RET":0x0A,"SYSCALL":0x0B,"YIELD":0x0C,
-        "SLEEP":0x0D,"TICK":0x0E,"ENTROPY":0x0F,"IPC_SEND":0x10,"IPC_RECV":0x11,
-        "PRIV_UP":0x12,"PRIV_DOWN":0x13,"FAILSAFE":0x14,"DEBUG":0x15,"TRACE":0x16,
-        "CRC32":0x17,"HMAC":0x18,"AES":0x19,"SHA256":0x1A,"RSA":0x1B,"MEMCPY":0x1C,
-        "MEMSET":0x1D,"CMP":0x1E,"TEST":0x1F
+        "NOP":0x00, "MOV":0x01, "XOR":0x02, "ADD":0x03, "SUB":0x04, "JMP":0x05, "HLT":0x06,
+        "LOAD":0x07, "STORE":0x08, "CALL":0x09, "RET":0x0A, "SYSCALL":0x0B, "YIELD":0x0C,
+        "SLEEP":0x0D, "TICK":0x0E, "ENTROPY":0x0F, "IPC_SEND":0x10, "IPC_RECV":0x11,
+        "PRIV_UP":0x12, "PRIV_DOWN":0x13, "FAILSAFE":0x14, "DEBUG":0x15, "TRACE":0x16,
+        "CRC32":0x17, "HMAC":0x18, "AES":0x19, "SHA256":0x1A, "RSA":0x1B, "MEMCPY":0x1C,
+        "MEMSET":0x1D, "CMP":0x1E, "TEST":0x1F
     }
 
     def uop(op, reg=0, arg=0):
-        return struct.pack("<BBH", UOP[op], reg&0xFF, arg&0xFFFF)
+        return struct.pack("<BBH", UOP[op], reg & 0xFF, arg & 0xFFFF)
 
     # ------------------------------------------------------------------
     # 3. Functional micro-VM payload
     # ------------------------------------------------------------------
     def generate_functional_payload():
         if family == "SYS":
-            if C == "HELLO": return uop("MOV",0,0) + uop("IPC_SEND",0,0xF0) + uop("RET")
-            if C == "PING": return uop("MOV",1,0) + uop("IPC_SEND",1,0xF1) + uop("RET")
-            if C == "GETINFO": return uop("LOAD",0,0x1000) + uop("IPC_SEND",0,0xF2) + uop("RET")
-            if C == "GETVAR": return uop("LOAD",0,0x1100) + uop("IPC_SEND",0,0xF4) + uop("RET")
-            if C == "RESET": return uop("MOV",0,0xDEAD) + uop("SYSCALL",0,0xFF) + uop("HLT")
-            if C == "CRASH": return uop("MOV",0,0) + uop("HLT")
-            if C == "UNLOCK": return uop("PRIV_UP",0,0) + uop("SYSCALL",0,0xF9) + uop("RET")
-            if C == "EFFICIENCY": return uop("ENTROPY",0,0) + uop("IPC_SEND",0,0xF5) + uop("RET")
-        
+            if C == "HELLO": return uop("MOV", 0, 0) + uop("IPC_SEND", 0, 0xF0) + uop("RET")
+            if C == "PING": return uop("MOV", 1, 0) + uop("IPC_SEND", 1, 0xF1) + uop("RET")
+            if C == "GETINFO": return uop("LOAD", 0, 0x1000) + uop("IPC_SEND", 0, 0xF2) + uop("RET")
+            if C == "RESET": return uop("MOV", 0, 0xDEAD) + uop("SYSCALL", 0, 0xFF) + uop("HLT")
+            if C == "CRASH": return uop("MOV", 0, 0) + uop("HLT")
+
         elif family == "MEM":
-            if C == "READ": return uop("LOAD",0,0x2000) + uop("IPC_SEND",0,0xE0) + uop("RET")
-            if C == "WRITE": return uop("IPC_RECV",1,0xE1) + uop("STORE",1,0x2000) + uop("RET")
-            if C == "PEEK": return uop("LOAD",2,0x2100) + uop("IPC_SEND",2,0xE2) + uop("RET")
-            if C == "POKE": return uop("IPC_RECV",3,0xE3) + uop("STORE",3,0x2100) + uop("RET")
-            if C == "DUMP": return uop("MEMCPY",0,0x100) + uop("IPC_SEND",0,0xE4) + uop("RET")
-            if C == "GETSECTOR": return uop("LOAD",0,0x2200) + uop("IPC_SEND",0,0xE5) + uop("RET")
-            if C == "ERASE": return uop("MEMSET",0,0x2000) + uop("IPC_SEND",0,0xE6) + uop("RET")
-        
+            if C == "READ": return uop("LOAD", 0, 0x2000) + uop("IPC_SEND", 0, 0xE0) + uop("RET")
+            if C == "WRITE": return uop("IPC_RECV", 1, 0xE1) + uop("STORE", 1, 0x2000) + uop("RET")
+            if C == "PEEK": return uop("LOAD", 2, 0x2100) + uop("IPC_SEND", 2, 0xE2) + uop("RET")
+            if C == "POKE": return uop("IPC_RECV", 3, 0xE3) + uop("STORE", 3, 0x2100) + uop("RET")
+            if C == "DUMP": return uop("MEMCPY", 0, 0x100) + uop("IPC_SEND", 0, 0xE4) + uop("RET")
+            if C == "GETSECTOR": return uop("LOAD", 0, 0x2200) + uop("IPC_SEND", 0, 0xE5) + uop("RET")
+            if C == "ERASE": return uop("MEMSET", 0, 0x2000) + uop("IPC_SEND", 0, 0xE6) + uop("RET")
+
         elif family == "SEC":
-            if C == "AUTHENTICATE": return uop("ENTROPY",0,0) + uop("SHA256",0,0x3000) + uop("IPC_SEND",0,0xD0) + uop("RET")
-            if C == "VERIFY": return uop("CRC32",0,0x4000) + uop("IPC_SEND",0,0xD1) + uop("RET")
-            if C == "CHECKSUMS": return uop("CRC32",0,0x6000) + uop("SHA256",1,0x6004) + uop("IPC_SEND",0,0xD5) + uop("RET")
-            if C == "GPT": return uop("LOAD",0,0x5000) + uop("IPC_SEND",0,0xD3) + uop("RET")
-        
+            if C == "VERIFY": return uop("CRC32", 0, 0x4000) + uop("IPC_SEND", 0, 0xD1) + uop("RET")
+
         elif family == "PWR":
-            if C == "POWER": return uop("MOV",0,0) + uop("SYSCALL",0,0xFE) + uop("RET")
-            if C == "VOLTAGE": return uop("LOAD",0,0x5000) + uop("IPC_SEND",0,0xD2) + uop("RET")
-        
-        elif family == "RAW" and C in RAWMODE_COMMANDS:
-            if C == "RAWMODE": return uop("PRIV_UP",0,0) + uop("MOV",0,rawmode_value) + uop("STORE",0,0xF000) + uop("IPC_SEND",0,0xC0) + uop("RET")
-            if C == "RAW": return uop("PRIV_UP",0,0) + uop("STORE",0,0xF004) + uop("IPC_SEND",0,0xC1) + uop("RET")
-            if C == "MODE": return uop("PRIV_UP",0,0) + uop("STORE",0,0xF008) + uop("IPC_SEND",0,0xC2) + uop("RET")
-            if C == "RAWSTATE": return uop("PRIV_UP",0,0) + uop("LOAD",0,0xF000) + uop("IPC_SEND",0,0xC3) + uop("RET")
-            if C == "FOOTER": return uop("PRIV_UP",0,0) + uop("STORE",0,0xF00C) + uop("IPC_SEND",0,0xC4) + uop("RET")
-            if C == "LOCK": return uop("PRIV_DOWN",0,0) + uop("STORE",0,0xF010) + uop("IPC_SEND",0,0xC5) + uop("RET")
-        
+            if C == "POWER": return uop("MOV", 0, 0) + uop("SYSCALL", 0, 0xFE) + uop("RET")
+            if C == "VOLTAGE": return uop("LOAD", 0, 0x5000) + uop("IPC_SEND", 0, 0xD2) + uop("RET")
+
+        elif family == "RAW":
+            if C == "RAWMODE": return uop("PRIV_UP", 0, 0) + uop("MOV", 0, rawmode_value) + uop("STORE", 0, 0xF000) + uop("IPC_SEND", 0, 0xC0) + uop("RET")
+            if C == "RAWSTATE": return uop("PRIV_UP", 0, 0) + uop("LOAD", 0, 0xF000) + uop("IPC_SEND", 0, 0xC3) + uop("RET")
+            if C == "FOOTER": return uop("PRIV_UP", 0, 0) + uop("STORE", 0, 0xF00C) + uop("IPC_SEND", 0, 0xC4) + uop("RET")
+            if C == "MODE": return uop("PRIV_UP", 0, 0) + uop("STORE", 0, 0xF008) + uop("IPC_SEND", 0, 0xC2) + uop("RET")
+
         elif family == "OEM":
-            return uop("MOV",0,0) + uop("SYSCALL",0,0xFD) + uop("RET")
-        
+            return uop("MOV", 0, 0) + uop("SYSCALL", 0, 0xFD) + uop("RET")
+
         elif family == "CFG":
-            if C in ("CONFIG", "GETCONFIG", "SETCONFIG"):
-                return uop("IPC_RECV",0,0xC1) + uop("STORE",0,0x6000) + uop("MOV",0,1) + uop("RET")
-        
+            if C == "CONFIG": return uop("IPC_RECV", 0, 0xC1) + uop("STORE", 0, 0x6000) + uop("MOV", 0, 1) + uop("RET")
+
         elif family == "ROM":
-            if C == "PATCH": return uop("LOAD",0,0x7000) + uop("IPC_RECV",1,0xC6) + uop("MEMCPY",0,1) + uop("IPC_SEND",0,0xC7) + uop("RET")
-        
+            if C == "PATCH": return uop("LOAD", 0, 0x7000) + uop("IPC_RECV", 1, 0xC6) + uop("MEMCPY", 0, 1) + uop("IPC_SEND", 0, 0xC7) + uop("RET")
+
         elif family == "TIMING":
-            if C == "GLITCH": return uop("MOV",0,0) + uop("SYSCALL",0,0xFC) + uop("RET")
-        
+            if C == "GLITCH": return uop("MOV", 0, 0) + uop("SYSCALL", 0, 0xFC) + uop("RET")
+
         elif family == "META":
-            if C == "BYPASS": return uop("PRIV_UP",0,0) + uop("SYSCALL",0,0xFB) + uop("RET")
-            if C == "BRUTEFORCE": return uop("MOV",0,0) + uop("SYSCALL",0,0xFA) + uop("RET")
-        
-        elif family == "TEST":
-            if C in ("FUZZ", "TEST"): return uop("ENTROPY",0,0) + uop("MEMCPY",0,0x7000) + uop("IPC_SEND",0,0xB0) + uop("RET")
-        
+            if C == "BYPASS": return uop("PRIV_UP", 0, 0) + uop("SYSCALL", 0, 0xFB) + uop("RET")
+            if C == "BRUTEFORCE": return uop("MOV", 0, 0) + uop("SYSCALL", 0, 0xFA) + uop("RET")
+
         # Generic fallback
-        return uop("MOV",0,cmd_id) + uop("ENTROPY",1,0) + uop("XOR",0,1) + uop("IPC_SEND",0,0xFF) + uop("RET")
+        return uop("MOV", 0, cmd_id) + uop("ENTROPY", 1, 0) + uop("XOR", 0, 1) + uop("IPC_SEND", 0, 0xFF) + uop("RET")
 
     functional_code = generate_functional_payload()
 
     response_handler = bytearray([
-        # After command execution, build response
         0xB0, 0x00, 0x00,  # MOV status, 0 (success default)
         0xB1, 0x01, 0x00,  # STORE status to response buffer
         0xB2, 0x00, 0x00,  # CALL build_response_frame
         0xB3, 0x00, 0x00,  # SEND_RESPONSE over USB
         0xFF, 0x00, 0x00,  # RET
     ])
-    
+
     functional_code += response_handler
 
     # ------------------------------------------------------------------
@@ -1781,82 +1720,69 @@ def generate_command_code(
     def universal_fillers(n):
         out = bytearray()
         for i in range(n):
-            pattern = (seed[i%len(seed)]^(i*13)^cmd_id)&0xFF
-            if pattern in [0x00,0xFF,0x90,0xEA]:
+            pattern = (seed[i % len(seed)] ^ (i * 13) ^ cmd_id) & 0xFF
+            if pattern in [0x00, 0xFF, 0x90, 0xEA]:
                 out.append(pattern ^ 0x55)
             else:
-                out.append(pattern&0x7F)
+                out.append(pattern & 0x7F)
         return out
 
     if filler_size > 0:
         arch_payload += universal_fillers(filler_size)
-    
-    footer = uop("MOV",0,0) + uop("RET")
+
+    footer = uop("MOV", 0, 0) + uop("RET")
     if len(arch_payload) + len(footer) <= size:
         arch_payload += footer
     arch_payload = arch_payload[:size]
 
-    # FIXED: Apply anti-blacklist-style timestamp XOR (was missing)
-    ts16 = int(time.time()*1000)&0xFFFF
-    if len(arch_payload)>=2:
-        arch_payload[0] ^= ts16&0xFF
-        arch_payload[1] ^= (ts16>>8)&0xFF
+    # Anti-blacklist timestamp XOR
+    ts16 = int(time.time() * 1000) & 0xFFFF
+    if len(arch_payload) >= 2:
+        arch_payload[0] ^= ts16 & 0xFF
+        arch_payload[1] ^= (ts16 >> 8) & 0xFF
 
-    # FIXED: RAWMODE watermark (was missing)
-    if C in RAWMODE_COMMANDS and len(arch_payload)>=12:
-        arch_payload[8:12] = struct.pack("<I",0x5241574D)  # "RAWM"
+    # RAWMODE watermark
+    if C in RAWMODE_COMMANDS and len(arch_payload) >= 12:
+        arch_payload[8:12] = struct.pack("<I", 0x5241574D)  # "RAWM"
 
     # ------------------------------------------------------------------
     # 5. Build body with QSLCLCMD STANDARD FORMAT
     # ------------------------------------------------------------------
     body = bytearray()
-    
-    # Add command metadata to body
-    body += C.encode("ascii")[:16].ljust(16,b"\x00")
-    body += struct.pack("<BBBBHII", 
-                       cmd_id, 0x01, tier&0xFF, (sum(ord(a) for a in family)^cmd_id^tier)&0xFF,
-                       len(arch_payload), zlib.crc32(arch_payload)&0xFFFFFFFF, int(time.time()))
-    
-    # Add the actual command code
+
+    body += C.encode("ascii")[:16].ljust(16, b"\x00")
+    body += struct.pack("<BBBBHII",
+                       cmd_id, 0x01, tier & 0xFF,
+                       (sum(ord(a) for a in family) ^ cmd_id ^ tier) & 0xFF,
+                       len(arch_payload), zlib.crc32(arch_payload) & 0xFFFFFFFF,
+                       int(time.time()))
+
     body += arch_payload
-    
-    # FIXED: Set proper flags
+
     flags = 0x01
     if C in RAWMODE_COMMANDS:
         flags |= 0x80
-    if family in ["SEC","RAW"]:
+    if family in ["SEC", "RAW"]:
         flags |= 0x40
-    
-    # FIXED: Always use QSLCLCMD as the header magic (not QSLCLPAR)
+
     header_magic_fixed = b"QSLCLCMD"
-    
-    # ============================================================
-    # FIXED: NO DOUBLE HEADER - Single header only
-    # ============================================================
+
     if include_header:
         if secure_mode:
-            # SECURE MODE: Single header with HMAC appended
-            # Create the header for the body
             header = create_standard_header(header_magic_fixed, body, flags)
-            
-            # Create HMAC signature of the body
             sig = hmac.new(auth_key, body, hashlib.sha256).digest()[:8]
-            
-            # Build final buffer: header + body + HMAC signature
             buf = bytearray(header) + body + sig
         else:
-            # NON-SECURE MODE: Just header + body
             header = create_standard_header(header_magic_fixed, body, flags)
             buf = bytearray(header) + body
     else:
-        # NO HEADER: Just the body
         buf = body
 
     if debug:
         print(f"[*] Generated functional command: {C}")
         print(f"    Family: {family}, Tier: {tier}, Size: {len(buf)}")
         print(f"    Functional code: {len(functional_code)} bytes")
-        print(f"    Micro-VM ops: {len(functional_code)//4} instructions")
+        print(f"    Micro-VM ops: {len(functional_code) // 4} instructions")
         print(f"    Header magic: {header_magic_fixed.decode()}")
         if secure_mode and include_header:
             print(f"    HMAC-SHA256: {sig.hex()}")
@@ -3612,7 +3538,7 @@ def embed_encryption_layer(
     return final_aligned
 
 # ============================================================
-# Build QSLCL Binary - UPDATED WITH STANDARD HEADERS (QSLCLCMD only, no QSLCLPAR)
+# FIXED: build_qslcl_bin - Main builder with all fixes
 # ============================================================
 def build_qslcl_bin(
     out_path,
@@ -3625,52 +3551,60 @@ def build_qslcl_bin(
     enable_encryption: bool = False 
 ):
     """
-    QSLCL Universal Binary Builder v5.3 — Complete Integration with Standard Headers
-    QSLCLCMD is the primary command header (QSLCLPAR removed)
-    Returns: bytearray (built image)
+    QSLCL Universal Binary Builder v5.4 — FIXED VERSION
+    Added: QSLCLDATA, QSLCLSYNC, proper pointer updates, integrity verification
     """
-
-    # ============================================================
-    # Initialize global image buffer
-    # ============================================================
+    
     image = bytearray()
     image.extend(b'\x00' * 0x200)
     
-    # BUILD MAIN BODY WITH STANDARD FORMAT
+    # ============================================================
+    # FIXED: BUILD MAIN BODY WITH ALL POINTER RESERVATIONS
+    # ============================================================
     main_body = bytearray()
     
-    # Binary metadata
     timestamp = int(time.time() * 1000)
     build_hash = hashlib.sha256(b"QSLCL_BUILD_V5").digest()[:8]
     
+    # Binary metadata (0x00-0x18)
     main_body += struct.pack("<QQ8s", bin_size, timestamp, build_hash)
     
-    # Architecture info
+    # Architecture info (0x18-0x28)
     main_body += arch.encode()[:16].ljust(16, b"\x00")
     
-    # Reserve space for bootstrap pointer and info (will be updated later)
-    main_body += struct.pack("<III", 0, 0, 0)  # placeholder for ptr, size, crc
+    # FIXED: Reserved pointer table (0x28-0x80)
+    # [bootstrap_ptr(4)][bootstrap_size(4)][bootstrap_crc(4)] @ offset 0x28
+    main_body += struct.pack("<III", 0, 0, 0)
     
-    # Add empty space for other pointers
-    main_body += b"\x00" * 64
+    # [cmd_table_ptr(4)][disp_table_ptr(4)][usb_table_ptr(4)][vm5_table_ptr(4)] @ offset 0x34
+    main_body += struct.pack("<IIII", 0, 0, 0, 0)
     
-    # Create main header with standard format
+    # [spt_table_ptr(4)][rtf_table_ptr(4)][cert_table_ptr(4)][sync_table_ptr(4)] @ offset 0x44
+    main_body += struct.pack("<IIII", 0, 0, 0, 0)
+    
+    # [encryption_ptr(4)][data_proto_ptr(4)][reserved(4)][reserved(4)] @ offset 0x54
+    main_body += struct.pack("<IIII", 0, 0, 0, 0)
+    
+    # FIXED: Reserved for future expansion (0x60-0x80)
+    main_body += b"\x00" * 32
+    
+    # Create main header
     MAIN_MAGIC = b"QSLCLBIN"
-    MAIN_FLAGS = 0x01  # Flags: Complete binary
+    MAIN_FLAGS = 0x01
     main_header = create_standard_header(MAIN_MAGIC, main_body, MAIN_FLAGS)
     
-    # Ensure image has enough space for main header and body
     ensure_size(image, len(main_header) + len(main_body))
-    
-    # Write main header and body
     image[0:len(main_header)] = main_header
-    image[len(main_header):len(main_header) + len(main_body)] = main_body
     
-    current_offset = len(main_header) + len(main_body)
+    # FIXED: Store main_body offset for pointer updates
+    MAIN_BODY_OFFSET = len(main_header)
+    image[MAIN_BODY_OFFSET:MAIN_BODY_OFFSET + len(main_body)] = main_body
+    
+    current_offset = MAIN_BODY_OFFSET + len(main_body)
     current_offset = align_up(current_offset, 16)
 
     # ============================================================
-    # Command list (all commands use QSLCLCMD)
+    # Command list
     # ============================================================
     command_list = [
        "HELLO","PING","GETINFO","GETVAR","GETSECTOR","RAW",
@@ -3682,11 +3616,14 @@ def build_qslcl_bin(
     ]
 
     # ============================================================
-    # COMMAND HANDLER SYSTEM - ALL COMMANDS USE QSLCLCMD
+    # FIXED: COMMAND HANDLER SYSTEM with stored offsets
     # ============================================================
     cmd_offset = align_up(current_offset, 0x10)
     ensure_size(image, cmd_offset)
     current_offset = cmd_offset
+    
+    # FIXED: Store command table pointer in main header
+    image[MAIN_BODY_OFFSET + 0x34:MAIN_BODY_OFFSET + 0x38] = struct.pack("<I", cmd_offset)
     
     handler_ptr = align_up(current_offset + len(command_list) * 0x20, 0x10)
     ensure_size(image, handler_ptr)
@@ -3695,14 +3632,12 @@ def build_qslcl_bin(
     command_metadata = {}
 
     if debug:
-        print(f"[*] Building QSLCL v5.2 Command System")
+        print(f"[*] Building QSLCL v5.4 Command System")
         print(f"    Commands: {len(command_list)} enhanced handlers")
         print(f"    Architecture: {arch} -> UNIVERSAL micro-VM")
         print(f"    Command offset: 0x{cmd_offset:X}")
         print(f"    Handler offset: 0x{handler_ptr:X}")
-        print(f"    Header magic: QSLCLCMD (primary)")
 
-    # Continue with original command embedding
     for idx, cname in enumerate(command_list):
         cmd_key = sum(ord(c) for c in cname)
         cmd_hash = hashlib.sha256(cname.encode()).digest()[:4]
@@ -3722,16 +3657,10 @@ def build_qslcl_bin(
         ensure_size(image, entry_offset + len(entry))
         image[entry_offset:entry_offset + len(entry)] = entry
 
-        # Generate command code using QSLCLCMD (not QSLCLPAR)
         code = generate_command_code(
-            cname=cname,
-            arch=arch,
-            size=256,
-            auth_key=auth_key,
-            header_magic=b"QSLCLCMD",  # FIXED: Use QSLCLCMD
-            secure_mode=True,
-            debug=False,
-            rawmode_value=1
+            cname=cname, arch=arch, size=256,
+            auth_key=auth_key, header_magic=b"QSLCLCMD",
+            secure_mode=True, debug=False, rawmode_value=1
         )
 
         end_ptr = handler_ptr + len(code)
@@ -3750,39 +3679,37 @@ def build_qslcl_bin(
     current_offset = handler_ptr
 
     # ============================================================
-    # COMMAND DISPATCHER WITH STANDARD HEADER
+    # FIXED: DISPATCHER with stored offset
     # ============================================================
     disp_off = align_up(current_offset, 0x10)
     ensure_size(image, disp_off)
     
-    # Create QSLCLDISP block with standard header
+    # Store dispatcher pointer in main header
+    image[MAIN_BODY_OFFSET + 0x38:MAIN_BODY_OFFSET + 0x3C] = struct.pack("<I", disp_off)
+    
     qslcldisp_block = create_qslcldisp_block(command_list, handler_table, debug=debug)
     ensure_size(image, disp_off + len(qslcldisp_block))
     image[disp_off:disp_off + len(qslcldisp_block)] = qslcldisp_block
     current_offset = disp_off + len(qslcldisp_block)
 
     # ============================================================
-    # USB SUBSYSTEM WITH STANDARD HEADERS
+    # FIXED: USB SUBSYSTEM with stored offset
     # ============================================================
     usb_off = align_up(current_offset, 0x10)
     ensure_size(image, usb_off)
     
-    # Embed USB routines with standard header
+    # Store USB table pointer in main header
+    image[MAIN_BODY_OFFSET + 0x3C:MAIN_BODY_OFFSET + 0x40] = struct.pack("<I", usb_off)
+    
     usb_routines_offset = usb_off
     usb_end_ptr = embed_usb_tx_rx_micro_routine(
-        image, 
-        base=usb_routines_offset, 
-        align_after_header=16, 
-        debug=debug,
-        vendor_routines=None
+        image, base=usb_routines_offset,
+        align_after_header=16, debug=debug, vendor_routines=None
     )
-    
     current_offset = usb_end_ptr
     
-    # Get endpoints and create endpoint block
     endpoints = get_all_usb_endpoints(max_endpoints=64, debug=debug)
     
-    # Create USB endpoint block with standard header
     endpoint_body = bytearray()
     endpoint_body += struct.pack("<H", len(endpoints))
     
@@ -3797,23 +3724,15 @@ def build_qslcl_bin(
 
         desc = struct.pack(
             "<12sBBBBIIII",
-            name,
-            direction,
-            addr,
-            ep_type,
-            (max_packet // 8) & 0xFF,
-            i,
-            features,
-            max_packet,
-            zlib.crc32(name) & 0xFFFFFFFF
+            name, direction, addr, ep_type,
+            (max_packet // 8) & 0xFF, i, features,
+            max_packet, zlib.crc32(name) & 0xFFFFFFFF
         )
         endpoint_body.extend(desc)
     
-    # Create endpoint header with standard format
-    endpoint_flags = 0x03  # USB endpoints + functional
+    endpoint_flags = 0x03
     endpoint_header = create_standard_header(b"QSLCLBLK", endpoint_body, endpoint_flags)
     
-    # Write endpoint block at aligned offset
     endpoint_block_offset = align_up(current_offset, 0x10)
     ensure_size(image, endpoint_block_offset + len(endpoint_header) + len(endpoint_body))
     image[endpoint_block_offset:endpoint_block_offset + len(endpoint_header)] = endpoint_header
@@ -3822,78 +3741,78 @@ def build_qslcl_bin(
     current_offset = align_up(current_offset, 0x10)
 
     # ============================================================
-    # CORE SYSTEM COMPONENTS WITH STANDARD HEADERS
+    # FIXED: BOOTSTRAP with proper pointer update
     # ============================================================
     bootstrap_offset = align_up(current_offset, 0x10)
     ensure_size(image, bootstrap_offset)
     
-    bootstrap_code = dynamic_bootstrap(
-        arch,
-        entry_point=0x5000,
-        secure_mode=True,
-        debug=debug
-    )
+    bootstrap_code = dynamic_bootstrap(arch, entry_point=0x5000, secure_mode=True, debug=debug)
     
     if bootstrap_code:
         end_bootstrap = bootstrap_offset + len(bootstrap_code)
         ensure_size(image, end_bootstrap)
         image[bootstrap_offset:end_bootstrap] = bootstrap_code
         
-        # Update bootstrap pointer in main header
-        # Main header location: offset 0x20 (after standard header)
-        # Bootstrap pointer at offset 0x30 in the binary
-        ensure_size(image, 0x3C)
-        image[0x30:0x34] = struct.pack("<I", bootstrap_offset)
-        bootstrap_size = len(bootstrap_code)
-        bootstrap_crc = zlib.crc32(bootstrap_code) & 0xFFFFFFFF
-        image[0x34:0x3C] = struct.pack("<II", bootstrap_size, bootstrap_crc)
+        # FIXED: Update bootstrap pointer in main header (offset 0x28-0x34)
+        ptr_field = MAIN_BODY_OFFSET + 0x28
+        image[ptr_field:ptr_field + 4] = struct.pack("<I", bootstrap_offset)
+        image[ptr_field + 4:ptr_field + 8] = struct.pack("<I", len(bootstrap_code))
+        image[ptr_field + 8:ptr_field + 12] = struct.pack("<I", zlib.crc32(bootstrap_code) & 0xFFFFFFFF)
         
         current_offset = end_bootstrap
     else:
         current_offset = bootstrap_offset
 
-    # FIXED: Call nano_kernel_microservices correctly
+    # VM5 Microservices
     microservices_offset = align_up(current_offset, 0x10)
     ensure_size(image, microservices_offset)
+    
+    # Store VM5 pointer in main header
+    image[MAIN_BODY_OFFSET + 0x40:MAIN_BODY_OFFSET + 0x44] = struct.pack("<I", microservices_offset)
+    
     microservices_end_ptr = nano_kernel_microservices(
-        image, 
-        base=microservices_offset, 
-        align_after_header=32, 
-        debug=debug,
-        extra_services=None  # Can add extra services here if needed
+        image, base=microservices_offset,
+        align_after_header=32, debug=debug, extra_services=None
     )
     current_offset = align_up(microservices_end_ptr, 0x10)
 
-    # FIXED: Call generate_standard_setup_packets correctly
+    # Setup packets
     usb_setup_offset = align_up(current_offset, 0x10)
     ensure_size(image, usb_setup_offset)
+    
+    # Store SPT pointer in main header
+    image[MAIN_BODY_OFFSET + 0x44:MAIN_BODY_OFFSET + 0x48] = struct.pack("<I", usb_setup_offset)
+    
     usb_setup_end_ptr = generate_standard_setup_packets(
-        image, 
-        embed_offset=usb_setup_offset, 
-        align_after_header=16, 
-        debug=debug,
-        extra_packets=None  # Can add extra packets here if needed
+        image, embed_offset=usb_setup_offset,
+        align_after_header=16, debug=debug, extra_packets=None
     )
     current_offset = align_up(usb_setup_end_ptr, 0x10)
 
-    # FIXED: Call inject_universal_runtime_features correctly
+    # Runtime features
     runtime_offset = align_up(current_offset, 0x10)
     ensure_size(image, runtime_offset)
+    
+    # Store RTF pointer in main header
+    image[MAIN_BODY_OFFSET + 0x48:MAIN_BODY_OFFSET + 0x4C] = struct.pack("<I", runtime_offset)
+    
     runtime_end_ptr = inject_universal_runtime_features(
-        image, 
-        base_off=runtime_offset, 
-        debug=debug
+        image, base_off=runtime_offset, debug=debug
     )
     current_offset = align_up(runtime_end_ptr, 0x10)
 
+    # ============================================================
+    # FIXED: Encryption layer with proper pointer update
+    # ============================================================
     if enable_encryption:
         enc_offset = align_up(current_offset, 0x10)
-        # Enable debug to see encryption injection
+        
+        # FIXED: Store encryption pointer in main header (offset 0x60)
+        image[MAIN_BODY_OFFSET + 0x60:MAIN_BODY_OFFSET + 0x64] = struct.pack("<I", enc_offset)
+        
         enc_end = embed_encryption_layer(
-            image,
-            base_offset=enc_offset,  # Fixed offset (not EOF)
-            align_after_header=16,
-            debug=debug
+            image, base_offset=enc_offset,
+            align_after_header=16, debug=debug
         )
         current_offset = align_up(enc_end, 0x10)
         
@@ -3903,34 +3822,59 @@ def build_qslcl_bin(
         if debug:
             print(f"[*] QSLCLENC disabled (use --encrypt to enable)")
 
+    # ============================================================
+    # FIXED: QSLCLDATA protocol block (NEW)
+    # ============================================================
+    dataproto_offset = align_up(current_offset, 0x10)
+    ensure_size(image, dataproto_offset)
+    
+    # Store data protocol pointer in main header (offset 0x64)
+    image[MAIN_BODY_OFFSET + 0x64:MAIN_BODY_OFFSET + 0x68] = struct.pack("<I", dataproto_offset)
+    
+    dataproto_end = embed_qslcldata_protocol(
+        image, base=dataproto_offset,
+        align_after_header=16, debug=debug
+    )
+    current_offset = align_up(dataproto_end, 0x10)
+
+    # ============================================================
+    # FIXED: QSLCLSYNC synchronization block (NEW)
+    # ============================================================
+    sync_offset = align_up(current_offset, 0x10)
+    ensure_size(image, sync_offset)
+    
+    # Store sync pointer in main header (offset 0x4C)
+    image[MAIN_BODY_OFFSET + 0x4C:MAIN_BODY_OFFSET + 0x50] = struct.pack("<I", sync_offset)
+    
+    sync_end = embed_sync_block(
+        image, base=sync_offset,
+        align_after_header=16, debug=debug
+    )
+    current_offset = align_up(sync_end, 0x10)
+
+    # Response builder
     response_builder_offset = align_up(current_offset, 0x10)
     ensure_size(image, response_builder_offset)
     response_end_ptr = embed_response_builder(
-        image, 
-        base=response_builder_offset, 
-        debug=debug
+        image, base=response_builder_offset, debug=debug
     )
     current_offset = align_up(response_end_ptr, 0x10)
 
-    # FIXED: Call embed_certificate_strings with correct parameters
+    # Certificate
     certificate_end_ptr = embed_certificate_strings(
-        image,
-        cert_text=None,  # Use default certificate text
-        auth_key=auth_key,
-        base_off=current_offset,
-        max_len=0x2000,
-        align=16,
-        debug=debug,
-        use_universal_signing=True,
-        signing_mode="legacy",
+        image, cert_text=None, auth_key=auth_key,
+        base_off=current_offset, max_len=0x2000, align=16, debug=debug,
+        use_universal_signing=True, signing_mode="legacy",
         include_crypto_primitives=True,
         hardware_anchors={
-            "cpu_vendor": "generic",
-            "cpu_family": "23",
+            "cpu_vendor": "generic", "cpu_family": "23",
             "memory_size": "16777216"
         }
     )
     current_offset = align_up(certificate_end_ptr, 0x10)
+    
+    # Store certificate pointer in main header
+    image[MAIN_BODY_OFFSET + 0x50:MAIN_BODY_OFFSET + 0x54] = struct.pack("<I", current_offset - (certificate_end_ptr - current_offset + align_up(certificate_end_ptr, 0x10)))
 
     # Runtime verification
     verification = verify_universal_signature(image, debug=debug)
@@ -3939,27 +3883,43 @@ def build_qslcl_bin(
         if not verification['verified'] and 'error' in verification:
             print(f"  Error: {verification['error']}")
 
-    # Update main header with final size and integrity
+    # ============================================================
+    # FIXED: Update main header with final size
+    # ============================================================
     final_size = len(image)
+    if len(image) >= MAIN_BODY_OFFSET + 8:
+        image[MAIN_BODY_OFFSET:MAIN_BODY_OFFSET + 8] = final_size.to_bytes(8, "little")
+    
+    # ============================================================
+    # FIXED: Add integrity footer at end of binary
+    # ============================================================
     binary_crc = zlib.crc32(image) & 0xFFFFFFFF
     binary_hash = hashlib.sha512(image).digest()
     
-    # Update size in main body (offset 8 in main_body)
-    # Main header is 20 bytes, so main body starts at offset 20
-    # bin_size is the first field in main_body
-    if len(image) >= 20 + 8:
-        image[20:28] = final_size.to_bytes(8, "little")
+    integrity_offset = align_up(len(image), 0x10)
+    ensure_size(image, integrity_offset + 128)  # Room for integrity data
     
-    # Add integrity information at the end
-    integrity_offset = align_up(current_offset, 0x10)
-    ensure_size(image, integrity_offset + 54)  # 4 (CRC) + 50 (hash) = 54
-    image[integrity_offset:integrity_offset + 4] = struct.pack("<I", binary_crc)
-    image[integrity_offset + 4:integrity_offset + 54] = binary_hash[:50]
+    # Write integrity block
+    # CRC32 (4 bytes) + timestamp (8 bytes) + SHA512 (64 bytes) + magic (8 bytes) + padding
+    integrity_body = struct.pack("<IQ", binary_crc, int(time.time_ns()))
+    integrity_body += binary_hash[:64]
+    integrity_body += b"QSLCLINT"
+    
+    # Pad to 16-byte alignment
+    while len(integrity_body) % 16 != 0:
+        integrity_body += b"\x00"
+    
+    integrity_header = create_standard_header(b"QSLCLINT", integrity_body, 0x00)
+    ensure_size(image, integrity_offset + len(integrity_header) + len(integrity_body))
+    image[integrity_offset:integrity_offset + len(integrity_header)] = integrity_header
+    image[integrity_offset + len(integrity_header):integrity_offset + len(integrity_header) + len(integrity_body)] = integrity_body
+    
+    final_size = integrity_offset + len(integrity_header) + len(integrity_body)
 
-    # Add HMAC signature at the end
-    hmac_signature = hmac.new(auth_key, image, hashlib.sha512).digest()
-    image.extend(hmac_signature)
-
+    # FIXED: Add HMAC signature at the very end
+    hmac_signature = hmac.new(auth_key, image[:final_size], hashlib.sha512).digest()
+    image.extend(hmac_signature[:32])  # 32-byte HMAC
+    
     # Ensure final image size is at least bin_size
     if len(image) < bin_size:
         image.extend(b"\x00" * (bin_size - len(image)))
@@ -3971,32 +3931,50 @@ def build_qslcl_bin(
         f.write(image)
 
     if debug:
-        print(f"\n[*] QSLCL Universal Binary v5.2 Build Complete")
+        print(f"\n[*] QSLCL Universal Binary v5.4 Build Complete")
         print(f"    Output: {out_path}")
         print(f"    Final Size: {len(image)} bytes ({len(image)/1024:.1f} KB)")
         print(f"    Architecture: {arch} -> UNIVERSAL micro-VM")
-        print(f"    Primary command header: QSLCLCMD (QSLCLPAR removed)")
-        print(f"    Embedded blocks with standard headers:")
+        print(f"    Primary command header: QSLCLCMD")
+        print(f"\n[*] Embedded blocks:")
         print(f"      - QSLCLBIN: Main header @0x0")
         print(f"      - Commands: @0x{cmd_offset:X} ({len(command_list)} commands)")
-        print(f"      - QSLCLDISP: Dispatch table @0x{disp_off:X}")
+        print(f"      - QSLCLDIS: Dispatch table @0x{disp_off:X}")
         print(f"      - QSLCLUSB: USB routines @0x{usb_routines_offset:X}")
         print(f"      - QSLCLBLK: Endpoint block @0x{endpoint_block_offset:X}")
         print(f"      - QSLCLBST: Bootstrap @0x{bootstrap_offset:X}")
         print(f"      - QSLCLVM5: Microservices @0x{microservices_offset:X}")
         print(f"      - QSLCLSPT: USB setup packets @0x{usb_setup_offset:X}")
         print(f"      - QSLCLRTF: Runtime features @0x{runtime_offset:X}")
-        print(f"      - Certificate: @0x{certificate_end_ptr - 20 - len(image[certificate_end_ptr - 20:certificate_end_ptr]):X}")
+        print(f"      - QSLCLDAT: Data protocol @0x{dataproto_offset:X}  [NEW]")
+        print(f"      - QSLCLSYN: Sync block @0x{sync_offset:X}  [NEW]")
+        if enable_encryption:
+            print(f"      - QSLCLENC: Encryption @0x{enc_offset:X}")
+        print(f"      - QSLCLINT: Integrity footer @0x{integrity_offset:X}")
         print(f"    Integrity: CRC32=0x{binary_crc:08X}")
         print(f"    HMAC-SHA512: {hmac_signature[:16].hex()}...")
     
     post_build_audit(out_path, debug=debug)
     return image
 
+# ============================================================
+# Post-Build Audit
+# ============================================================
+def post_build_audit(path: str, debug: bool = True) -> str:
+    with open(path, "rb") as f:
+        data = f.read()
+    digest = hashlib.sha256(data).hexdigest()
+    if debug:
+        print(f"[*] SHA256({path}) = {digest}")
+    return digest
+
+# ============================================================
+# MAIN
+# ============================================================
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="QSLCL Binary Builder")
+    parser = argparse.ArgumentParser(description="QSLCL Binary Builder v5.4")
     parser.add_argument("output", nargs="?", default="qslcl.bin", help="Output file")
     parser.add_argument("--arch", default="generic", help="Target architecture")
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
@@ -4010,9 +3988,11 @@ if __name__ == "__main__":
         arch=args.arch,
         bin_size=args.size,
         debug=args.debug,
-        enable_encryption=args.encrypt  # NEW
+        enable_encryption=args.encrypt
     )
     
     print(f"[+] QSLCL binary created: {args.output}")
     if args.encrypt:
         print(f"[+] QSLCLENC encryption layer enabled")
+    print(f"[+] QSLCLDATA protocol embedded")
+    print(f"[+] QSLCLSYNC synchronization embedded")

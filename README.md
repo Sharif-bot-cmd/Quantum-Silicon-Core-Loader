@@ -2,9 +2,9 @@
 
 Primary Core: **qslcl.elf**
 
-Assistant Module: **qslcl.bin (v0.6.5)**
+Assistant Module: **qslcl.bin (v0.6.6)**
 
-Universal Controller: **qslcl.py (v2.0.4)**
+Universal Controller: **qslcl.py (v2.1.0)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION_MATRIX.md)
 
@@ -28,28 +28,46 @@ QSLCL runs in:
 
 ---
 
-### Whats New in **2.0.4**
+### What's New in **v2.1.0**
 
--- improve detection of partitions 
+- **Complete Code Cleanup** - Removed ~40% redundant code across all modules
+- **Standardized Architecture** - Every module follows identical patterns
+- **Direct QSLCLCMD Integration** - All modules use `QSLCLCMD_DB` for command dispatch
+- **Unified Progress Bar** - Single `ProgressBar` class across all operations
+- **Simplified Safety System** - Consistent `confirm()` function with force override
+- **Removed ANSI Colors** - Clean output compatible with all terminals
+- **Streamlined Imports** - Single `try/except` import chain per module
 
+### What's New in **qslcl.bin v0.6.6**
+
+- **QSLCLDATA Protocol** - Chunked data transfer with ACK/sequence handling
+- **QSLCLSYNC Block** - Transport framing and synchronization
+- **QSLCLDAT Block** - Data transfer protocol micro-VM handler
+- **Improved Pointer Tables** - All block offsets properly cross-referenced
+- **Integrity Footer** - CRC32 + SHA512 + HMAC signature at end of binary
+- **26 Commands** (cleaned from 34) - Only commands with actual module support
 
 ```
-QSLCL Binary Layout (v0.6.5):
+QSLCL Binary Layout (v0.6.6):
 ┌─────────────────────────────────────────────┐
-│ 0x00000000  QSLCLBIN (Main Header)          │
-│ 0x00001000  QSLCLCMD (47 Commands)          │
-│ 0x00002000  QSLCLEND (64 Endpoints)         │
-│ 0x00003000  QSLCLBST (Bootstrap)            │
-│ 0x00004000  QSLCLDISP (Dispatch)            │
-│ 0x00005000  QSLCLRTF (Runtime Faults)       │
-│ 0x00006000  QSLCLVM5 (Microservices)        │
-│ 0x00007000  QSLCLHDR (Certificate)          │
-│ 0x00008000  QSLCLRESP (Response Builder)    │
-│ ★ 0x00009000  QSLCLENC (NEW - Encryption) ★ │
+│ 0x000000  QSLCLBIN (Main Header + Ptrs)     │
+│ 0x000200+ QSLCLCMD (26 Commands)            │
+│ 0x004000+ QSLCLDIS (Dispatch Table)         │
+│ 0x005000+ QSLCLUSB (USB Micro-Engine)       │
+│ 0x006000+ QSLCLBLK (64 Endpoints)           │
+│ 0x007000+ QSLCLBST (Bootstrap Engine)       │
+│ 0x008000+ QSLCLVM5 (Nano-Kernel)            │
+│ 0x009000+ QSLCLSPT (USB Setup Packets)      │
+│ 0x00A000+ QSLCLRTF (Runtime Fault Table)    │
+│ 0x00B000+ QSLCLENC (Encryption Layer)       │
+│ 0x00C000+ QSLCLDAT (Data Protocol) ★ NEW    │
+│ 0x00D000+ QSLCLSYN (Sync Block) ★ NEW       │
+│ 0x00E000+ QSLCLHDR (Certificate)            │
+│ 0x00F000+ QSLCLINT (Integrity Footer) ★ NEW │
 └─────────────────────────────────────────────┘
 ```
 
-### Why This Matters for A18+:
+### Encryption Layer (v0.6.5+):
 
 | Without QSLCLENC | With QSLCLENC |
 |-----------------|----------------|
@@ -73,87 +91,63 @@ QSLCL Binary Layout (v0.6.5):
 - **Future-Proof** - No hardcoded PIDs needed; detects by USB standard compliance
 - **Autonomous Fallback** - Gracefully handles devices that don't fully comply with DFU spec
 
-**Technical Implementation:**
-```python
-def universal_dfu_detection(dev):
-    # Detects DFU by:
-    # 1. Interface Class 0xFE = Application Specific
-    # 2. Interface Subclass 0x01 = Device Firmware Upgrade  
-    # 3. Protocol 0x01/0x02 = Runtime/Download mode
-```
-
-**What this means for you:**
-- ✅ iPhone 16, 17, 18+ work immediately (no code changes needed)
-- ✅ iPad DFU modes auto-detected
-- ✅ Generic Android DFU devices supported
-- ✅ No more "device not recognized" errors for new hardware
-
 ---
 
-# What's New in **v2.0.0**
-
-## Massive Module Rewrite
-Complete rewrite of all 20+ command modules with comprehensive fixes:
-
-- **Fixed Import System** - Proper fallback chain: absolute → relative → standalone across all modules
-- **Unified Command Dispatch** - Consistent `_dispatch()` with `_find_cmd()` helper for QSLCLCMD database lookup
-- **Removed QSLCLPAR References** - All legacy references eliminated, consolidated to QSLCLCMD system
-- **Standardized Handler Signatures** - All handlers follow consistent `(dev, args, force, ...) -> bool` pattern
-- **Enhanced Safety System** - `_confirm()` with proper EOFError/KeyboardInterrupt handling across all modules
-- **Color-Coded Output** - Consistent `Colors` class across all modules for terminal output
-- **Progress Bar Fallbacks** - Local `ProgressBar` implementation when QSLCL version unavailable
-- **Structured Dispatch Tables** - Dictionary-based handler dispatch with alias support in every module
-- **Complete Error Recovery** - Retry logic, exponential backoff, and graceful fallbacks throughout
-
----
-
-# Complete Command List
+# Complete Command List (v2.1.0)
 
 **Core Memory Operations:**
 | Command | Description |
 |---------|-------------|
-| `read` | Advanced memory reading with resume support |
-| `write` | Professional memory writing with protection checks |
-| `erase` | Secure data erasure with multiple patterns |
-| `peek` | Memory inspection with type detection |
-| `poke` | Precision memory writing with bit operations |
-| `patch` | Advanced binary patching with verification |
-| `dump` | Memory dumping with compression and verification |
+| `read` | Memory reading with resume support, verification, hex/json/disasm output |
+| `write` | Memory writing with protection checks, pattern fill, verification |
+| `erase` | Secure erasure with multiple patterns (zero, FF, checker, random) |
+| `peek` | Memory inspection with type interpretation and pointer analysis |
+| `poke` | Precision memory writes with bit operations (AND/OR/XOR) |
+| `patch` | Binary patching with backup, verification, and dry-run support |
+| `dump` | Bulk memory dumping with compression, verification, and metadata |
 
-**System Commands:**
+**Device Interaction:**
 | Command | Description |
 |---------|-------------|
-| `hello` | Device handshake and identification |
-| `ping` | Latency testing and connectivity |
-| `getinfo` | Comprehensive device information |
-| `partitions` | Partition table listing |
-| `endpoints` | USB endpoint listing (supports DFU devices) |
-| `encryption` | **NEW** - Display encryption layer information |
-| `config` | Configuration management |
-| `config-list` | List configuration capabilities |
+| `hello` | Device handshake and capability detection |
+| `ping` | Round-trip latency testing |
+| `getinfo` | Comprehensive device information retrieval |
+| `partitions` | Partition table detection (MBR/GPT parsing) |
 
-**Advanced Operations:**
+**System Control:**
 | Command | Description |
 |---------|-------------|
-| `rawmode` | Privilege escalation with session management |
-| `reset` | System reset with multiple types |
-| `bruteforce` | Multi-strategy system exploration |
-| `bypass` | Security bypass with auto-detection |
-| `glitch` | Hardware fault injection framework |
-| `verify` | System integrity verification |
+| `reset` | System reset (soft/hard/recovery/bootloader/EDL/factory) |
+| `power` | Power management (status/on/off/cycle/sleep/wake) |
+| `mode` | Mode management (normal/recovery/bootloader/download/EDL) |
+| `config` | Configuration management (get/set/list/backup/restore/reset) |
 
-**Specialized Commands:**
+**Voltage & Hardware:**
 | Command | Description |
 |---------|-------------|
-| `oem` | OEM bootloader unlock/lock functions |
-| `odm` | ODM manufacturing and customization |
-| `mode` | System mode management |
-| `power` | Power domain and battery control |
-| `voltage` | Voltage regulation and monitoring |
-| `crash` | Controlled crash injection testing |
-| `crash-test` | Automated crash test suites |
-| `footer` | Footer analysis and validation |
-| `rawstate` | Hardware state inspection |
+| `voltage` | Voltage read/set/monitor/scale with safety ranges |
+| `rawstate` | Low-level hardware state inspection and manipulation |
+
+**Security & Analysis:**
+| Command | Description |
+|---------|-------------|
+| `rawmode` | Privilege escalation with session audit logging |
+| `bypass` | Security bypass with auto-detection and enforcement analysis |
+| `verify` | System verification (checksum/signature/integrity/security/hardware/firmware) |
+| `footer` | Footer analysis with validation and security assessment |
+
+**Manufacturing & ODM:**
+| Command | Description |
+|---------|-------------|
+| `oem` | OEM operations (bootloader unlock/lock, warranty, secure boot) |
+| `odm` | ODM operations (provisioning, testing, calibration, customization) |
+
+**Advanced Testing:**
+| Command | Description |
+|---------|-------------|
+| `crash` | Controlled crash injection with recovery monitoring |
+| `glitch` | Hardware fault injection with parameter scanning |
+| `bruteforce` | Automated testing (scan/pattern/fuzz/dictionary/replay) |
 
 ---
 
@@ -165,13 +159,12 @@ Complete rewrite of all 20+ command modules with comprehensive fixes:
 pip install pyserial pyusb
 pip install pycryptodome   # optional, for crypto operations
 pip install capstone        # optional, for disassembly
-pip install requests tqdm   # optional
 ```
 
 ## Basic Usage
 
 ```bash
-# Build with encryption support (NEW)
+# Build with encryption support
 python build.py qslcl.bin --encrypt --debug
 
 # Test basic functionality
@@ -179,9 +172,8 @@ python qslcl.py hello --loader=qslcl.bin
 python qslcl.py getinfo --loader=qslcl.bin
 python qslcl.py ping --loader=qslcl.bin
 
-# List available commands and endpoints
-python qslcl.py endpoints --loader=qslcl.bin
-python qslcl.py encryption --loader=qslcl.bin  # NEW - show encryption layer
+# List available commands
+python qslcl.py hello --loader=qslcl.bin
 ```
 
 ## Encryption Layer Usage (v0.6.5+)
@@ -190,28 +182,29 @@ python qslcl.py encryption --loader=qslcl.bin  # NEW - show encryption layer
 # Build with encryption enabled
 python build.py qslcl.bin --encrypt --debug
 
-# Check encryption status
-python qslcl.py encryption --loader=qslcl.bin
+# Check encryption status (shown automatically on load)
+python qslcl.py hello --loader=qslcl.bin
 
 # Expected output:
-# [*] Found QSLCLENC structured block at 0x8A00 (256 bytes)
-# [*] QSLCLENC: Encryption layer v1.0
-#     Capabilities: 0x0000001F
-#       - ChaCha20-Poly1305: ✓
-#       - AES-256-GCM: ✓
-#     Integrity: ✓ Valid
+# [*] QSLCL Loader Modules Detected:
+#   ├─ QSLCLBIN: generic arch, 131072 bytes
+#   ├─ QSLCLCMD: 26 commands
+#   ├─ QSLCLEND: 64 endpoints
+#   ├─ QSLCLENC: v1.0
+#   │   ChaCha20=✓, AES-GCM=✓
+#   ├─ QSLCLDAT: Data protocol v1.0
+#   ├─ QSLCLSYN: Sync block, 4 frame types
+#   └─ QSLCLHDR: 1 certificate blocks
 ```
 
 ## DFU Mode Detection (v2.0.1+)
 
 ```bash
 # Automatic DFU detection - no manual PID configuration needed
-python qslcl.py endpoints --debug
+python qslcl.py hello --debug
 
 # Expected output for DFU devices:
 # [*] DFU device detected: Apple Inc. (0x05AC:0xXXXX) - DFU Mode (Download)
-# [*] USB Endpoints (1 total):
-#      DFU Device    BIDIR     0x00       CTRL    64
 ```
 
 ## Professional Usage
@@ -219,11 +212,8 @@ python qslcl.py endpoints --debug
 ```bash
 # Complete memory operations
 python qslcl.py read boot boot.img --loader=qslcl.bin
-python qslcl.py write boot modified_boot.img --loader=qslcl.bin --verify
+python qslcl.py write boot modified_boot.img --loader=qslcl.bin
 python qslcl.py dump system --size 100M --compress --verify --loader=qslcl.bin
-
-# With encryption (auto-detected if QSLCLENC present)
-python qslcl.py read 0x80000000 --size 1M -o dump.bin --loader=qslcl.bin
 
 # Configuration management
 python qslcl.py config get debug_level
@@ -235,10 +225,10 @@ python qslcl.py bypass detect --loader=qslcl.bin
 python qslcl.py verify security --verbose --loader=qslcl.bin
 python qslcl.py footer --type SECURITY --validate --loader=qslcl.bin
 
-# System control
-python qslcl.py reset soft --loader=qslcl.bin
-python qslcl.py power status --loader=qslcl.bin
-python qslcl.py mode set DEBUG --loader=qslcl.bin
+# Hardware testing
+python qslcl.py voltage monitor ALL 30 1
+python qslcl.py glitch scan --loader=qslcl.bin
+python qslcl.py crash test basic 3 5 --loader=qslcl.bin
 ```
 
 ---
@@ -247,14 +237,54 @@ python qslcl.py mode set DEBUG --loader=qslcl.bin
 
 | Vendor   | Mode             | Detection Method            | Encryption | Status |
 |----------|------------------|-----------------------------|------------|--------|
-| Qualcomm | EDL              | Sahara + Firehose handshake | Optional   | ✅ Enhanced |
-| MediaTek | BROM / Preloader | 0xA0 preloader ping         | Optional   | ✅ Enhanced |
-| Apple    | DFU (A12-A17)    | Dynamic USB DFU Class       | No         | ✅ v2.0.1 |
-| Apple    | DFU (A18+)       | Dynamic USB DFU Class       | **Required** | ⚠️ v0.6.5 ready |
-| Google   | DFU              | Dynamic USB DFU Class       | Optional   | ✅ New |
-| Samsung  | DFU              | Dynamic USB DFU Class       | Optional   | ✅ New |
-| Generic  | USB CDC/Bulk     | Endpoint auto-discovery     | Optional   | ✅ Universal |
-| Any      | Serial COM       | UART auto sync              | No         | ✅ Universal |
+| Qualcomm | EDL              | Sahara + Firehose handshake | Optional   | ✅ |
+| MediaTek | BROM / Preloader | 0xA0 preloader ping         | Optional   | ✅ |
+| Apple    | DFU (A12-A17)    | Dynamic USB DFU Class       | No         | ✅ |
+| Apple    | DFU (A18+)       | Dynamic USB DFU Class       | **Required** | ⚠️ Ready |
+| Google   | DFU              | Dynamic USB DFU Class       | Optional   | ✅ |
+| Samsung  | DFU              | Dynamic USB DFU Class       | Optional   | ✅ |
+| Generic  | USB CDC/Bulk     | Endpoint auto-discovery     | Optional   | ✅ |
+| Any      | Serial COM       | UART auto sync              | No         | ✅ |
+
+---
+
+# Module Architecture (v2.1.0)
+
+All command modules follow a clean, consistent architecture:
+
+```
+modules/
+├── read.py          # Memory reading with resume/verify/format conversion
+├── write.py         # Memory writing with safety checks/verification
+├── erase.py         # Secure erasure with multiple patterns
+├── peek.py          # Memory inspection with type/pointer analysis
+├── poke.py          # Precision writes with bit operations
+├── dump.py          # Bulk memory dumping with compression/metadata
+├── patch.py         # Binary patching with backup/verification
+├── oem.py           # OEM bootloader/warranty/secure boot
+├── odm.py           # ODM provisioning/testing/calibration
+├── rawmode.py       # Privilege escalation with session audit
+├── voltage.py       # Voltage control/monitoring/limits
+├── verify.py        # System verification (multi-stage)
+├── reset.py         # System reset (10+ types)
+├── rawstate.py      # Hardware state inspection
+├── power.py         # Power management (12 subcommands)
+├── mode.py          # Mode management (18 modes)
+├── glitch.py        # Hardware fault injection
+├── footer.py        # Footer analysis/validation
+├── crash.py         # Controlled crash injection/testing
+├── config.py        # Configuration with schema validation
+├── bypass.py        # Security bypass with auto-detection
+└── bruteforce.py    # Automated testing/fuzzing/dictionary
+```
+
+Each module features:
+- **Single import chain** - Clean `try/except` with fallback
+- **Direct QSLCLCMD integration** - No wrapper functions
+- **Unified dispatch** - `module_cmd()` pattern with DB lookup
+- **Consistent safety** - `confirm()` with force override
+- **Progress tracking** - Single `ProgressBar` class
+- **Clean output** - No ANSI codes, universal terminal compatibility
 
 ---
 
@@ -262,9 +292,10 @@ python qslcl.py mode set DEBUG --loader=qslcl.bin
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
-| **v0.6.5 / v2.0.2** | 2026 | **QSLCLENC encryption layer** - ChaCha20/AES, future-proof for A18+ |
+| **v0.6.6 / v2.1.0** | 2026 | **Code cleanup** - 40% reduction, QSLCLDATA/SYNC blocks, 26 commands |
+| v0.6.5 / v2.0.2 | 2026 | QSLCLENC encryption layer - ChaCha20/AES for A18+ |
 | v0.6.4 / v2.0.1 | 2026 | Dynamic DFU detection, QSLCLRESP fixes |
-| v0.6.3 / v2.0.0 | 2026 | Complete module rewrite, 47 commands |
+| v0.6.3 / v2.0.0 | 2026 | Complete module rewrite |
 | v0.5.x / v1.x | 2025 | Legacy versions |
 
 ---
@@ -306,12 +337,19 @@ QSLCLCMD → [ENCRYPT] → QSLCLENC → USB → Device → [DECRYPT] → Execute
 | ChaCha20-Poly1305 | 256-bit | Poly1305 | ARMv8.2-A+ (Apple Silicon) |
 | AES-256-GCM | 256-bit | GMAC | AES-NI / ARMv8 Crypto Extensions |
 
-### Integrity Protection
+### Data Protocol (v0.6.6+)
 
-- **CRC32** - Frame header integrity
-- **HMAC-SHA256** - Session authentication  
-- **Poly1305** - Per-packet authentication (ChaCha20 mode)
-- **SHA256 Footer** - Full encryption block verification
+```
+Host                           Device
+  |                              |
+  |--- QSLCLDATA frame --------->|  Chunked data with sequence
+  |<-- QSLCLDACK ----------------|  Acknowledgment
+  |--- QSLCLDATA frame (more) -->|  Multi-frame transfer
+  |<-- QSLCLDACK ----------------|
+  |                              |
+  |--- QSLCLSYN frame ---------->|  Transport sync
+  |<-- QSLCLSYN -----------------|  Frame type negotiation
+```
 
 ---
 
@@ -345,113 +383,40 @@ The QSLCLENC encryption layer is designed for **research and interoperability**,
 
 **Parser Detection Problems:**
 ```bash
-# If modules aren't detected, check binary structure
-python qslcl.py hello --loader=qslcl.bin
+python qslcl.py hello --loader=qslcl.bin --debug
 ```
 
 **Encryption Layer Not Found:**
 ```bash
-# Build with encryption enabled
 python build.py qslcl.bin --encrypt --debug
-
-# Verify encryption block
-python qslcl.py encryption --loader=qslcl.bin
 ```
 
-**DFU Device Not Detected (v2.0.1+ fixed):**
+**DFU Device Not Detected:**
 ```bash
-# Enable debug to see DFU detection
-python qslcl.py endpoints --debug
-
-# If still not detected, check:
-# 1. Device is actually in DFU mode
-# 2. USB cable supports data (MFI for Apple)
-# 3. Run with sudo/administrator privileges
+python qslcl.py hello --debug
 ```
 
 **Memory Operation Errors:**
 ```bash
-# Use smaller chunk sizes for problematic devices
 python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
-
-# For patching issues, resume interrupted operations
-python qslcl.py dump 0x10000000 --size 1M --resume --loader=qslcl.bin
 ```
-
-## Debug Information
-
-```bash
-# Enable debug output
-python build.py --debug --encrypt
-python qslcl.py hello --loader=qslcl.bin --debug
-
-# Verbose output for complex operations
-python qslcl.py rawmode list --verbose --loader=qslcl.bin
-
-# Debug DFU detection specifically
-python qslcl.py endpoints --debug 2>&1 | grep -i dfu
-
-# Debug encryption layer
-python qslcl.py encryption --loader=qslcl.bin --debug
-```
-
----
-
-# Module Architecture (v2.0.2)
-
-All command modules follow a consistent architecture:
-
-```
-modules/
-├── read.py          # Memory reading with resume/verify
-├── write.py         # Memory writing with protection
-├── erase.py         # Secure erasure patterns
-├── peek.py          # Memory inspection
-├── poke.py          # Precision writes
-├── dump.py          # Bulk memory dumping
-├── patch.py         # Binary patching
-├── oem.py           # OEM operations
-├── odm.py           # ODM operations
-├── rawmode.py       # Privilege escalation
-├── voltage.py       # Voltage control
-├── verify.py        # System verification
-├── reset.py         # System reset
-├── rawstate.py      # Hardware state
-├── power.py         # Power management
-├── mode.py          # Mode management
-├── glitch.py        # Fault injection
-├── footer.py        # Footer analysis
-├── crash.py         # Crash injection
-├── config.py        # Configuration
-├── bypass.py        # Security bypass
-└── bruteforce.py    # Automated testing
-```
-
-Each module features:
-- **Standardized imports** with proper fallback chains
-- **Unified dispatch** via `_dispatch()` helper
-- **Dictionary-based handlers** with alias support
-- **Consistent error handling** with retry logic
-- **Color-coded output** via shared `Colors` class
-- **Progress tracking** with local fallback
 
 ---
 
 # Final Words
 
-> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, and every bootstrap execution becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping and now, quantum-resistant encryption."**
+> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, and every bootstrap execution becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping, quantum-resistant encryption, and structured data protocols."**
 
 ## Key Philosophy
 
-* **Universal Execution** - One binary, all architectures, 47 complete commands
+* **Universal Execution** - One binary, all architectures, 26 essential commands
 * **Silicon Intimacy** - Direct hardware conversation with bit-level precision
-* **Adaptive Intelligence** - Environment-aware behavior with safety enforcement
+* **Clean Architecture** - 40% less code, 100% more maintainable
 * **Professional Grade** - Enterprise-level memory operations with verification
-* **Advanced Patching** - Professional binary modification with read-back verification
-* **Modular Architecture** - Consistent, maintainable command modules
+* **Future-Proof Detection** - USB DFU Class compliance
+* **Encryption Ready** - ChaCha20/AES for A18+ compatibility
+* **Data Protocol** - Structured bulk transfers with integrity
 * **Ethical Empowerment** - Capability with responsibility and safety controls
-* **Future-Proof Detection** - USB DFU Class compliance (v2.0.1)
-* **Encryption Ready** - ChaCha20/AES for A18+ compatibility (v0.6.5)
 
 **YouTube**: [https://www.youtube.com/@EntropyVector](https://www.youtube.com/@EntropyVector)
 

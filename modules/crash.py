@@ -1,252 +1,126 @@
 #!/usr/bin/env python3
 """
-crash.py - QSLCL CRASH Command Module v2.0 (FIXED)
-Fixed: Import handling, command dispatch, safety checks,
-       crash injection, recovery monitoring, test suites
+crash.py - QSLCL CRASH Command Module v2.1 (CLEANED)
+Controlled crash injection and system stability testing
 """
 
 import os
 import sys
 import struct
 import time
-import traceback
-from typing import Dict, List, Tuple, Optional, Any, Union
+from typing import Optional, List, Tuple, Dict
 
 # =============================================================================
-# FIXED: Proper relative imports with comprehensive fallbacks
+# IMPORTS - With proper fallbacks
 # =============================================================================
-_use_qslcl = False
-_scan_all = None
-_auto_loader_if_needed = None
-_qslcl_dispatch = None
-_decode_runtime_result = None
-_ProgressBar = None
-_QSLCLCMD_DB = None
-_DEBUG = False
-
 try:
     from qslcl import (
-        scan_all as _qslcl_scan_all,
-        auto_loader_if_needed as _qslcl_auto_loader,
-        qslcl_dispatch as _qslcl_dispatch_fn,
-        decode_runtime_result as _qslcl_decode_runtime,
-        ProgressBar as _qslcl_ProgressBar,
-        QSLCLCMD_DB as _qslcl_cmd_db,
-        _DEBUG as _qslcl_debug,
-        set_debug
+        scan_all,
+        auto_loader_if_needed,
+        qslcl_dispatch,
+        decode_runtime_result,
+        encode_qslcl_structure,
+        QSLCLCMD_DB,
+        _DEBUG
     )
-    _scan_all = _qslcl_scan_all
-    _auto_loader_if_needed = _qslcl_auto_loader
-    _qslcl_dispatch = _qslcl_dispatch_fn
-    _decode_runtime_result = _qslcl_decode_runtime
-    _ProgressBar = _qslcl_ProgressBar
-    _QSLCLCMD_DB = _qslcl_cmd_db
-    _DEBUG = _qslcl_debug
-    _use_qslcl = True
 except ImportError:
     try:
         from .qslcl import (
-            scan_all as _qslcl_scan_all,
-            auto_loader_if_needed as _qslcl_auto_loader,
-            qslcl_dispatch as _qslcl_dispatch_fn,
-            decode_runtime_result as _qslcl_decode_runtime,
-            ProgressBar as _qslcl_ProgressBar,
-            QSLCLCMD_DB as _qslcl_cmd_db,
-            _DEBUG as _qslcl_debug,
-            set_debug
+            scan_all,
+            auto_loader_if_needed,
+            qslcl_dispatch,
+            decode_runtime_result,
+            encode_qslcl_structure,
+            QSLCLCMD_DB,
+            _DEBUG
         )
-        _scan_all = _qslcl_scan_all
-        _auto_loader_if_needed = _qslcl_auto_loader
-        _qslcl_dispatch = _qslcl_dispatch_fn
-        _decode_runtime_result = _qslcl_decode_runtime
-        _ProgressBar = _qslcl_ProgressBar
-        _QSLCLCMD_DB = _qslcl_cmd_db
-        _DEBUG = _qslcl_debug
-        _use_qslcl = True
     except ImportError:
-        _use_qslcl = False
-
-
-# =============================================================================
-# FIXED: Standalone mode
-# =============================================================================
-_STANDALONE_WARNED = False
-def _warn_standalone():
-    global _STANDALONE_WARNED
-    if not _STANDALONE_WARNED:
-        print("[!] Running in standalone mode"); _STANDALONE_WARNED = True
-
+        print("[!] CRITICAL: Cannot import qslcl core module")
+        sys.exit(1)
 
 # =============================================================================
-# FIXED: Constants
+# CONSTANTS
 # =============================================================================
-CRASH_TIMEOUT = 15.0
-MAX_RETRIES = 2
-MAX_ITERATIONS = 100
+TIMEOUT = 15.0
+MAX_ITER = 100
 MAX_DELAY = 300
 
-# Crash opcodes
-class CrashOp:
-    CAPABILITIES = 0x00
-    KERNEL_PANIC = 0x01
-    NULL_POINTER = 0x02
-    STACK_OVERFLOW = 0x03
-    HEAP_CORRUPTION = 0x04
-    DIVIDE_ZERO = 0x05
-    MEMORY_CORRUPTION = 0x06
-    WATCHDOG = 0x07
-    INTERRUPT_STORM = 0x08
-    DMA_OVERFLOW = 0x09
-    CUSTOM = 0x0A
-    ANALYSIS = 0x20
+# Opcodes
+OP_CAPABILITIES = 0x00
+OP_KERNEL_PANIC = 0x01
+OP_NULL_POINTER = 0x02
+OP_STACK_OVERFLOW = 0x03
+OP_HEAP_CORRUPT = 0x04
+OP_DIVIDE_ZERO = 0x05
+OP_MEM_CORRUPT = 0x06
+OP_WATCHDOG = 0x07
+OP_IRQ_STORM = 0x08
+OP_DMA_OVERFLOW = 0x09
+OP_CUSTOM = 0x0A
+OP_ANALYSIS = 0x20
 
 # Crash type definitions
 CRASH_TYPES = {
-    'KERNEL_PANIC':      {'severity':'HIGH',   'recovery':'MANUAL', 'confirm':'PANIC'},
-    'NULL_POINTER':      {'severity':'MEDIUM', 'recovery':'AUTO',   'confirm':None},
-    'STACK_OVERFLOW':    {'severity':'MEDIUM', 'recovery':'AUTO',   'confirm':None},
-    'HEAP_CORRUPTION':   {'severity':'HIGH',   'recovery':'MANUAL', 'confirm':None},
-    'DIVIDE_ZERO':       {'severity':'LOW',    'recovery':'AUTO',   'confirm':None},
-    'MEMORY_CORRUPTION': {'severity':'HIGH',   'recovery':'MANUAL', 'confirm':None},
-    'WATCHDOG':          {'severity':'MEDIUM', 'recovery':'AUTO',   'confirm':None},
-    'INTERRUPT_STORM':   {'severity':'MEDIUM', 'recovery':'AUTO',   'confirm':None},
-    'DMA_OVERFLOW':      {'severity':'HIGH',   'recovery':'MANUAL', 'confirm':None},
+    'KERNEL_PANIC':      {'opcode': OP_KERNEL_PANIC,   'risk': 'HIGH',   'recovery': 'MANUAL'},
+    'NULL_POINTER':      {'opcode': OP_NULL_POINTER,    'risk': 'MEDIUM', 'recovery': 'AUTO'},
+    'STACK_OVERFLOW':    {'opcode': OP_STACK_OVERFLOW,  'risk': 'MEDIUM', 'recovery': 'AUTO'},
+    'HEAP_CORRUPTION':   {'opcode': OP_HEAP_CORRUPT,    'risk': 'HIGH',   'recovery': 'MANUAL'},
+    'DIVIDE_ZERO':       {'opcode': OP_DIVIDE_ZERO,     'risk': 'LOW',    'recovery': 'AUTO'},
+    'MEMORY_CORRUPTION': {'opcode': OP_MEM_CORRUPT,     'risk': 'HIGH',   'recovery': 'MANUAL'},
+    'WATCHDOG':          {'opcode': OP_WATCHDOG,        'risk': 'MEDIUM', 'recovery': 'AUTO'},
+    'IRQ_STORM':         {'opcode': OP_IRQ_STORM,       'risk': 'MEDIUM', 'recovery': 'AUTO'},
+    'DMA_OVERFLOW':      {'opcode': OP_DMA_OVERFLOW,    'risk': 'HIGH',   'recovery': 'MANUAL'},
 }
 
 HEAP_TYPES = ['DOUBLE_FREE', 'USE_AFTER_FREE', 'BUFFER_OVERFLOW', 'RACE_CONDITION']
-TEST_TYPES = ['basic', 'comprehensive', 'recovery', 'stress']
-
-# =============================================================================
-# FIXED: Colors
-# =============================================================================
-class C:
-    GREEN = '\033[92m'; YELLOW = '\033[93m'; RED = '\033[91m'
-    BRIGHT_RED = '\033[91;1m'; CYAN = '\033[96m'; RESET = '\033[0m'; BOLD = '\033[1m'
 
 
 # =============================================================================
-# FIXED: Local ProgressBar fallback
+# UTILITY FUNCTIONS
 # =============================================================================
-class LocalProgressBar:
-    def __init__(self, total, prefix='', suffix='', length=50):
-        self.total = max(total, 1); self.prefix = prefix
-        self.suffix = suffix; self.length = length; self.current = 0
-        self._started = False
-    def __enter__(self): return self
-    def __exit__(self, *a):
-        if self._started: print()
-    def update(self, n):
-        self._started = True; self.current += n
-        pct = min(100, 100 * self.current / self.total)
-        filled = int(self.length * self.current // self.total)
-        print(f'\r{self.prefix} |{"█"*filled}{"-"*(self.length-filled)}| {pct:.0f}% {self.suffix}', end='', flush=True)
-
-def _get_progress(total, **kw):
-    if _use_qslcl and _ProgressBar: return _ProgressBar(total, **kw)
-    return LocalProgressBar(total, **kw)
-
-
-# =============================================================================
-# FIXED: Parse helpers
-# =============================================================================
-def _parse_address(s: str) -> int:
+def parse_addr(s: str) -> int:
     s = str(s).strip().lower()
     if s.startswith('0x'): return int(s[2:], 16)
     try: return int(s, 16)
     except: return int(s, 10)
 
 
-# =============================================================================
-# FIXED: Confirmation helper
-# =============================================================================
-def _confirm(msg: str, req: str, force: bool) -> bool:
+def confirm(msg: str, req: str, force: bool) -> bool:
     if force: return True
-    print(f"\n{C.BRIGHT_RED}{msg}{C.RESET}")
+    print(f"\n[!] {msg}")
     try: return input(f"    Type '{req}': ") == req
     except: return False
 
 
-# =============================================================================
-# FIXED: Dispatch helper
-# =============================================================================
-def _find_cmd(name: str) -> Optional[Tuple]:
-    if not _use_qslcl or not _QSLCLCMD_DB: return None
-    u = name.upper()
-    for k,v in _QSLCLCMD_DB.items():
-        if isinstance(k,str) and k.upper()==u: return ("name",k)
-        if isinstance(v,dict) and v.get("name","").upper()==u: return ("opcode",k)
-    return None
-
-def _dispatch(dev, cmd: str, payload: bytes, timeout: float=None) -> Tuple[bool,str,bytes]:
-    if not _use_qslcl: return False,"NO_QSLCL",b""
-    for attempt in range(MAX_RETRIES):
+def crash_cmd(dev, payload: bytes) -> Tuple[bool, str, bytes]:
+    """Send crash command"""
+    for attempt in range(2):
         try:
-            ci = _find_cmd(cmd)
-            if ci:
-                t,k = ci
-                resp = _qslcl_dispatch(dev, k if t=="name" else str(k), payload, timeout=timeout or CRASH_TIMEOUT)
+            if "CRASH" in QSLCLCMD_DB:
+                resp = qslcl_dispatch(dev, "CRASH", payload, timeout=TIMEOUT)
             else:
-                resp = _qslcl_dispatch(dev, cmd, payload, timeout=timeout or CRASH_TIMEOUT)
+                pkt = encode_qslcl_structure(b"QSLCLCMD", payload)
+                dev.write(pkt)
+                _, resp = dev.read(timeout=TIMEOUT)
+            
             if resp:
-                s = _decode_runtime_result(resp)
-                return s.get("severity")=="SUCCESS", s.get("name","?"), s.get("extra",b"")
-        except: pass
-        if attempt==0: time.sleep(0.1)
-    return False,"NO_RESPONSE",b""
+                status = decode_runtime_result(resp)
+                return status.get("severity") == "SUCCESS", status.get("name", "?"), status.get("extra", b"")
+        except:
+            if attempt == 0: time.sleep(0.1)
+    
+    return False, "NO_RESPONSE", b""
 
 
-# =============================================================================
-# FIXED: System health check
-# =============================================================================
-def _check_health(dev) -> bool:
-    """Check if device is responsive."""
-    ok, _, _ = _dispatch(dev, "PING", b"", timeout=3)
+def ping(dev) -> bool:
+    """Quick health check"""
+    ok, _, _ = crash_cmd(dev, b"")
     return ok
 
 
-# =============================================================================
-# FIXED: Crash execution helper
-# =============================================================================
-def _execute_crash(dev, opcode: int, data: bytes = b"", crash_name: str = "",
-                   force: bool = False, timeout: int = 10) -> bool:
-    """Execute a crash command with safety and monitoring."""
-    info = CRASH_TYPES.get(crash_name, {})
-    
-    # Safety confirmation
-    if info.get('confirm'):
-        if not _confirm(
-            f"⚠️  {crash_name} - {info.get('severity','?')} RISK\n"
-            f"System will crash and may require {'MANUAL' if info.get('recovery')=='MANUAL' else 'automatic'} recovery!",
-            info['confirm'], force
-        ):
-            return False
-    
-    if info.get('severity') in ('HIGH',) and not force:
-        if not _confirm(
-            f"⚠️  HIGH SEVERITY crash: {crash_name}\n"
-            f"This may cause data loss or require manual recovery!",
-            'CRASH', force
-        ):
-            return False
-    
-    payload = struct.pack("<B", opcode) + data + struct.pack("<I", timeout)
-    
-    print(f"\n{C.CYAN}[*] Triggering: {crash_name}{C.RESET}")
-    ok, name, extra = _dispatch(dev, "CRASH", payload, timeout=5)
-    
-    if ok:
-        print(f"{C.GREEN}[+] Crash triggered{C.RESET}")
-    else:
-        print(f"{C.YELLOW}[*] Device may have crashed (no response){C.RESET}")
-    
-    # Monitor recovery
-    _monitor_recovery(dev, timeout, crash_name)
-    return True
-
-
-def _monitor_recovery(dev, timeout: int, crash_name: str):
-    """Monitor device recovery after crash."""
-    print(f"\n{C.CYAN}[*] Recovery: {timeout}s timeout{C.RESET}")
+def monitor_recovery(dev, timeout: int = 30):
+    """Monitor device recovery after crash"""
+    print(f"\n[*] Monitoring recovery ({timeout}s)...")
     start = time.time()
     
     while time.time() - start < timeout:
@@ -255,396 +129,348 @@ def _monitor_recovery(dev, timeout: int, crash_name: str):
         bar = '█' * (int(elapsed) % 20) + '░' * (20 - (int(elapsed) % 20))
         print(f"\r    [{bar}] {remaining}s", end="", flush=True)
         
-        try:
-            if _check_health(dev):
-                print(f"\n{C.GREEN}[+] Recovered after {elapsed:.1f}s{C.RESET}")
-                return
-        except: pass
+        if ping(dev):
+            print(f"\n[+] Recovered after {elapsed:.1f}s")
+            return True
+        
         time.sleep(1)
     
-    print(f"\n{C.RED}[!] Recovery timeout - manual intervention may be needed{C.RESET}")
-    print(f"[*] Steps: 1) Power cycle  2) Recovery mode  3) JTAG/SWD debugger")
+    print(f"\n[!] Recovery timeout - manual intervention may be needed")
+    print("[*] Try: power cycle, recovery mode, or hardware reset")
+    return False
+
+
+class ProgressBar:
+    def __init__(self, total, prefix='', suffix='', length=40):
+        self.total = max(total, 1); self.prefix = prefix
+        self.suffix = suffix; self.length = length; self.current = 0
+    
+    def __enter__(self):
+        self.update(0); return self
+    
+    def __exit__(self, *a): print()
+    
+    def update(self, n):
+        self.current += n
+        pct = 100 * self.current / self.total
+        filled = int(self.length * self.current // self.total)
+        bar = '█' * filled + '─' * (self.length - filled)
+        print(f'\r{self.prefix} |{bar}| {pct:5.1f}% {self.suffix}', end='', flush=True)
 
 
 # =============================================================================
-# FIXED: Subcommand implementations
+# CRASH EXECUTION
 # =============================================================================
-def crash_list(dev, args, force=False, severity='medium', timeout=10) -> bool:
-    """List available crash types."""
-    print(f"\n{C.BOLD}[+] Crash Types:{C.RESET}\n")
-    print(f"  {'Name':<20} {'Severity':<10} {'Recovery':<10}")
+def execute_crash(dev, crash_name: str, opcode: int, data: bytes = b"",
+                  force: bool = False, timeout: int = 10) -> bool:
+    """Execute a crash with safety and recovery monitoring"""
+    info = CRASH_TYPES.get(crash_name, {'risk': 'MEDIUM', 'recovery': 'AUTO'})
+    
+    # Safety for HIGH risk
+    if info['risk'] == 'HIGH' and not force:
+        if not confirm(f"⚠️  {crash_name} - HIGH RISK!\nMay require manual recovery!", 'CRASH', force):
+            return False
+    
+    # Kernel panic warning
+    if crash_name == 'KERNEL_PANIC' and not force:
+        if not confirm(f"⚠️  KERNEL PANIC - System will crash completely!", 'PANIC', force):
+            return False
+    
+    payload = struct.pack("<B", opcode) + data + struct.pack("<I", timeout)
+    
+    print(f"\n[*] Triggering: {crash_name}")
+    ok, name, _ = crash_cmd(dev, payload)
+    
+    if ok:
+        print("[+] Crash triggered")
+    else:
+        print("[*] Device may have crashed (no response)")
+    
+    monitor_recovery(dev, timeout)
+    return True
+
+
+# =============================================================================
+# SUBCOMMANDS
+# =============================================================================
+def cmd_list(dev, args, force, timeout):
+    """List crash types"""
+    print(f"\n[*] Crash Types:\n")
+    print(f"  {'Name':<20} {'Risk':<10} {'Recovery':<10}")
     print(f"  {'-'*20} {'-'*10} {'-'*10}")
     
     for name, info in CRASH_TYPES.items():
-        icon = {'LOW':'🟢','MEDIUM':'🟡','HIGH':'🔴'}.get(info['severity'],'❓')
-        print(f"  {icon} {name:<17} {info['severity']:<10} {info['recovery']:<10}")
+        icon = {'LOW':'🟢', 'MEDIUM':'🟡', 'HIGH':'🔴'}[info['risk']]
+        print(f"  {icon} {name:<17} {info['risk']:<10} {info['recovery']:<10}")
     
-    print(f"\n{C.CYAN}Heap types: {', '.join(HEAP_TYPES)}{C.RESET}")
-    print(f"{C.CYAN}Test types: {', '.join(TEST_TYPES)}{C.RESET}")
+    print(f"\n[*] Heap types: {', '.join(HEAP_TYPES)}")
     return True
 
 
-def crash_kernel(dev, args, force=False, severity='medium', timeout=10) -> bool:
+def cmd_kernel(dev, args, force, timeout):
     ptype = args[0].upper() if args else "GENERIC"
-    data = ptype.encode('ascii','ignore')[:16].ljust(16, b'\x00')
-    return _execute_crash(dev, CrashOp.KERNEL_PANIC, data, 'KERNEL_PANIC', force, timeout)
+    data = ptype.encode()[:16].ljust(16, b'\x00')
+    return execute_crash(dev, 'KERNEL_PANIC', OP_KERNEL_PANIC, data, force, timeout)
 
-def crash_null_pointer(dev, args, force=False, severity='medium', timeout=10) -> bool:
-    addr = _parse_address(args[0]) if args else 0
+def cmd_nullptr(dev, args, force, timeout):
+    addr = parse_addr(args[0]) if args else 0
     data = struct.pack("<I", addr)
-    return _execute_crash(dev, CrashOp.NULL_POINTER, data, 'NULL_POINTER', force, timeout)
+    return execute_crash(dev, 'NULL_POINTER', OP_NULL_POINTER, data, force, timeout)
 
-def crash_stack_overflow(dev, args, force=False, severity='medium', timeout=10) -> bool:
+def cmd_stack(dev, args, force, timeout):
     depth = max(10, min(100000, int(args[0]) if args else 1000))
     data = struct.pack("<I", depth)
-    return _execute_crash(dev, CrashOp.STACK_OVERFLOW, data, 'STACK_OVERFLOW', force, timeout)
+    return execute_crash(dev, 'STACK_OVERFLOW', OP_STACK_OVERFLOW, data, force, timeout)
 
-def crash_heap_corruption(dev, args, force=False, severity='medium', timeout=10) -> bool:
+def cmd_heap(dev, args, force, timeout):
     htype = args[0].upper() if args and args[0].upper() in HEAP_TYPES else "DOUBLE_FREE"
-    data = htype.encode('ascii','ignore')[:16].ljust(16, b'\x00')
-    return _execute_crash(dev, CrashOp.HEAP_CORRUPTION, data, 'HEAP_CORRUPTION', force, timeout)
+    data = htype.encode()[:16].ljust(16, b'\x00')
+    return execute_crash(dev, 'HEAP_CORRUPTION', OP_HEAP_CORRUPT, data, force, timeout)
 
-def crash_divide_zero(dev, args, force=False, severity='medium', timeout=10) -> bool:
-    return _execute_crash(dev, CrashOp.DIVIDE_ZERO, b'', 'DIVIDE_ZERO', force, timeout)
+def cmd_divzero(dev, args, force, timeout):
+    return execute_crash(dev, 'DIVIDE_ZERO', OP_DIVIDE_ZERO, b'', force, timeout)
 
-def crash_memory_corruption(dev, args, force=False, severity='medium', timeout=10) -> bool:
-    addr = _parse_address(args[0]) if args else 0x10000000
-    pattern = _parse_address(args[1]) if len(args) > 1 else 0xDEADBEEF
+def cmd_memory(dev, args, force, timeout):
+    addr = parse_addr(args[0]) if args else 0x10000000
+    pattern = parse_addr(args[1]) if len(args) > 1 else 0xDEADBEEF
+    
     if addr < 0x1000 and not force:
-        if not _confirm(f"⚠️  Low memory corruption at 0x{addr:08X} may brick device!", 'MEMORY', force):
+        if not confirm(f"⚠️  Low memory corruption at 0x{addr:08X} may brick device!", 'MEMORY', force):
             return False
+    
     data = struct.pack("<II", addr, pattern)
-    return _execute_crash(dev, CrashOp.MEMORY_CORRUPTION, data, 'MEMORY_CORRUPTION', force, timeout)
+    return execute_crash(dev, 'MEMORY_CORRUPTION', OP_MEM_CORRUPT, data, force, timeout)
 
-def crash_watchdog(dev, args, force=False, severity='medium', timeout=10) -> bool:
+def cmd_watchdog(dev, args, force, timeout):
     ms = max(100, min(60000, int(args[0]) if args else 1000))
     data = struct.pack("<I", ms)
-    return _execute_crash(dev, CrashOp.WATCHDOG, data, 'WATCHDOG', force, max(timeout, ms//1000+5))
+    return execute_crash(dev, 'WATCHDOG', OP_WATCHDOG, data, force, max(timeout, ms//1000+5))
 
-def crash_interrupt(dev, args, force=False, severity='medium', timeout=10) -> bool:
+def cmd_irq(dev, args, force, timeout):
     irq = max(0, min(255, int(args[0]) if args else 0))
-    freq = max(1, min(100000, int(args[1]) if len(args)>1 else 1000))
+    freq = max(1, min(100000, int(args[1]) if len(args) > 1 else 1000))
     data = struct.pack("<II", irq, freq)
-    return _execute_crash(dev, CrashOp.INTERRUPT_STORM, data, 'INTERRUPT_STORM', force, timeout)
+    return execute_crash(dev, 'IRQ_STORM', OP_IRQ_STORM, data, force, timeout)
 
-def crash_dma(dev, args, force=False, severity='medium', timeout=10) -> bool:
+def cmd_dma(dev, args, force, timeout):
     ch = max(0, min(31, int(args[0]) if args else 0))
     data = struct.pack("<I", ch)
-    return _execute_crash(dev, CrashOp.DMA_OVERFLOW, data, 'DMA_OVERFLOW', force, timeout)
+    return execute_crash(dev, 'DMA_OVERFLOW', OP_DMA_OVERFLOW, data, force, timeout)
 
-def crash_custom(dev, args, force=False, severity='medium', timeout=10) -> bool:
+def cmd_custom(dev, args, force, timeout):
     if not args:
-        print(f"{C.RED}[!] Specify crash scenario{C.RESET}")
+        print("[!] Specify crash scenario")
         return False
     scenario = ' '.join(str(a) for a in args)[:60]
-    data = scenario.encode('ascii','ignore')[:64].ljust(64, b'\x00')
-    return _execute_crash(dev, CrashOp.CUSTOM, data, 'CUSTOM', force, timeout)
+    data = scenario.encode()[:64].ljust(64, b'\x00')
+    return execute_crash(dev, 'CUSTOM', OP_CUSTOM, data, force, timeout)
 
-def crash_analyze(dev, args, force=False, severity='medium', timeout=10) -> bool:
-    print(f"\n{C.CYAN}[*] Crash Analysis{C.RESET}")
-    ok, _, data = _dispatch(dev, "CRASH", struct.pack("<B", CrashOp.ANALYSIS))
+def cmd_analyze(dev, args, force, timeout):
+    """Crash analysis"""
+    print(f"\n[*] Crash Analysis:")
     
-    if ok and data:
-        analysis = _parse_analysis(data)
-        _display_analysis(analysis)
+    ok, _, data = crash_cmd(dev, struct.pack("<B", OP_ANALYSIS))
+    
+    if ok and data and len(data) >= 13:
+        count = struct.unpack("<I", data[0:4])[0]
+        ts = struct.unpack("<I", data[4:8])[0]
+        rate = struct.unpack("<I", data[8:12])[0]
+        health = {0:'CRITICAL', 1:'POOR', 2:'FAIR', 3:'GOOD', 4:'EXCELLENT'}.get(data[12], '?')
+        
+        ts_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ts)) if 946684800 < ts < 2000000000 else f"0x{ts:X}"
+        
+        print(f"    Crashes:  {count}")
+        print(f"    Last:     {ts_str}")
+        print(f"    Recovery: {rate}%")
+        print(f"    Health:   {health}")
+        
+        if count > 10:
+            print(f"\n[!] High crash count ({count}) - investigate stability")
+        elif count > 0 and rate < 80:
+            print(f"\n[!] Low recovery rate ({rate}%) - improve recovery")
+        elif count == 0:
+            print(f"\n[+] No crashes - system stable")
     else:
-        print(f"{C.YELLOW}[*] No crash data available{C.RESET}")
+        print("    No crash data available")
+    
     return True
 
 
 # =============================================================================
-# FIXED: Analysis parsing and display
-# =============================================================================
-def _parse_analysis(data: bytes) -> Dict:
-    a = {'crash_count':0, 'last_crash':'Unknown', 'recovery_rate':0, 'health':'UNKNOWN'}
-    try:
-        if len(data) >= 4: a['crash_count'] = struct.unpack("<I", data[0:4])[0]
-        if len(data) >= 8:
-            ts = struct.unpack("<I", data[4:8])[0]
-            if ts > 0:
-                try: a['last_crash'] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ts))
-                except: a['last_crash'] = f"ts=0x{ts:X}"
-        if len(data) >= 12: a['recovery_rate'] = struct.unpack("<I", data[8:12])[0]
-        if len(data) >= 13:
-            a['health'] = {0:'CRITICAL',1:'POOR',2:'FAIR',3:'GOOD',4:'EXCELLENT'}.get(data[12],'UNKNOWN')
-    except: pass
-    return a
-
-def _display_analysis(a: Dict):
-    print(f"\n{C.BOLD}[+] Crash Report:{C.RESET}")
-    print(f"    Crashes:  {a.get('crash_count',0)}")
-    print(f"    Last:     {a.get('last_crash','?')}")
-    print(f"    Recovery: {a.get('recovery_rate',0)}%")
-    print(f"    Health:   {a.get('health','?')}")
-    
-    count = a.get('crash_count', 0)
-    rate = a.get('recovery_rate', 0)
-    
-    if count > 10:
-        print(f"\n{C.RED}[!] High crash count ({count}) - investigate stability{C.RESET}")
-    elif count > 0:
-        print(f"\n{C.YELLOW}[*] {count} crash(es) recorded{C.RESET}")
-        if rate < 80:
-            print(f"{C.RED}[!] Low recovery rate ({rate}%) - improve recovery{C.RESET}")
-    else:
-        print(f"\n{C.GREEN}[+] No crashes - system stable{C.RESET}")
-
-
-# =============================================================================
-# FIXED: Test suites
+# TEST SUITES
 # =============================================================================
 def cmd_crash_test(args=None) -> int:
-    """Crash test suite."""
-    if not _use_qslcl: _warn_standalone()
+    """Crash test suite"""
+    if args is None:
+        print("[!] No arguments")
+        return 1
     
-    if _use_qslcl:
-        try: devs = _scan_all()
-        except: print(f"{C.RED}[!] Scan failed{C.RESET}"); return 1
-        if not devs: print(f"{C.RED}[!] No device{C.RESET}"); return 1
-        dev = devs[0]
-    else:
-        print(f"{C.RED}[!] No QSLCL{C.RESET}"); return 1
+    devs = scan_all()
+    if not devs:
+        print("[!] No device")
+        return 1
     
-    if hasattr(args, 'loader') and getattr(args, 'loader', None):
-        try: _auto_loader_if_needed(args, dev)
-        except: pass
+    dev = devs[0]
+    print(f"[*] Device: {dev.product}")
+    
+    if getattr(args, 'loader', None):
+        auto_loader_if_needed(args, dev)
     
     cargs = getattr(args, 'crash_args', []) or []
-    ttype = cargs[0] if cargs and cargs[0] in TEST_TYPES else 'basic'
-    iterations = max(1, min(MAX_ITERATIONS, int(cargs[1]) if len(cargs) > 1 else 1))
+    ttype = cargs[0] if cargs and cargs[0] in ('basic', 'comprehensive', 'recovery', 'stress') else 'basic'
+    iters = max(1, min(MAX_ITER, int(cargs[1]) if len(cargs) > 1 else 1))
     delay = max(1, min(MAX_DELAY, int(cargs[2]) if len(cargs) > 2 else 5))
     
-    print(f"\n{C.BOLD}[+] Crash Test: {ttype} ({iterations}x, {delay}s delay){C.RESET}")
+    print(f"\n[*] Crash Test: {ttype} ({iters}x, {delay}s delay)")
     
-    if not _confirm("⚠️  Crash testing may cause instability and require manual recovery!", 'TEST', False):
+    if not confirm("⚠️  Crash testing may cause instability and require manual recovery!", 'TEST', False):
         return 0
     
     if ttype == 'basic':
-        return _run_test(dev, iterations, delay, [
-            ('NULL_POINTER', lambda: crash_null_pointer(dev, [], True, 'medium', delay)),
-            ('DIVIDE_ZERO', lambda: crash_divide_zero(dev, [], True, 'medium', delay)),
-            ('STACK_OVERFLOW', lambda: crash_stack_overflow(dev, ['100'], True, 'medium', delay)),
-        ])
+        scenarios = [('NULL', cmd_nullptr), ('DIV0', cmd_divzero), ('STACK', lambda d,a,f,t: cmd_stack(d, ['100'], f, t))]
     elif ttype == 'comprehensive':
-        return _run_test(dev, iterations, delay, [
-            ('NULL_POINTER', lambda: crash_null_pointer(dev, [], True, 'medium', delay)),
-            ('DIVIDE_ZERO', lambda: crash_divide_zero(dev, [], True, 'medium', delay)),
-            ('STACK', lambda: crash_stack_overflow(dev, ['500'], True, 'medium', delay)),
-            ('HEAP', lambda: crash_heap_corruption(dev, ['DOUBLE_FREE'], True, 'medium', delay)),
-            ('MEMORY', lambda: crash_memory_corruption(dev, ['0x20000000','0xBAD'], True, 'medium', delay)),
-        ])
+        scenarios = [('NULL', cmd_nullptr), ('DIV0', cmd_divzero), ('STACK', lambda d,a,f,t: cmd_stack(d, ['500'], f, t)),
+                    ('HEAP', lambda d,a,f,t: cmd_heap(d, ['DOUBLE_FREE'], f, t)),
+                    ('MEM', lambda d,a,f,t: cmd_memory(d, ['0x20000000', '0xBAD'], f, t))]
     elif ttype == 'recovery':
-        return _run_recovery_test(dev, iterations, delay)
-    elif ttype == 'stress':
-        return _run_stress_test(dev, iterations, delay)
+        scenarios = [('NULL', cmd_nullptr)]
+    else:  # stress
+        scenarios = [('NULL', cmd_nullptr), ('DIV0', cmd_divzero), ('STACK', lambda d,a,f,t: cmd_stack(d, ['50'], f, t))]
     
-    return 0
-
-
-def _run_test(dev, iterations: int, delay: int, scenarios: List[Tuple[str, callable]]) -> int:
-    """Run crash test suite."""
-    total = iterations * len(scenarios)
+    total = iters * len(scenarios)
     passed = 0
     
-    print(f"\n{C.CYAN}[*] {len(scenarios)} scenarios × {iterations} = {total} tests{C.RESET}")
+    print(f"\n[*] {len(scenarios)} scenarios × {iters} = {total} tests")
     
-    with _get_progress(total, prefix='Testing', suffix='Complete') as pb:
-        for i in range(iterations):
-            for name, func in scenarios:
-                print(f"\n  [{name}] ", end="", flush=True)
-                try:
-                    func()
-                    time.sleep(delay)
-                    if _check_health(dev):
-                        print(f"{C.GREEN}PASS{C.RESET}")
-                        passed += 1
-                    else:
-                        print(f"{C.RED}NO RECOVERY{C.RESET}")
-                        # Try re-scan
-                        time.sleep(3)
-                        d2 = _scan_all()
-                        if d2: dev = d2[0]
-                except KeyboardInterrupt:
-                    print(f"{C.YELLOW}SKIP{C.RESET}")
-                    return 0 if passed >= total * 0.8 else 1
-                except Exception as e:
-                    print(f"{C.RED}ERROR: {e}{C.RESET}")
+    try:
+        with ProgressBar(total, prefix='Testing', suffix='Complete') as pb:
+            for i in range(iters):
+                for name, func in scenarios:
+                    print(f"\n  [{name}] ", end="", flush=True)
+                    try:
+                        func(dev, [], True, delay)
+                        time.sleep(delay)
+                        if ping(dev):
+                            print("PASS")
+                            passed += 1
+                        else:
+                            print("NO RECOVERY")
+                            time.sleep(3)
+                            new_devs = scan_all()
+                            if new_devs: dev = new_devs[0]
+                    except KeyboardInterrupt:
+                        print("SKIP")
+                        return 0 if passed >= total * 0.8 else 1
+                    except Exception as e:
+                        print(f"ERROR: {e}")
+                    
+                    pb.update(1)
                 
-                pb.update(1)
-            
-            if i < iterations - 1:
-                time.sleep(2)
+                if i < iters - 1:
+                    time.sleep(2)
+    except KeyboardInterrupt:
+        pass
     
     rate = passed / total * 100 if total > 0 else 0
-    print(f"\n{C.BOLD}[+] Result: {passed}/{total} ({rate:.0f}%){C.RESET}")
-    return 0 if rate >= 80 else 1
-
-
-def _run_recovery_test(dev, iterations: int, delay: int) -> int:
-    """Test recovery mechanisms."""
-    passed = 0
-    
-    with _get_progress(iterations, prefix='Recovery', suffix='Complete') as pb:
-        for i in range(iterations):
-            print(f"\n  [{i+1}/{iterations}] ", end="", flush=True)
-            try:
-                crash_null_pointer(dev, [], True, 'medium', delay)
-                time.sleep(delay)
-                
-                # Test recovery mechanisms
-                recovered = _check_health(dev)
-                if recovered:
-                    print(f"{C.GREEN}RECOVERED{C.RESET}")
-                    passed += 1
-                else:
-                    print(f"{C.RED}FAILED{C.RESET}")
-                    time.sleep(3)
-                    d2 = _scan_all()
-                    if d2: dev = d2[0]
-            except KeyboardInterrupt:
-                break
-            except Exception as e:
-                print(f"{C.RED}ERROR: {e}{C.RESET}")
-            
-            pb.update(1)
-    
-    return 0 if passed >= iterations * 0.8 else 1
-
-
-def _run_stress_test(dev, iterations: int, delay: int) -> int:
-    """Run stress testing."""
-    crashes = 0
-    target = iterations * 3
-    
-    with _get_progress(target, prefix='Crashes', suffix='Complete') as pb:
-        for i in range(iterations):
-            for name in ['NULL_POINTER','DIVIDE_ZERO','STACK']:
-                try:
-                    handler = {'NULL_POINTER': lambda: crash_null_pointer(dev, [], True, 'medium', 5),
-                              'DIVIDE_ZERO': lambda: crash_divide_zero(dev, [], True, 'medium', 5),
-                              'STACK': lambda: crash_stack_overflow(dev, ['50'], True, 'medium', 5)}[name]
-                    handler()
-                    crashes += 1
-                    time.sleep(1)
-                except KeyboardInterrupt: break
-                except: pass
-                pb.update(1)
-    
-    rate = crashes / target * 100 if target > 0 else 0
-    print(f"\n{C.BOLD}[+] Stress: {crashes}/{target} ({rate:.0f}%){C.RESET}")
+    print(f"\n[+] Result: {passed}/{total} ({rate:.0f}%)")
     return 0 if rate >= 80 else 1
 
 
 # =============================================================================
-# FIXED: Dispatch table
+# DISPATCH TABLE
 # =============================================================================
-CRASH_HANDLERS = {
-    'list': crash_list, 'ls': crash_list, 'types': crash_list,
-    'kernel': crash_kernel, 'panic': crash_kernel,
-    'null': crash_null_pointer, 'nullptr': crash_null_pointer, 'null-pointer': crash_null_pointer,
-    'stack': crash_stack_overflow, 'overflow': crash_stack_overflow, 'stack-overflow': crash_stack_overflow,
-    'heap': crash_heap_corruption, 'corruption': crash_heap_corruption, 'heap-corruption': crash_heap_corruption,
-    'divide': crash_divide_zero, 'divide-zero': crash_divide_zero, 'div0': crash_divide_zero,
-    'memory': crash_memory_corruption, 'mem': crash_memory_corruption, 'memory-corruption': crash_memory_corruption,
-    'watchdog': crash_watchdog, 'wdt': crash_watchdog,
-    'interrupt': crash_interrupt, 'irq': crash_interrupt, 'isr': crash_interrupt,
-    'dma': crash_dma, 'dma-overflow': crash_dma,
-    'custom': crash_custom, 'user': crash_custom,
-    'analyze': crash_analyze, 'analysis': crash_analyze,
+HANDLERS = {
+    'list': cmd_list, 'ls': cmd_list, 'types': cmd_list,
+    'kernel': cmd_kernel, 'panic': cmd_kernel,
+    'null': cmd_nullptr, 'nullptr': cmd_nullptr, 'null-pointer': cmd_nullptr,
+    'stack': cmd_stack, 'overflow': cmd_stack, 'stack-overflow': cmd_stack,
+    'heap': cmd_heap, 'corruption': cmd_heap, 'heap-corruption': cmd_heap,
+    'divide': cmd_divzero, 'divide-zero': cmd_divzero, 'div0': cmd_divzero,
+    'memory': cmd_memory, 'mem': cmd_memory, 'memory-corruption': cmd_memory,
+    'watchdog': cmd_watchdog, 'wdt': cmd_watchdog,
+    'interrupt': cmd_irq, 'irq': cmd_irq, 'isr': cmd_irq,
+    'dma': cmd_dma, 'dma-overflow': cmd_dma,
+    'custom': cmd_custom, 'user': cmd_custom,
+    'analyze': cmd_analyze, 'analysis': cmd_analyze,
 }
 
 
 # =============================================================================
-# FIXED: Help
-# =============================================================================
-def print_crash_help():
-    print(f"""
-{C.BOLD}CRASH - Controlled Crash Injection{C.RESET}
-{'='*50}
-
-{C.CYAN}SUBCOMMANDS:{C.RESET}
-  list                    List crash types
-  kernel [type]           Kernel panic
-  null [addr]             Null pointer dereference
-  stack [depth]           Stack overflow (default: 1000)
-  heap [type]             Heap corruption ({', '.join(HEAP_TYPES)})
-  divide-zero             Division by zero
-  memory [addr] [pat]     Memory corruption
-  watchdog [ms]           Watchdog timeout (default: 1000ms)
-  interrupt [irq] [freq]  Interrupt storm
-  dma [channel]           DMA overflow
-  custom <scenario>       Custom crash
-  analyze                 Crash analysis
-  crash-test [type] [n] [d]  Run test suite
-
-{C.CYAN}SEVERITY:{C.RESET}
-  🟢 LOW      Auto-recovery expected
-  🟡 MEDIUM   May need intervention
-  🔴 HIGH     Manual recovery likely
-
-{C.CYAN}OPTIONS:{C.RESET}
-  --force        Skip confirmations
-  --severity     low/medium/high
-  --timeout N    Recovery timeout
-
-{C.RED}⚠️  WARNING: Crashes may cause data loss or require manual recovery!{C.RESET}
-""")
-
-
-# =============================================================================
-# FIXED: Main function
+# MAIN COMMAND
 # =============================================================================
 def cmd_crash(args=None) -> int:
+    """
+    QSLCL CRASH - Controlled crash injection and stability testing
+    
+    Examples:
+        crash list                          - List crash types
+        crash kernel                        - Kernel panic
+        crash null                          - Null pointer dereference
+        crash stack 5000                    - Stack overflow (depth 5000)
+        crash heap DOUBLE_FREE              - Heap corruption
+        crash divide-zero                   - Division by zero
+        crash memory 0x20000000 0xBAD       - Memory corruption
+        crash watchdog 5000                 - Watchdog timeout (5s)
+        crash interrupt 10 1000             - IRQ storm on IRQ10
+        crash dma 3                         - DMA overflow on ch3
+        crash custom "race condition"       - Custom crash
+        crash analyze                       - Crash analysis
+        crash-test basic 3 5                - Basic test: 3x, 5s delay
+    
+    Risk Levels: 🟢 LOW  🟡 MEDIUM  🔴 HIGH
+    """
+    
     if args is None:
-        print(f"{C.RED}[!] No arguments{C.RESET}"); print_crash_help(); return 1
+        print("[!] No arguments")
+        print("[*] Usage: crash <list|kernel|null|stack|heap|divide|memory|watchdog|interrupt|dma|custom|analyze>")
+        return 1
     
-    if not _use_qslcl: _warn_standalone()
+    devs = scan_all()
+    if not devs:
+        print("[!] No device")
+        return 1
     
-    if _use_qslcl:
-        try: devs = _scan_all()
-        except: print(f"{C.RED}[!] Scan failed{C.RESET}"); return 1
-        if not devs: print(f"{C.RED}[!] No device{C.RESET}"); return 1
-        dev = devs[0]
-        print(f"{C.CYAN}[*] Device: {dev.product}{C.RESET}")
-    else:
-        print(f"{C.RED}[!] No QSLCL{C.RESET}"); return 1
+    dev = devs[0]
+    print(f"[*] Device: {dev.product}")
     
-    if hasattr(args, 'loader') and getattr(args, 'loader', None):
-        try: _auto_loader_if_needed(args, dev)
-        except: pass
+    if getattr(args, 'loader', None):
+        auto_loader_if_needed(args, dev)
     
-    sub = (getattr(args, 'crash_subcommand', '') or getattr(args, 'subcommand', '')).lower().strip()
-    cargs = getattr(args, 'crash_args', []) or []
+    sub = (getattr(args, 'crash_subcommand', '') or getattr(args, 'subcmd', '')).lower().strip()
+    cargs = getattr(args, 'crash_args', []) or getattr(args, 'args', []) or []
     force = getattr(args, 'force', False)
-    severity = getattr(args, 'severity', 'medium') or 'medium'
-    timeout = max(5, int(getattr(args, 'timeout', 10) or 10))
+    timeout = max(5, getattr(args, 'timeout', 10) or 10)
     
-    if not sub or sub in ('help','?','-h','--help'):
-        print_crash_help(); return 0
+    if not sub or sub in ('help', '?'):
+        print("[*] Crash Commands:")
+        for name, func in sorted(set(HANDLERS.items()), key=lambda x: x[0]):
+            if '_' not in name:
+                doc = (func.__doc__ or '').strip().split('\n')[0]
+                print(f"    {name:<15} {doc}")
+        return 0
     
-    handler = CRASH_HANDLERS.get(sub)
+    handler = HANDLERS.get(sub)
     if not handler:
-        print(f"{C.RED}[!] Unknown: {sub}{C.RESET}"); print_crash_help(); return 1
+        print(f"[!] Unknown: {sub}")
+        return 1
     
     try:
-        return 0 if handler(dev, cargs, force, severity, timeout) else 1
+        return 0 if handler(dev, cargs, force, timeout) else 1
     except KeyboardInterrupt:
-        print(f"\n{C.YELLOW}[!] Interrupted{C.RESET}"); return 1
+        print("\n[!] Interrupted")
+        return 1
     except Exception as e:
-        print(f"{C.RED}[!] Error: {e}{C.RESET}")
-        if _DEBUG: traceback.print_exc()
+        print(f"[!] Error: {e}")
+        if _DEBUG:
+            import traceback
+            traceback.print_exc()
         return 1
 
 
-def add_crash_arguments(parser):
-    parser.add_argument('crash_subcommand', nargs='?', help='Subcommand')
-    parser.add_argument('crash_args', nargs='*', help='Arguments')
-    parser.add_argument('--severity', choices=['low','medium','high'], default='medium')
-    parser.add_argument('--timeout', type=int, default=10, help='Recovery timeout')
-    parser.add_argument('--force', action='store_true', help='Skip confirmations')
-    return parser
-
-
+# =============================================================================
+# MODULE ENTRY
+# =============================================================================
 if __name__ == "__main__":
-    print("[*] crash.py - QSLCL CRASH Module v2.0")
-    print_crash_help()
+    print("[*] crash.py - QSLCL CRASH Command Module")
+    print("[*] This module is imported by qslcl.py")
+    print("[*] Usage: python qslcl.py crash <subcommand> [args]")

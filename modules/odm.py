@@ -1,1247 +1,620 @@
 #!/usr/bin/env python3
 """
-odm.py - QSLCL ODM Command Module v2.0 (FIXED)
-Fixed: Import handling, command dispatch, subcommand dispatch table,
-       error recovery, data parsing, consistency across all handlers
+odm.py - QSLCL ODM Command Module v2.1 (CLEANED)
+ODM operations: provisioning, testing, calibration, customization
 """
 
 import os
 import sys
-import re
 import struct
 import time
-import traceback
-from typing import Dict, List, Tuple, Optional, Any, Union
+from typing import Optional, List, Tuple, Dict
 
 # =============================================================================
-# FIXED: Proper relative imports with comprehensive fallbacks
+# IMPORTS - With proper fallbacks
 # =============================================================================
-_use_qslcl = False
-_scan_all = None
-_auto_loader_if_needed = None
-_qslcl_dispatch = None
-_decode_runtime_result = None
-_QSLCLCMD_DB = None
-_DEBUG = False
-
 try:
     from qslcl import (
-        scan_all as _qslcl_scan_all,
-        auto_loader_if_needed as _qslcl_auto_loader,
-        qslcl_dispatch as _qslcl_dispatch_fn,
-        decode_runtime_result as _qslcl_decode_runtime,
-        QSLCLCMD_DB as _qslcl_cmd_db,
-        _DEBUG as _qslcl_debug,
-        set_debug
+        scan_all,
+        auto_loader_if_needed,
+        qslcl_dispatch,
+        decode_runtime_result,
+        encode_qslcl_structure,
+        QSLCLCMD_DB,
+        _DEBUG
     )
-    _scan_all = _qslcl_scan_all
-    _auto_loader_if_needed = _qslcl_auto_loader
-    _qslcl_dispatch = _qslcl_dispatch_fn
-    _decode_runtime_result = _qslcl_decode_runtime
-    _QSLCLCMD_DB = _qslcl_cmd_db
-    _DEBUG = _qslcl_debug
-    _use_qslcl = True
 except ImportError:
     try:
         from .qslcl import (
-            scan_all as _qslcl_scan_all,
-            auto_loader_if_needed as _qslcl_auto_loader,
-            qslcl_dispatch as _qslcl_dispatch_fn,
-            decode_runtime_result as _qslcl_decode_runtime,
-            QSLCLCMD_DB as _qslcl_cmd_db,
-            _DEBUG as _qslcl_debug,
-            set_debug
+            scan_all,
+            auto_loader_if_needed,
+            qslcl_dispatch,
+            decode_runtime_result,
+            encode_qslcl_structure,
+            QSLCLCMD_DB,
+            _DEBUG
         )
-        _scan_all = _qslcl_scan_all
-        _auto_loader_if_needed = _qslcl_auto_loader
-        _qslcl_dispatch = _qslcl_dispatch_fn
-        _decode_runtime_result = _qslcl_decode_runtime
-        _QSLCLCMD_DB = _qslcl_cmd_db
-        _DEBUG = _qslcl_debug
-        _use_qslcl = True
     except ImportError:
-        _use_qslcl = False
-
-
-# =============================================================================
-# FIXED: Standalone mode handling
-# =============================================================================
-_STANDALONE_WARNED = False
-
-def _warn_standalone():
-    """Warn about standalone mode once"""
-    global _STANDALONE_WARNED
-    if not _STANDALONE_WARNED:
-        print("[!] Running in standalone mode (limited functionality)")
-        print("[*] For full features, ensure qslcl.py is in the Python path")
-        _STANDALONE_WARNED = True
-
+        print("[!] CRITICAL: Cannot import qslcl core module")
+        sys.exit(1)
 
 # =============================================================================
-# FIXED: Constants
+# CONSTANTS
 # =============================================================================
-ODM_TIMEOUT = 15.0              # ODM operation timeout
-MAX_RETRIES = 3                 # Max retries
+TIMEOUT = 15.0
+MAX_RETRIES = 3
 
-# =============================================================================
-# FIXED: ODM Command opcodes
-# =============================================================================
-class ODMOpcode:
-    """ODM command opcodes for structured dispatch."""
-    INFO = 0x01
-    PROVISION = 0x10
-    CUSTOMIZE = 0x20
-    TEST = 0x30
-    CALIBRATE = 0x40
-    FEATURE = 0x50
-    REGION = 0x60
-    SECURITY = 0x70
-    FIRMWARE_INFO = 0x75
-    FIRMWARE_UPDATE = 0x76
-    FIRMWARE_DATA = 0x77
-    MANUFACTURING = 0x80
-    SUPPLYCHAIN = 0x85
-    UNLOCK = 0x90
-    LOCK = 0xA0
-    RESET = 0xB0
+# Opcodes
+OP_INFO = 0x01
+OP_PROVISION = 0x10
+OP_CUSTOMIZE = 0x20
+OP_TEST = 0x30
+OP_CALIBRATE = 0x40
+OP_FEATURE = 0x50
+OP_REGION = 0x60
+OP_SECURITY = 0x70
+OP_FIRMWARE_INFO = 0x75
+OP_FIRMWARE_UPDATE = 0x76
+OP_FIRMWARE_DATA = 0x77
+OP_MANUFACTURING = 0x80
+OP_SUPPLYCHAIN = 0x85
+OP_UNLOCK = 0x90
+OP_LOCK = 0xA0
+OP_RESET = 0xB0
 
-# Valid values for various operations
 VALID_CUSTOMIZATIONS = ['branding', 'bootlogo', 'bootanimation', 'sounds', 'themes']
-VALID_TEST_TYPES = ['QUICK', 'FULL', 'EXTENDED']
+VALID_TESTS = ['QUICK', 'FULL', 'EXTENDED']
 VALID_HARDWARE = ['display', 'touch', 'audio', 'sensors', 'camera', 'battery']
-VALID_SECURITY_OPS = ['enable', 'disable', 'lockdown', 'unlock', 'status']
+VALID_SECURITY = ['enable', 'disable', 'lockdown', 'unlock', 'status']
 VALID_REGIONS = ['NA', 'EU', 'ASIA', 'CN', 'JP', 'KR', 'IN', 'LATAM', 'MEA', 'GLOBAL']
-VALID_ACTIONS = ['ENABLE', 'DISABLE', 'TOGGLE']
 
 
 # =============================================================================
-# FIXED: Interactive confirmation helper
+# UTILITY FUNCTIONS
 # =============================================================================
-def confirm_action(prompt: str, force: bool = False) -> bool:
-    """Request user confirmation for operations."""
-    if force:
-        return True
-    
-    print(f"\n{prompt}")
-    try:
-        response = input("    Continue? (y/N): ")
-        return response.lower() in ('y', 'yes')
-    except (EOFError, KeyboardInterrupt):
-        print("\n[!] Interactive input not available")
-        return False
+def confirm(msg: str, force: bool) -> bool:
+    if force: return True
+    print(f"\n[!] {msg}")
+    try: return input("    Continue? (y/N): ").lower() in ('y', 'yes')
+    except: return False
 
 
-# =============================================================================
-# FIXED: Find command in QSLCLCMD database
-# =============================================================================
-def find_command(cmd_name: str) -> Optional[Tuple[str, Any]]:
-    """Find a command in QSLCLCMD_DB."""
-    if not _use_qslcl or not _QSLCLCMD_DB:
-        return None
-    
-    cmd_upper = cmd_name.upper()
-    for key, value in _QSLCLCMD_DB.items():
-        if isinstance(key, str) and key.upper() == cmd_upper:
-            return ("name", key)
-        if isinstance(value, dict) and value.get("name", "").upper() == cmd_upper:
-            return ("opcode", key)
-    return None
-
-
-# =============================================================================
-# FIXED: Command dispatch helper
-# =============================================================================
-def dispatch_odm_command(dev, opcode: int, data: bytes = b"", 
-                         timeout: float = None) -> Tuple[bool, str, bytes]:
-    """
-    Dispatch an ODM command with consistent error handling.
-    
-    Returns:
-        Tuple[bool, str, bytes]: (success, status_name, extra_data)
-    """
-    if not _use_qslcl:
-        return False, "NO_QSLCL_SUPPORT", b""
-    
-    if timeout is None:
-        timeout = ODM_TIMEOUT
-    
+def odm_cmd(dev, opcode: int, data: bytes = b"") -> Tuple[bool, str, bytes]:
+    """Send ODM command"""
     payload = struct.pack("<B", opcode) + data
     
     for attempt in range(MAX_RETRIES):
         try:
-            # Try ODM command first
-            if find_command("ODM"):
-                resp = _qslcl_dispatch(dev, "ODM", payload, timeout=timeout)
+            if "ODM" in QSLCLCMD_DB:
+                resp = qslcl_dispatch(dev, "ODM", payload, timeout=TIMEOUT)
             else:
-                resp = _qslcl_dispatch(dev, str(opcode), payload, timeout=timeout)
+                pkt = encode_qslcl_structure(b"QSLCLCMD", payload)
+                dev.write(pkt)
+                _, resp = dev.read(timeout=TIMEOUT)
             
             if resp:
-                status = _decode_runtime_result(resp)
-                severity = status.get("severity", "ERROR")
-                name = status.get("name", "UNKNOWN")
-                extra = status.get("extra", b"")
-                return severity == "SUCCESS", name, extra
-            
-        except Exception as e:
-            if _DEBUG:
-                print(f"[!] ODM dispatch attempt {attempt+1} failed: {e}")
+                status = decode_runtime_result(resp)
+                return status.get("severity") == "SUCCESS", status.get("name", "?"), status.get("extra", b"")
+        except:
             if attempt < MAX_RETRIES - 1:
-                time.sleep(0.2 * (attempt + 1))
+                time.sleep(0.2)
     
     return False, "NO_RESPONSE", b""
 
 
-# =============================================================================
-# FIXED: Helper to display success/failure
-# =============================================================================
-def print_result(success: bool, status_name: str, operation: str, extra: bytes = b"",
-                 verbose: bool = False):
-    """Print standardized operation result."""
-    if success:
-        print(f"[+] {operation} completed successfully")
+def result(ok: bool, name: str, op: str, extra: bytes = b"", verbose: bool = False):
+    """Print standardized result"""
+    if ok:
+        print(f"[+] {op} complete")
         if verbose and extra:
-            print(f"    Response data: {extra[:128].hex()}{'...' if len(extra) > 128 else ''}")
+            print(f"    Data: {extra[:64].hex()}{'...' if len(extra)>64 else ''}")
     else:
-        print(f"[!] {operation} failed: {status_name}")
-        if extra and verbose:
-            print(f"    Extra data: {extra[:64].hex()}")
+        print(f"[!] {op} failed: {name}")
 
 
 # =============================================================================
-# FIXED: Display helper functions
+# SUBCOMMANDS
 # =============================================================================
-def print_table(headers: List[str], rows: List[List[str]], indent: str = "    "):
-    """Print a formatted table."""
-    if not rows:
-        print(f"{indent}(empty)")
-        return
+def cmd_info(dev, args, force, verbose):
+    """Device information"""
+    print("\n[*] ODM Device Info:")
     
-    # Calculate column widths
-    col_widths = [len(h) for h in headers]
-    for row in rows:
-        for i, cell in enumerate(row):
-            if i < len(col_widths):
-                col_widths[i] = max(col_widths[i], len(str(cell)))
+    ok, name, extra = odm_cmd(dev, OP_INFO)
     
-    # Print header
-    header_line = "  ".join(f"{h:<{w}}" for h, w in zip(headers, col_widths))
-    print(f"{indent}{header_line}")
-    print(f"{indent}{'-' * len(header_line)}")
-    
-    # Print rows
-    for row in rows:
-        row_line = "  ".join(f"{str(c):<{w}}" for c, w in zip(row, col_widths))
-        print(f"{indent}{row_line}")
+    if ok and extra and len(extra) >= 128:
+        fields = {
+            'Manufacturer': extra[0:32],
+            'Model': extra[32:64],
+            'SKU': extra[64:80],
+            'Serial': extra[80:96],
+            'HW Revision': extra[96:112],
+            'Production Date': extra[112:128],
+        }
+        for key, val in fields.items():
+            decoded = val.decode('ascii', errors='ignore').rstrip('\x00').strip()
+            print(f"    {key:<18} {decoded or '?'}")
+    else:
+        print(f"    Manufacturer: Unknown | Model: Unknown | SKU: Unknown")
+        print(f"    Serial: Unknown | HW: Unknown | Date: Unknown")
 
 
-# =============================================================================
-# FIXED: ODM Info command
-# =============================================================================
-def odm_info(dev, args: List[str], force: bool = False, verbose: bool = False):
-    """Display ODM-specific device information."""
-    print("\n[*] Querying ODM device information...")
+def cmd_provision(dev, args, force, verbose):
+    """Device provisioning"""
+    print(f"\n{'='*45}")
+    print(f"  ODM DEVICE PROVISIONING")
+    print(f"{'='*45}")
     
-    # Try to get info from device
-    info = _query_odm_info_from_device(dev, verbose)
-    
-    # Display results
-    print(f"\n[+] ODM Device Information:")
-    print_table(
-        ["Field", "Value"],
-        [
-            ["Manufacturer", info.get('manufacturer', 'Unknown')],
-            ["Model", info.get('model', 'Unknown')],
-            ["SKU", info.get('sku', 'Unknown')],
-            ["Serial", info.get('serial', 'Unknown')],
-            ["HW Revision", info.get('hw_revision', 'Unknown')],
-            ["Production Date", info.get('production_date', 'Unknown')],
-            ["Region", info.get('region', 'Unknown')],
-            ["Carrier", info.get('carrier', 'Unknown')],
-        ]
-    )
-    
-    # Features
-    features = info.get('features', [])
-    if features:
-        print(f"\n[+] ODM Features:")
-        feature_rows = []
-        for f in features:
-            status = "[ON]" if f.get('enabled', False) else "[OFF]"
-            feature_rows.append([f"  {status}", f.get('name', '?'), f.get('description', '')])
-        print_table(["Status", "Feature", "Description"], feature_rows)
-    
-    # Customizations
-    customizations = info.get('customizations', [])
-    if customizations:
-        print(f"\n[+] Device Customizations:")
-        custom_rows = [[c.get('type', '?'), str(c.get('value', ''))] for c in customizations]
-        print_table(["Type", "Value"], custom_rows)
-
-
-def _query_odm_info_from_device(dev, verbose: bool = False) -> Dict[str, Any]:
-    """Try to query actual ODM info from device, with fallback."""
-    # Default info
-    default_info = {
-        'manufacturer': 'Unknown ODM',
-        'model': 'Unknown Model',
-        'sku': 'Unknown SKU',
-        'serial': 'Unknown',
-        'hw_revision': 'Unknown',
-        'production_date': 'Unknown',
-        'region': 'GLOBAL',
-        'carrier': 'Multi-carrier',
-        'features': [],
-        'customizations': [],
-    }
-    
-    try:
-        success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.INFO)
-        
-        if success and extra and len(extra) >= 128:
-            info = {}
-            info['manufacturer'] = extra[0:32].decode('ascii', errors='ignore').rstrip('\x00').strip()
-            info['model'] = extra[32:64].decode('ascii', errors='ignore').rstrip('\x00').strip()
-            info['sku'] = extra[64:80].decode('ascii', errors='ignore').rstrip('\x00').strip()
-            info['serial'] = extra[80:96].decode('ascii', errors='ignore').rstrip('\x00').strip()
-            info['hw_revision'] = extra[96:112].decode('ascii', errors='ignore').rstrip('\x00').strip()
-            info['production_date'] = extra[112:128].decode('ascii', errors='ignore').rstrip('\x00').strip()
-            
-            # Merge with defaults for missing fields
-            for key, value in default_info.items():
-                if key not in info or not info[key]:
-                    info[key] = value
-            
-            return info
-    except Exception as e:
-        if verbose and _DEBUG:
-            print(f"[!] Device ODM info query error: {e}")
-    
-    return default_info
-
-
-# =============================================================================
-# FIXED: ODM Provision command
-# =============================================================================
-def odm_provision(dev, args: List[str], force: bool = False, verbose: bool = False):
-    """Provision device for ODM manufacturing."""
-    print("\n[*] ========================================")
-    print("[*] ODM DEVICE PROVISIONING")
-    print("[*] ========================================")
-    
-    if not confirm_action(
-        "Provisioning will configure device for manufacturing.\n"
-        "This sets manufacturing flags and base parameters.",
-        force
-    ):
-        print("[*] Operation cancelled")
+    if not confirm("Provisioning configures device for manufacturing.\nSets manufacturing flags and base parameters.", force):
         return
     
     steps = [
-        "Initializing provisioning mode",
-        "Setting manufacturing flags",
-        "Configuring base parameters",
-        "Installing ODM certificates",
-        "Setting up secure elements",
-        "Finalizing provisioning"
+        "Init provisioning", "Set manufacturing flags", "Configure base params",
+        "Install ODM certificates", "Setup secure elements", "Finalize provisioning"
     ]
     
-    print()
-    all_success = True
-    
+    all_ok = True
     for i, step in enumerate(steps):
-        print(f"[*] Step {i+1}/{len(steps)}: {step}...", end=" ", flush=True)
-        
-        step_data = step.encode('ascii')[:32].ljust(32, b'\x00')
-        success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.PROVISION, step_data)
-        
-        if success:
-            print("OK")
-        else:
-            print(f"FAILED ({status_name})")
-            all_success = False
+        print(f"    Step {i+1}/{len(steps)}: {step}...", end=" ", flush=True)
+        data = step.encode()[:32].ljust(32, b'\x00')
+        ok, name, _ = odm_cmd(dev, OP_PROVISION, data)
+        print("OK" if ok else f"FAIL ({name})")
+        if not ok:
+            all_ok = False
             if not force:
-                print(f"[!] Provisioning aborted at step {i+1}")
+                print(f"[!] Aborted at step {i+1}")
                 return
-        time.sleep(0.3)
+        time.sleep(0.2)
     
-    if all_success:
-        print(f"\n[+] ODM provisioning completed successfully")
-    else:
-        print(f"\n[!] ODM provisioning completed with errors (some steps failed)")
+    print(f"\n[{' ✓' if all_ok else ' !'}] Provisioning {'complete' if all_ok else 'completed with errors'}")
 
 
-# =============================================================================
-# FIXED: ODM Customize command
-# =============================================================================
-def odm_customize(dev, args: List[str], force: bool = False, verbose: bool = False):
-    """Apply ODM customizations and branding."""
+def cmd_customize(dev, args, force, verbose):
+    """Apply customization"""
     if not args:
-        print("[!] Specify customization type and value")
-        print(f"[*] Available types: {', '.join(VALID_CUSTOMIZATIONS)}")
-        print("[*] Usage: odm customize <type> <value|file>")
+        print(f"[!] Usage: odm customize <type> <value|file>")
+        print(f"[*] Types: {', '.join(VALID_CUSTOMIZATIONS)}")
         return
     
-    custom_type = args[0].lower()
-    custom_value = args[1] if len(args) > 1 else ""
-    
-    if custom_type not in VALID_CUSTOMIZATIONS:
-        print(f"[!] Invalid customization type: '{custom_type}'")
-        print(f"[*] Valid types: {', '.join(VALID_CUSTOMIZATIONS)}")
+    ctype = args[0].lower()
+    if ctype not in VALID_CUSTOMIZATIONS:
+        print(f"[!] Invalid type: {ctype}")
         return
     
-    print(f"\n[*] Customization: {custom_type}")
+    value = args[1] if len(args) > 1 else ""
+    print(f"\n[*] Customize: {ctype} = {value[:50]}{'...' if len(value)>50 else ''}")
     
-    if not confirm_action(
-        f"This will modify device {custom_type}.\n"
-        "Custom boot components may affect boot behavior.",
-        force
-    ):
-        print("[*] Operation cancelled")
+    if not confirm(f"Modify device {ctype}. May affect boot behavior.", force):
         return
     
-    # Build customization data
-    type_bytes = custom_type.encode('ascii')[:16].ljust(16, b'\x00')
+    data = ctype.encode()[:16].ljust(16, b'\x00')
     
-    # Check if value is a file path
-    if custom_value and os.path.exists(custom_value) and os.path.isfile(custom_value):
+    if value and os.path.isfile(value):
         try:
-            file_size = os.path.getsize(custom_value)
-            if file_size > 10 * 1024 * 1024:  # 10MB limit
-                print(f"[!] File too large: {file_size} bytes (max 10MB)")
+            sz = os.path.getsize(value)
+            if sz > 10*1024*1024:
+                print(f"[!] File too large: {sz} bytes (max 10MB)")
                 return
-            
-            print(f"[*] Loading from file: {custom_value} ({file_size} bytes)")
-            with open(custom_value, 'rb') as f:
-                file_data = f.read()
-            
-            data = type_bytes + struct.pack("<I", len(file_data)) + file_data
+            with open(value, 'rb') as f:
+                data += struct.pack("<I", len(f.read())) + f.read()
         except Exception as e:
-            print(f"[!] File read error: {e}")
+            print(f"[!] File error: {e}")
             return
     else:
-        # String value
-        value_bytes = custom_value.encode('ascii')[:64].ljust(64, b'\x00')
-        data = type_bytes + value_bytes
+        data += value.encode()[:64].ljust(64, b'\x00')
     
-    success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.CUSTOMIZE, data)
-    print_result(success, status_name, f"{custom_type} customization", extra, verbose)
+    ok, name, extra = odm_cmd(dev, OP_CUSTOMIZE, data)
+    result(ok, name, f"Customize {ctype}", extra, verbose)
 
 
-# =============================================================================
-# FIXED: ODM Test command
-# =============================================================================
-def odm_test(dev, args: List[str], force: bool = False, verbose: bool = False):
-    """Run ODM manufacturing tests."""
-    test_type = args[0].upper() if args else "QUICK"
-    
-    if test_type not in VALID_TEST_TYPES:
-        print(f"[!] Invalid test type: '{test_type}'")
-        print(f"[*] Valid types: {', '.join(VALID_TEST_TYPES)}")
-        test_type = "QUICK"
-    
-    # Test definitions with realistic durations
-    test_suites = {
-        "QUICK": [
-            ("Basic connectivity", 0.3),
-            ("Memory test", 0.5),
-            ("CPU validation", 0.3),
-            ("Storage check", 0.5),
-        ],
-        "FULL": [
-            ("Hardware diagnostics", 1.0),
-            ("Sensor calibration check", 1.0),
-            ("Radio module test", 1.5),
-            ("Display verification", 0.5),
-            ("Audio subsystem test", 1.0),
-            ("Battery status check", 1.0),
-            ("Camera module test", 0.5),
-        ],
-        "EXTENDED": [
-            ("Burn-in stress test", 3.0),
-            ("Memory stress testing", 2.0),
-            ("Thermal validation", 2.0),
-            ("Long-term reliability simulation", 3.0),
-            ("Environmental tolerance check", 2.0),
-        ]
-    }
-    
-    tests = test_suites.get(test_type, test_suites["QUICK"])
-    total_duration = sum(d for _, d in tests)
-    
-    print(f"\n[*] ========================================")
-    print(f"[*] ODM {test_type} TEST SUITE")
-    print(f"[*] ========================================")
-    print(f"[*] Tests: {len(tests)}")
-    print(f"[*] Estimated duration: {total_duration:.1f}s")
-    
-    if not confirm_action(
-        f"Running {test_type} manufacturing tests.\n"
-        "Device may be unresponsive during testing.",
-        force
-    ):
-        print("[*] Operation cancelled")
+def cmd_test(dev, args, force, verbose):
+    """Run manufacturing tests"""
+    ttype = args[0].upper() if args else "QUICK"
+    if ttype not in VALID_TESTS:
+        print(f"[!] Invalid: {ttype}. Use: {', '.join(VALID_TESTS)}")
         return
     
-    print()
-    results = {"PASS": 0, "FAIL": 0, "SKIP": 0}
+    suites = {
+        "QUICK": [("Connectivity", 0.3), ("Memory", 0.5), ("CPU", 0.3), ("Storage", 0.5)],
+        "FULL": [("Hardware diag", 1.0), ("Sensors", 1.0), ("Radio", 1.5), ("Display", 0.5),
+                 ("Audio", 1.0), ("Battery", 1.0), ("Camera", 0.5)],
+        "EXTENDED": [("Burn-in", 3.0), ("Memory stress", 2.0), ("Thermal", 2.0),
+                     ("Reliability", 3.0), ("Environmental", 2.0)],
+    }
     
-    for test_name, test_duration in tests:
-        print(f"    [{test_name:<35}] ", end="", flush=True)
+    tests = suites.get(ttype, suites["QUICK"])
+    duration = sum(d for _, d in tests)
+    
+    print(f"\n{'='*45}")
+    print(f"  ODM {ttype} TEST SUITE ({len(tests)} tests, ~{duration:.0f}s)")
+    print(f"{'='*45}")
+    
+    if not confirm(f"Run {ttype} tests. Device may be unresponsive.", force):
+        return
+    
+    passed = failed = skipped = 0
+    for test_name, delay in tests:
+        print(f"    [{test_name:<30}] ", end="", flush=True)
         
-        test_data = test_type.encode('ascii')[:8].ljust(8, b'\x00')
-        test_data += test_name.encode('ascii')[:32].ljust(32, b'\x00')
+        data = ttype.encode()[:8].ljust(8, b'\x00') + test_name.encode()[:32].ljust(32, b'\x00')
+        ok, name, extra = odm_cmd(dev, OP_TEST, data)
+        time.sleep(max(0.1, delay - 0.3))
         
-        success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.TEST, test_data)
-        
-        # Simulate remaining test time
-        time.sleep(max(0.1, test_duration - 0.3))
-        
-        if success:
-            print("PASS")
-            results["PASS"] += 1
-        elif status_name == "SKIP" or status_name == "NOT_SUPPORTED":
-            print("SKIP")
-            results["SKIP"] += 1
+        if ok:
+            print("PASS"); passed += 1
+        elif name in ("SKIP", "NOT_SUPPORTED"):
+            print("SKIP"); skipped += 1
         else:
-            print(f"FAIL ({status_name})")
-            results["FAIL"] += 1
+            print(f"FAIL ({name})"); failed += 1
             if verbose and extra:
-                print(f"        Details: {extra[:64].hex()}")
+                print(f"        {extra[:64].hex()}")
     
-    # Summary
-    total = sum(results.values())
-    print(f"\n[+] Test Suite Complete:")
-    print(f"    Passed:  {results['PASS']}/{total}")
-    print(f"    Failed:  {results['FAIL']}/{total}")
-    if results['SKIP'] > 0:
-        print(f"    Skipped: {results['SKIP']}/{total}")
-    
-    if results['FAIL'] == 0:
-        print(f"\n[✓] All tests passed!")
-    else:
-        print(f"\n[!] {results['FAIL']} test(s) failed - review device logs")
+    total = passed + failed + skipped
+    print(f"\n[+] Results: {passed}/{total} passed, {failed} failed", end='')
+    if skipped: print(f", {skipped} skipped", end='')
+    print()
 
 
-# =============================================================================
-# FIXED: ODM Calibrate command
-# =============================================================================
-def odm_calibrate(dev, args: List[str], force: bool = False, verbose: bool = False):
-    """Calibrate ODM-specific hardware."""
+def cmd_calibrate(dev, args, force, verbose):
+    """Calibrate hardware"""
     if not args:
-        print("[!] Specify hardware to calibrate")
+        print(f"[!] Usage: odm calibrate <hardware>")
         print(f"[*] Available: {', '.join(VALID_HARDWARE)}")
         return
     
-    hardware = args[0].lower()
-    
-    if hardware not in VALID_HARDWARE:
-        print(f"[!] Invalid hardware: '{hardware}'")
-        print(f"[*] Valid: {', '.join(VALID_HARDWARE)}")
+    hw = args[0].lower()
+    if hw not in VALID_HARDWARE:
+        print(f"[!] Invalid: {hw}")
         return
     
-    print(f"\n[*] Calibrating: {hardware}")
+    print(f"\n[*] Calibrating: {hw}")
     
-    if not confirm_action(
-        f"{hardware.capitalize()} calibration requires proper test equipment.\n"
-        "Incorrect calibration may cause hardware malfunction.",
-        force
-    ):
-        print("[*] Operation cancelled")
+    if not confirm(f"{hw.capitalize()} calibration requires proper equipment.\nIncorrect calibration may cause malfunction.", force):
         return
     
-    # Build calibration data
-    data = hardware.encode('ascii')[:16].ljust(16, b'\x00')
+    data = hw.encode()[:16].ljust(16, b'\x00')
+    for param in args[1:4]:
+        try:
+            if '.' in param: data += struct.pack("<f", float(param))
+            else: data += struct.pack("<I", int(param, 0))
+        except ValueError:
+            data += param.encode()[:16].ljust(16, b'\x00')
     
-    # Add calibration parameters
-    if len(args) > 1:
-        for param in args[1:4]:  # Max 3 additional params
-            try:
-                if '.' in param:
-                    data += struct.pack("<f", float(param))
-                else:
-                    data += struct.pack("<I", int(param, 0))
-            except ValueError:
-                data += param.encode('ascii')[:16].ljust(16, b'\x00')
-    
-    success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.CALIBRATE, data)
-    print_result(success, status_name, f"{hardware} calibration", extra, verbose)
+    ok, name, extra = odm_cmd(dev, OP_CALIBRATE, data)
+    result(ok, name, f"Calibrate {hw}", extra, verbose)
 
 
-# =============================================================================
-# FIXED: ODM Feature command
-# =============================================================================
-def odm_feature(dev, args: List[str], force: bool = False, verbose: bool = False):
-    """Enable/disable ODM-specific features."""
+def cmd_feature(dev, args, force, verbose):
+    """Toggle features"""
     if not args:
-        print("[!] Specify feature name and action")
-        print("[*] Usage: odm feature <name> [ENABLE|DISABLE|TOGGLE]")
-        print("[*] Common features: CUSTOM_BOOTANIMATION, BRANDED_SOUNDS, "
-              "CUSTOM_THEME, EXTENDED_DIAGNOSTICS")
+        print("[!] Usage: odm feature <name> [ENABLE|DISABLE|TOGGLE]")
         return
     
     feature = args[0].upper()
     action = args[1].upper() if len(args) > 1 else "TOGGLE"
     
-    if action not in VALID_ACTIONS:
-        print(f"[!] Invalid action: '{action}'")
-        print(f"[*] Valid: {', '.join(VALID_ACTIONS)}")
+    if action not in ('ENABLE', 'DISABLE', 'TOGGLE'):
+        print(f"[!] Invalid action: {action}")
         return
     
     print(f"\n[*] Feature: {feature} -> {action}")
     
-    if not confirm_action(
-        f"This will {action.lower()} the '{feature}' feature.",
-        force
-    ):
-        print("[*] Operation cancelled")
+    if not confirm(f"{action} feature '{feature}'.", force):
         return
     
-    data = feature.encode('ascii')[:16].ljust(16, b'\x00')
-    data += action.encode('ascii')[:8].ljust(8, b'\x00')
-    
-    success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.FEATURE, data)
-    print_result(success, status_name, f"Feature {feature} {action.lower()}", extra, verbose)
+    data = feature.encode()[:16].ljust(16, b'\x00') + action.encode()[:8].ljust(8, b'\x00')
+    ok, name, extra = odm_cmd(dev, OP_FEATURE, data)
+    result(ok, name, f"Feature {feature}", extra, verbose)
 
 
-# =============================================================================
-# FIXED: ODM Region command
-# =============================================================================
-def odm_region(dev, args: List[str], force: bool = False, verbose: bool = False):
-    """Configure regional settings."""
+def cmd_region(dev, args, force, verbose):
+    """Region configuration"""
     if not args:
-        print("[!] Specify operation: list, info, set <region>")
+        print("[!] Usage: odm region <list|info|set> [region]")
         return
     
-    operation = args[0].lower()
+    op = args[0].lower()
     
-    if operation == "list":
-        print(f"\n[+] Available Regions ({len(VALID_REGIONS)}):")
-        # Print in columns
-        for i in range(0, len(VALID_REGIONS), 4):
-            print(f"    {'  '.join(VALID_REGIONS[i:i+4])}")
+    if op == "list":
+        print(f"\n[*] Available Regions:")
+        for i in range(0, len(VALID_REGIONS), 5):
+            print(f"    {', '.join(VALID_REGIONS[i:i+5])}")
         return
     
-    elif operation == "info":
-        print("\n[*] Querying current region...")
+    elif op == "info":
+        print("\n[*] Current region:")
         data = b"GET".ljust(16, b'\x00')
-        success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.REGION, data)
-        
-        if success and extra:
+        ok, name, extra = odm_cmd(dev, OP_REGION, data)
+        if ok and extra:
             region = extra.decode('ascii', errors='ignore').rstrip('\x00').strip()
-            print(f"[+] Current region: {region}")
+            print(f"[+] {region}")
         else:
-            print_result(success, status_name, "Region query", extra, verbose)
+            result(ok, name, "Region query", extra, verbose)
     
-    elif operation == "set" and len(args) > 1:
+    elif op == "set" and len(args) > 1:
         region = args[1].upper()
-        
         if region not in VALID_REGIONS:
-            print(f"[!] Invalid region: '{region}'")
-            print(f"[*] Valid: {', '.join(VALID_REGIONS)}")
+            print(f"[!] Invalid region: {region}")
             return
         
         print(f"\n[*] Setting region: {region}")
-        
-        if not confirm_action(
-            "Region change may affect radio compliance, available features,\n"
-            "and regulatory certifications.",
-            force
-        ):
-            print("[*] Operation cancelled")
+        if not confirm("Region change affects radio compliance and features.", force):
             return
         
-        data = b"SET".ljust(16, b'\x00')
-        data += region.encode('ascii')[:8].ljust(8, b'\x00')
-        
-        success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.REGION, data)
-        print_result(success, status_name, f"Region set to {region}", extra, verbose)
-    
+        data = b"SET".ljust(16, b'\x00') + region.encode()[:8].ljust(8, b'\x00')
+        ok, name, extra = odm_cmd(dev, OP_REGION, data)
+        result(ok, name, f"Region → {region}", extra, verbose)
     else:
-        print("[!] Invalid region operation. Use: list, info, set <region>")
+        print("[!] Usage: odm region <list|info|set> [region]")
 
 
-# =============================================================================
-# FIXED: ODM Security command
-# =============================================================================
-def odm_security(dev, args: List[str], force: bool = False, verbose: bool = False):
-    """Manage ODM security settings."""
-    if not args:
-        print("[!] Specify security operation")
-        print(f"[*] Available: {', '.join(VALID_SECURITY_OPS)}")
+def cmd_security(dev, args, force, verbose):
+    """Security management"""
+    if not args or args[0].lower() not in VALID_SECURITY:
+        print(f"[!] Usage: odm security <{'|'.join(VALID_SECURITY)}>")
         return
     
-    operation = args[0].lower()
+    op = args[0].lower()
+    print(f"\n[*] Security: {op}")
     
-    if operation not in VALID_SECURITY_OPS:
-        print(f"[!] Invalid operation: '{operation}'")
-        print(f"[*] Valid: {', '.join(VALID_SECURITY_OPS)}")
-        return
-    
-    print(f"\n[*] Security operation: {operation}")
-    
-    if operation in ("lockdown", "enable"):
-        if not confirm_action(
-            "Security lockdown restricts device access and may prevent\n"
-            "future modifications without proper authorization.",
-            force
-        ):
-            print("[*] Operation cancelled")
+    if op in ("lockdown", "enable"):
+        if not confirm(f"Security {op} restricts access and may prevent future modifications.", force):
             return
     
-    data = operation.encode('ascii')[:16].ljust(16, b'\x00')
-    success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.SECURITY, data)
-    print_result(success, status_name, f"Security {operation}", extra, verbose)
+    data = op.encode()[:16].ljust(16, b'\x00')
+    ok, name, extra = odm_cmd(dev, OP_SECURITY, data)
+    result(ok, name, f"Security {op}", extra, verbose)
 
 
-# =============================================================================
-# FIXED: ODM Firmware command
-# =============================================================================
-def odm_firmware(dev, args: List[str], force: bool = False, verbose: bool = False):
-    """Manage ODM-specific firmware."""
+def cmd_firmware(dev, args, force, verbose):
+    """Firmware management"""
     if not args:
-        print("[!] Specify operation: info, update <file>")
+        print("[!] Usage: odm firmware <info|update> [file]")
         return
     
-    operation = args[0].lower()
+    op = args[0].lower()
     
-    if operation == "info":
-        print("\n[*] Querying ODM firmware information...")
-        success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.FIRMWARE_INFO)
-        
-        if success and len(extra) >= 64:
-            version = extra[0:16].decode('ascii', errors='ignore').rstrip('\x00').strip()
+    if op == "info":
+        print("\n[*] ODM Firmware:")
+        ok, name, extra = odm_cmd(dev, OP_FIRMWARE_INFO)
+        if ok and len(extra) >= 64:
+            ver = extra[0:16].decode('ascii', errors='ignore').rstrip('\x00').strip()
             build = extra[16:32].decode('ascii', errors='ignore').rstrip('\x00').strip()
             date = extra[32:48].decode('ascii', errors='ignore').rstrip('\x00').strip()
             custom = extra[48:64].decode('ascii', errors='ignore').rstrip('\x00').strip()
-            
-            print(f"\n[+] ODM Firmware:")
-            print_table(
-                ["Field", "Value"],
-                [
-                    ["Version", version or "Unknown"],
-                    ["Build", build or "Unknown"],
-                    ["Date", date or "Unknown"],
-                    ["Customizations", custom or "None"],
-                ]
-            )
+            print(f"    Version: {ver or '?'}  Build: {build or '?'}")
+            print(f"    Date:    {date or '?'}  Customizations: {custom or 'None'}")
         else:
-            print_result(success, status_name, "Firmware info query", extra, verbose)
+            result(ok, name, "Firmware info", extra, verbose)
     
-    elif operation == "update" and len(args) > 1:
-        firmware_file = args[1]
-        
-        if not os.path.exists(firmware_file):
-            print(f"[!] Firmware file not found: {firmware_file}")
+    elif op == "update" and len(args) > 1:
+        fw_file = args[1]
+        if not os.path.isfile(fw_file):
+            print(f"[!] File not found: {fw_file}")
             return
         
-        if not os.path.isfile(firmware_file):
-            print(f"[!] Not a file: {firmware_file}")
-            return
+        sz = os.path.getsize(fw_file)
+        print(f"\n[*] Firmware update: {fw_file} ({sz:,} bytes)")
         
-        try:
-            file_size = os.path.getsize(firmware_file)
-        except OSError as e:
-            print(f"[!] Cannot access file: {e}")
-            return
-        
-        print(f"\n[*] Firmware update:")
-        print(f"    File: {firmware_file}")
-        print(f"    Size: {file_size:,} bytes")
-        
-        if not confirm_action(
+        if not confirm(
             "⚠️  FIRMWARE UPDATE WARNING:\n"
-            "  - Interruption may BRICK the device\n"
+            "  - Interruption may BRICK device\n"
             "  - Ensure stable power connection\n"
             "  - Have recovery firmware available\n"
-            "  - Device may reboot after update",
-            force
+            "  - Device may reboot after update", force
         ):
-            print("[*] Operation cancelled")
             return
         
         try:
-            with open(firmware_file, 'rb') as f:
-                firmware_data = f.read()
+            with open(fw_file, 'rb') as f:
+                fw_data = f.read()
             
-            # Initialize update
-            print("[*] Initializing firmware update...")
-            init_data = struct.pack("<I", len(firmware_data))
-            success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.FIRMWARE_UPDATE, init_data)
-            
-            if not success:
-                print(f"[!] Update initialization failed: {status_name}")
+            print("[*] Initializing...")
+            ok, name, _ = odm_cmd(dev, OP_FIRMWARE_UPDATE, struct.pack("<I", len(fw_data)))
+            if not ok:
+                print(f"[!] Init failed: {name}")
                 return
             
-            print("[*] Sending firmware data...")
-            data_success, data_status, data_extra = dispatch_odm_command(
-                dev, ODMOpcode.FIRMWARE_DATA, firmware_data, timeout=60.0
-            )
+            print("[*] Sending firmware...")
+            ok, name, _ = odm_cmd(dev, OP_FIRMWARE_DATA, fw_data)
             
-            if data_success:
-                print("[+] Firmware update completed!")
-                print("[*] Device may restart automatically")
+            if ok:
+                print("[+] Update complete! Device may restart.")
             else:
-                print(f"[!] Firmware data transfer failed: {data_status}")
-        
+                print(f"[!] Transfer failed: {name}")
         except Exception as e:
-            print(f"[!] Firmware update error: {type(e).__name__}: {e}")
-            if _DEBUG:
-                traceback.print_exc()
-    
-    else:
-        print("[!] Invalid firmware operation. Use: info, update <file>")
+            print(f"[!] Error: {e}")
 
 
-# =============================================================================
-# FIXED: ODM Manufacturing command
-# =============================================================================
-def odm_manufacturing(dev, args: List[str], force: bool = False, verbose: bool = False):
-    """Access manufacturing modes."""
-    print("\n[*] ========================================")
-    print("[*] MANUFACTURING MODE")
-    print("[*] ========================================")
+def cmd_manufacturing(dev, args, force, verbose):
+    """Manufacturing mode"""
+    print(f"\n{'='*45}")
+    print(f"  MANUFACTURING MODE")
+    print(f"{'='*45}")
     
-    if not confirm_action(
-        "⚠️  MANUFACTURING MODE WARNING:\n"
-        "  - Provides LOW-LEVEL device access\n"
-        "  - May VOID warranties\n"
-        "  - Bypasses security features\n"
-        "  - For authorized personnel only",
-        force
+    if not confirm(
+        "⚠️  MANUFACTURING MODE:\n"
+        "  - LOW-LEVEL device access\n"
+        "  - Bypasses security\n"
+        "  - May void warranty\n"
+        "  - For authorized personnel only", force
     ):
-        print("[*] Operation cancelled")
         return
     
-    data = b"ENTER".ljust(16, b'\x00')
-    success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.MANUFACTURING, data)
+    ok, name, _ = odm_cmd(dev, OP_MANUFACTURING, b"ENTER".ljust(16, b'\x00'))
     
-    if success:
-        print("\n[+] Manufacturing mode activated")
-        print("\n[*] Available manufacturing commands:")
-        mfg_commands = [
-            "RAW_FLASH_ACCESS",
-            "HARDWARE_TEST_MODE",
-            "CALIBRATION_DATA_RW",
-            "SECURE_ELEMENT_ACCESS",
-            "PRODUCTION_KEY_MGMT",
-            "BOUNDARY_SCAN",
-            "JTAG_ENABLE",
-        ]
-        for cmd in mfg_commands:
-            print(f"    • {cmd}")
+    if ok:
+        print("\n[+] Manufacturing mode active")
+        print("[*] Available: RAW_FLASH, HW_TEST, CALIB_RW, SEC_ELEMENT, PROD_KEYS, BOUNDARY_SCAN, JTAG")
     else:
-        print_result(success, status_name, "Manufacturing mode", extra, verbose)
+        print(f"[!] Failed: {name}")
 
 
-# =============================================================================
-# FIXED: ODM Supply Chain command
-# =============================================================================
-def odm_supplychain(dev, args: List[str], force: bool = False, verbose: bool = False):
-    """Query supply chain information."""
-    print("\n[*] Querying supply chain information...")
+def cmd_supplychain(dev, args, force, verbose):
+    """Supply chain info"""
+    print("\n[*] Supply Chain:")
     
-    success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.SUPPLYCHAIN)
+    ok, name, extra = odm_cmd(dev, OP_SUPPLYCHAIN)
     
-    if success and len(extra) >= 128:
+    if ok and extra and len(extra) >= 128:
         fields = {
-            'Factory': extra[0:32],
-            'Production Line': extra[32:48],
-            'Work Order': extra[48:64],
-            'Batch': extra[64:80],
-            'QC Status': extra[80:96],
-            'Ship Date': extra[96:112],
+            'Factory': extra[0:32], 'Prod Line': extra[32:48], 'Work Order': extra[48:64],
+            'Batch': extra[64:80], 'QC Status': extra[80:96], 'Ship Date': extra[96:112],
             'Destination': extra[112:128],
         }
-        
-        print(f"\n[+] Supply Chain Information:")
-        rows = []
-        for key, value in fields.items():
-            decoded = value.decode('ascii', errors='ignore').rstrip('\x00').strip()
-            rows.append([key, decoded or 'N/A'])
-        print_table(["Field", "Value"], rows)
+        for key, val in fields.items():
+            decoded = val.decode('ascii', errors='ignore').rstrip('\x00').strip()
+            print(f"    {key:<14} {decoded or 'N/A'}")
     else:
-        print_result(success, status_name, "Supply chain query", extra, verbose)
+        result(ok, name, "Supply chain query", extra, verbose)
 
 
-# =============================================================================
-# FIXED: ODM Unlock command
-# =============================================================================
-def odm_unlock(dev, args: List[str], force: bool = False, verbose: bool = False):
-    """Unlock ODM development features."""
-    print("\n[*] ========================================")
-    print("[*] UNLOCK ODM DEVELOPMENT FEATURES")
-    print("[*] ========================================")
+def cmd_unlock(dev, args, force, verbose):
+    """Unlock development features"""
+    print(f"\n{'='*45}")
+    print(f"  UNLOCK ODM DEVELOPMENT")
+    print(f"{'='*45}")
     
-    if not confirm_action(
-        "⚠️  DEVELOPMENT UNLOCK WARNING:\n"
-        "  - Enables advanced ODM development tools\n"
-        "  - Bypasses normal security restrictions\n"
+    if not confirm(
+        "⚠️  DEVELOPMENT UNLOCK:\n"
+        "  - Advanced ODM tools\n"
+        "  - Bypasses security\n"
         "  - May void warranty\n"
-        "  - Only use on development/test devices",
-        force
+        "  - Development/test devices only", force
     ):
-        print("[*] Operation cancelled")
         return
     
     data = b"ODM_DEV".ljust(16, b'\x00')
-    
     if args:
-        unlock_code = args[0]
-        data += unlock_code.encode('ascii')[:16].ljust(16, b'\x00')
+        data += args[0].encode()[:16].ljust(16, b'\x00')
     
-    success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.UNLOCK, data)
+    ok, name, _ = odm_cmd(dev, OP_UNLOCK, data)
     
-    if success:
-        print("\n[+] ODM development features unlocked")
-        print("\n[*] Available development features:")
-        features = [
-            "DEBUG_ACCESS",
-            "RAW_MEMORY_ACCESS",
-            "SECURE_BOOT_BYPASS",
-            "TEST_POINT_ACCESS",
-            "CALIBRATION_OVERRIDE",
-            "LOGGING_ENHANCED",
-        ]
-        for f in features:
-            print(f"    • {f}")
+    if ok:
+        print("\n[+] Unlocked. Features: DEBUG, RAW_MEM, SEC_BOOT_BYPASS, TEST_POINT, CALIB_OVERRIDE, ENHANCED_LOG")
     else:
-        print_result(success, status_name, "ODM unlock", extra, verbose)
+        print(f"[!] Failed: {name}")
 
 
-# =============================================================================
-# FIXED: ODM Lock command
-# =============================================================================
-def odm_lock(dev, args: List[str], force: bool = False, verbose: bool = False):
-    """Lock ODM features."""
-    print("\n[*] Locking ODM development features...")
+def cmd_lock(dev, args, force, verbose):
+    """Lock to production"""
+    print("\n[*] Locking ODM features...")
+    ok, name, extra = odm_cmd(dev, OP_LOCK, b"PRODUCTION".ljust(16, b'\x00'))
+    result(ok, name, "ODM lock", extra, verbose)
+
+
+def cmd_reset(dev, args, force, verbose):
+    """Reset to factory"""
+    print(f"\n{'='*45}")
+    print(f"  RESET ODM CUSTOMIZATIONS")
+    print(f"{'='*45}")
     
-    data = b"PRODUCTION".ljust(16, b'\x00')
-    success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.LOCK, data)
-    print_result(success, status_name, "ODM lock", extra, verbose)
-
-
-# =============================================================================
-# FIXED: ODM Reset command
-# =============================================================================
-def odm_reset(dev, args: List[str], force: bool = False, verbose: bool = False):
-    """Reset ODM customizations to factory defaults."""
-    print("\n[*] ========================================")
-    print("[*] RESET ODM CUSTOMIZATIONS")
-    print("[*] ========================================")
-    
-    if not confirm_action(
+    if not confirm(
         "⚠️  RESET WARNING:\n"
-        "  - Removes ALL ODM customizations and branding\n"
-        "  - Device returns to generic factory state\n"
-        "  - This cannot be undone without re-provisioning",
-        force
+        "  - Removes ALL ODM customizations\n"
+        "  - Returns to generic factory state\n"
+        "  - Cannot be undone without re-provisioning", force
     ):
-        print("[*] Operation cancelled")
         return
     
-    data = b"FACTORY".ljust(16, b'\x00')
-    success, status_name, extra = dispatch_odm_command(dev, ODMOpcode.RESET, data)
+    ok, name, _ = odm_cmd(dev, OP_RESET, b"FACTORY".ljust(16, b'\x00'))
     
-    if success:
-        print("\n[+] ODM customizations reset to factory defaults")
-        print("\n[*] Reset items:")
-        items = [
-            "Branding and logos",
-            "Custom boot animations",
-            "System sounds",
-            "UI themes",
-            "Regional settings",
-            "Manufacturing flags",
-            "Calibration overrides",
-        ]
-        for item in items:
-            print(f"    • {item}")
+    if ok:
+        print("\n[+] Reset complete. Removed: branding, logos, bootanim, sounds, themes, regions, mfg flags, calibration")
     else:
-        print_result(success, status_name, "ODM reset", extra, verbose)
+        print(f"[!] Failed: {name}")
 
 
 # =============================================================================
-# FIXED: Subcommand dispatch table
+# DISPATCH TABLE
 # =============================================================================
-ODM_SUBCOMMANDS = {
-    # Info
-    'info': odm_info,
-    'status': odm_info,
-    'identity': odm_info,
-    
-    # Provisioning
-    'provision': odm_provision,
-    'setup': odm_provision,
-    'init': odm_provision,
-    
-    # Customization
-    'customize': odm_customize,
-    'brand': odm_customize,
-    'personalize': odm_customize,
-    
-    # Testing
-    'test': odm_test,
-    'diagnostic': odm_test,
-    'selftest': odm_test,
-    
-    # Calibration
-    'calibrate': odm_calibrate,
-    'tune': odm_calibrate,
-    'adjust': odm_calibrate,
-    
-    # Features
-    'feature': odm_feature,
-    'capability': odm_feature,
-    'toggle': odm_feature,
-    
-    # Region
-    'region': odm_region,
-    'locale': odm_region,
-    'market': odm_region,
-    
-    # Security
-    'security': odm_security,
-    'lockdown': odm_security,
-    'secure': odm_security,
-    
-    # Firmware
-    'firmware': odm_firmware,
-    'update': odm_firmware,
-    'flash': odm_firmware,
-    
-    # Manufacturing
-    'manufacturing': odm_manufacturing,
-    'factory': odm_manufacturing,
-    'production': odm_manufacturing,
-    
-    # Supply chain
-    'supplychain': odm_supplychain,
-    'logistics': odm_supplychain,
-    'tracking': odm_supplychain,
-    
-    # Unlock
-    'unlock': odm_unlock,
-    'enable': odm_unlock,
-    'activate': odm_unlock,
-    
-    # Lock
-    'lock': odm_lock,
-    'disable': odm_lock,
-    'deactivate': odm_lock,
-    
-    # Reset
-    'reset': odm_reset,
-    'restore': odm_reset,
-    'defaults': odm_reset,
-    
-    # Help
-    'help': lambda dev, args, force, verbose: print_odm_help(),
-    '?': lambda dev, args, force, verbose: print_odm_help(),
+HANDLERS = {
+    'info': cmd_info, 'status': cmd_info, 'identity': cmd_info,
+    'provision': cmd_provision, 'setup': cmd_provision, 'init': cmd_provision,
+    'customize': cmd_customize, 'brand': cmd_customize, 'personalize': cmd_customize,
+    'test': cmd_test, 'diagnostic': cmd_test, 'selftest': cmd_test,
+    'calibrate': cmd_calibrate, 'tune': cmd_calibrate, 'adjust': cmd_calibrate,
+    'feature': cmd_feature, 'capability': cmd_feature, 'toggle': cmd_feature,
+    'region': cmd_region, 'locale': cmd_region, 'market': cmd_region,
+    'security': cmd_security, 'lockdown': cmd_security, 'secure': cmd_security,
+    'firmware': cmd_firmware, 'update': cmd_firmware, 'flash': cmd_firmware,
+    'manufacturing': cmd_manufacturing, 'factory': cmd_manufacturing, 'production': cmd_manufacturing,
+    'supplychain': cmd_supplychain, 'logistics': cmd_supplychain, 'tracking': cmd_supplychain,
+    'unlock': cmd_unlock, 'enable': cmd_unlock, 'activate': cmd_unlock,
+    'lock': cmd_lock, 'disable': cmd_lock, 'deactivate': cmd_lock,
+    'reset': cmd_reset, 'restore': cmd_reset, 'defaults': cmd_reset,
 }
 
 
 # =============================================================================
-# FIXED: Help display
-# =============================================================================
-def print_odm_help():
-    """Display ODM command help."""
-    print("""
-╔══════════════════════════════════════════════════════════════╗
-║                    ODM COMMAND HELP                          ║
-╠══════════════════════════════════════════════════════════════╣
-║                                                              ║
-║  Device Information:                                         ║
-║    info                 Show ODM device information          ║
-║    supplychain          Show supply chain information        ║
-║                                                              ║
-║  Manufacturing:                                              ║
-║    provision            Provision device for manufacturing   ║
-║    test [QUICK|FULL|EXTENDED]  Run manufacturing tests       ║
-║    calibrate <hw>       Calibrate hardware component         ║
-║    manufacturing        Enter manufacturing mode             ║
-║                                                              ║
-║  Customization:                                              ║
-║    customize <type> <v> Apply ODM customizations             ║
-║    feature <name> [act] Manage ODM features                  ║
-║    region [list|info|set <r>]  Configure regional settings   ║
-║                                                              ║
-║  Security:                                                   ║
-║    security <op>        Manage security settings             ║
-║    unlock [code]        Unlock ODM development features      ║
-║    lock                 Lock ODM features (production)       ║
-║                                                              ║
-║  Firmware:                                                   ║
-║    firmware info        Show ODM firmware information        ║
-║    firmware update <f>  Update ODM firmware from file        ║
-║                                                              ║
-║  Maintenance:                                                ║
-║    reset                Reset ODM customizations to default  ║
-║                                                              ║
-╠══════════════════════════════════════════════════════════════╣
-║  CUSTOMIZATION TYPES:   branding, bootlogo, bootanimation,   ║
-║                         sounds, themes                       ║
-║  TEST TYPES:            QUICK, FULL, EXTENDED                ║
-║  HARDWARE:              display, touch, audio, sensors,      ║
-║                         camera, battery                      ║
-║  SECURITY OPS:          enable, disable, lockdown, unlock,   ║
-║                         status                               ║
-║  REGIONS:               NA, EU, ASIA, CN, JP, KR, IN,       ║
-║                         LATAM, MEA, GLOBAL                   ║
-╠══════════════════════════════════════════════════════════════╣
-║  FLAGS:  --force (-f)   Skip confirmation prompts            ║
-║          --verbose (-v) Show detailed output                 ║
-╠══════════════════════════════════════════════════════════════╣
-║  EXAMPLES:                                                   ║
-║    qslcl odm info                                            ║
-║    qslcl odm test FULL --verbose                             ║
-║    qslcl odm customize branding "MyBrand"                    ║
-║    qslcl odm calibrate display                               ║
-║    qslcl odm region set EU                                   ║
-║    qslcl odm firmware update odm_fw.bin --force              ║
-║    qslcl odm manufacturing --force                           ║
-╚══════════════════════════════════════════════════════════════╝
-""")
-
-
-# =============================================================================
-# FIXED: Main ODM command function
+# MAIN COMMAND
 # =============================================================================
 def cmd_odm(args=None) -> int:
     """
-    QSLCL ODM Command v2.0 (FIXED)
+    QSLCL ODM - ODM operations and device management
     
-    Manages ODM operations including:
-    - Device provisioning and customization
-    - Manufacturing tests and calibration
-    - Feature and region management
-    - Security and firmware operations
-    
-    Returns:
-        int: 0 on success, 1 on failure
+    Examples:
+        odm info                      - Device information
+        odm test FULL --verbose       - Full manufacturing test
+        odm customize branding "Name" - Apply branding
+        odm calibrate display         - Calibrate display
+        odm region set EU             - Set region to EU
+        odm firmware update fw.bin    - Update firmware
+        odm manufacturing --force     - Enter manufacturing mode
+        odm reset                     - Reset customizations
     """
     
-    # =========================================================================
-    # Input validation
-    # =========================================================================
     if args is None:
-        print("[!] ODM: No arguments provided")
-        print_odm_help()
+        print("[!] No arguments")
+        print("[*] Usage: odm <info|provision|test|calibrate|customize|feature|region|security|firmware|manufacturing|reset>")
         return 1
     
-    if not _use_qslcl:
-        _warn_standalone()
-    
-    # =========================================================================
-    # Device discovery
-    # =========================================================================
-    if _use_qslcl:
-        try:
-            devs = _scan_all()
-        except Exception as e:
-            print(f"[!] Device scan failed: {e}")
-            return 1
-        
-        if not devs:
-            print("[!] No QSLCL-compatible device detected")
-            return 1
-        
-        dev = devs[0]
-        print(f"[*] Device: {dev.product} ({dev.vendor})")
-    else:
-        print("[!] Cannot access device in standalone mode")
+    devs = scan_all()
+    if not devs:
+        print("[!] No device")
         return 1
     
-    # =========================================================================
-    # Loader injection
-    # =========================================================================
-    if hasattr(args, 'loader') and args.loader:
-        try:
-            _auto_loader_if_needed(args, dev)
-        except Exception as e:
-            print(f"[!] Loader injection failed: {e}")
-            return 1
+    dev = devs[0]
+    print(f"[*] Device: {dev.product}")
     
-    # =========================================================================
-    # Extract subcommand
-    # =========================================================================
-    subcommand = None
-    for attr in ['odm_subcommand', 'subcommand']:
-        if hasattr(args, attr):
-            val = getattr(args, attr)
-            if val:
-                subcommand = val.lower().strip()
-                break
+    if getattr(args, 'loader', None):
+        auto_loader_if_needed(args, dev)
     
-    if not subcommand:
-        print("[!] No subcommand specified")
-        print_odm_help()
-        return 1
-    
-    # Extract other args
-    odm_args = getattr(args, 'odm_args', []) or getattr(args, 'args', []) or []
+    sub = (getattr(args, 'odm_subcommand', '') or getattr(args, 'subcmd', '')).lower().strip()
+    oargs = getattr(args, 'odm_args', []) or getattr(args, 'args', []) or []
     force = getattr(args, 'force', False)
     verbose = getattr(args, 'verbose', False)
     
-    # =========================================================================
-    # Dispatch subcommand
-    # =========================================================================
-    handler = ODM_SUBCOMMANDS.get(subcommand)
+    if not sub or sub in ('help', '?'):
+        print("[*] ODM Commands:")
+        for name, func in sorted(set(HANDLERS.items()), key=lambda x: x[0]):
+            if '_' not in name:
+                doc = (func.__doc__ or '').strip().split('\n')[0]
+                print(f"    {name:<15} {doc}")
+        return 0
     
-    if handler:
-        try:
-            handler(dev, odm_args, force, verbose)
-            return 0
-        except TypeError as e:
-            # Handle lambda mismatch
-            if _DEBUG:
-                print(f"[!] Handler signature error for '{subcommand}': {e}")
-            handler(dev, odm_args, force, verbose)
-            return 0
-        except Exception as e:
-            print(f"[!] ODM operation failed: {type(e).__name__}: {e}")
-            if verbose and _DEBUG:
-                traceback.print_exc()
-            return 1
-    else:
-        print(f"[!] Unknown ODM subcommand: '{subcommand}'")
-        print_odm_help()
+    handler = HANDLERS.get(sub)
+    if not handler:
+        print(f"[!] Unknown: {sub}")
+        return 1
+    
+    try:
+        handler(dev, oargs, force, verbose)
+        return 0
+    except KeyboardInterrupt:
+        print("\n[!] Interrupted")
+        return 1
+    except Exception as e:
+        print(f"[!] Error: {e}")
+        if verbose and _DEBUG:
+            import traceback
+            traceback.print_exc()
         return 1
 
 
 # =============================================================================
-# FIXED: Argument extensions
-# =============================================================================
-def add_odm_arguments(parser) -> None:
-    """Add ODM-specific arguments to an argument parser."""
-    parser.add_argument(
-        'odm_subcommand',
-        nargs='?',
-        help='ODM subcommand (info, test, calibrate, customize, etc.)'
-    )
-    parser.add_argument(
-        'odm_args',
-        nargs='*',
-        help='Additional arguments for the ODM subcommand'
-    )
-    parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='Verbose output with detailed information'
-    )
-    parser.add_argument(
-        '--force', '-f',
-        action='store_true',
-        help='Force operation without confirmation prompts'
-    )
-    return parser
-
-
-# =============================================================================
-# Module entry point
+# MODULE ENTRY
 # =============================================================================
 if __name__ == "__main__":
-    print("[*] odm.py - QSLCL ODM Command Module v2.0")
-    print("[*] This module is designed to be imported by qslcl.py")
-    print("[*] Usage: python qslcl.py odm <subcommand> [options]")
-    print()
-    print_odm_help()
+    print("[*] odm.py - QSLCL ODM Command Module")
+    print("[*] This module is imported by qslcl.py")
+    print("[*] Usage: python qslcl.py odm <subcommand> [args]")
