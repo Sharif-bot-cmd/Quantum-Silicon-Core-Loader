@@ -109,7 +109,7 @@ _DETECTED_SECTOR_SIZE = None
 PARTITION_CACHE = {}
 PARTITION_SCHEMA_CACHE = {}
 MEMORY_REGION_CACHE = {}
-_SECTOR_SIZE_CACHE = {}
+SECTOR_SIZE_CACHE = {}
 
 # Global databases for each block type
 QSLCLBIN_DB = {}  # NEW: Main binary header database
@@ -2165,7 +2165,6 @@ def detect_sector_size_via_probe(dev, base_addr: int = 0x80000000) -> int:
     # Default to 4096 if probing fails
     return 4096
 
-
 def detect_sector_size_via_read_write(dev, test_addr: int = None) -> int:
     """
     PROBE METHOD 2: Detect sector size by write-read verification.
@@ -2229,7 +2228,6 @@ def detect_sector_size_via_read_write(dev, test_addr: int = None) -> int:
     
     return 4096
 
-
 def detect_sector_size_via_info(dev) -> int:
     """
     PROBE METHOD 3: Get sector size from device info commands.
@@ -2269,7 +2267,6 @@ def detect_sector_size_via_info(dev) -> int:
     
     return 0  # Not detected
 
-
 def detect_sector_size_via_geometry(dev) -> int:
     """
     PROBE METHOD 4: Detect by geometry analysis.
@@ -2299,7 +2296,6 @@ def detect_sector_size_via_geometry(dev) -> int:
             print(f"[!] Geometry detection failed: {e}")
     
     return 0
-
 
 def detect_sector_size(dev, force_redetect: bool = False) -> int:
     """
@@ -2369,7 +2365,6 @@ def detect_sector_size(dev, force_redetect: bool = False) -> int:
     _DETECTED_SECTOR_SIZE = 4096
     return 4096
 
-
 def get_sector_size(dev, force_redetect: bool = False) -> int:
     """
     Get cached or freshly detected sector size.
@@ -2394,7 +2389,6 @@ def get_sector_size(dev, force_redetect: bool = False) -> int:
 # =============================================================================
 # OPTIONAL: Smart sector size for different storage types
 # =============================================================================
-
 def get_optimal_chunk_size(dev, sector_size: int = None) -> int:
     """
     Calculate optimal chunk size based on sector size.
@@ -2414,7 +2408,6 @@ def get_optimal_chunk_size(dev, sector_size: int = None) -> int:
             return size
     
     return sector_size * 256  # Default
-
 
 def get_sector_info(dev) -> dict:
     """
