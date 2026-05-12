@@ -4,7 +4,7 @@ Primary Core: **qslcl.elf**
 
 Assistant Module: **qslcl.bin (v0.6.5)**
 
-Universal Controller: **qslcl.py (v2.0.2)**
+Universal Controller: **qslcl.py (v2.0.4)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION_MATRIX.md)
 
@@ -28,11 +28,10 @@ QSLCL runs in:
 
 ---
 
-### Whats New in **2.0.3**
+### Whats New in **2.0.4**
 
--- improve detect_device_handle for accurate detection.
+-- improve detection of partitions 
 
-### New Block Type: QSLCLENC
 
 ```
 QSLCL Binary Layout (v0.6.5):
