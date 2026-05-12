@@ -2064,46 +2064,6 @@ def detect_soc_by_rules(handle) -> str:
     
     return "GENERIC"
 
-
-# ============================================================
-# Replace the original function with enhanced version
-# ============================================================
-
-# If you want to completely replace the old function:
-def detect_device_type(handle, timeout: float = 0.5):
-    """
-    REPLACEMENT: Universal device type detection for ANY SOC.
-    Uses multiple detection methods for maximum compatibility.
-    """
-    # First try rule-based SOC detection
-    soc_type = detect_soc_by_rules(handle)
-    if soc_type != "GENERIC":
-        return soc_type
-    
-    # Fallback to original logic
-    try:
-        data = handle.read(64)
-    except:
-        return "GENERIC"
-    
-    if not data:
-        return "GENERIC"
-    
-    text = data.decode(errors="ignore").upper()
-    
-    if "BOOTROM" in text or "BR" in text or data.startswith(b"\xA0"):
-        return "MTK"
-    if "EDL" in text or "SAHARA" in text or "FIREHOSE" in text:
-        return "QUALCOMM"
-    if "DFU" in text or b"\x12\x01" in data[:4]:
-        return "APPLE_DFU"
-    if "SAMSUNG" in text or "EXYNOS" in text:
-        return "SAMSUNG"
-    if "ROCKUSB" in text or "LOADER" in text:
-        return "ROCKCHIP"
-    
-    return "GENERIC"
-
 # =============================================================================
 # COMMAND DISPATCH
 # =============================================================================
