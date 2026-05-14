@@ -398,7 +398,7 @@ sudo lsusb -v -d 05AC:1281 | grep "QSLCL"
 
 ## CRITICAL WARNING
 
-**QSLCL CAN PERMANENTLY BRICK (DESTROY) YOUR DEVICE IF USED INCORRECTLY.**
+**QSLCL CAN  BRICK YOUR DEVICE IF USED INCORRECTLY.**
 
 | Safety Level | Operations | Risk |
 |-------------|-----------|------|
