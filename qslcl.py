@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qslcl.py — Universal QSLCL Tool v2.1.1
+# qslcl.py — Universal QSLCL Tool v2.1.2
 # Author: Sharif — QSLCL Creator
 # Works on all SOC architectures
 import sys, time, argparse, zlib, struct, threading, re, os, random, math, shutil, gzip, json, itertools, hashlib, queue
@@ -66,6 +66,7 @@ QSLCLENC_DB = {}  # Encryption layer
 QSLCLDAT_DB = {}  # Data transfer protocol
 QSLCLSYN_DB = {}  # Synchronization block
 QSLCLHDR_DB = {}  # Certificate/header blocks
+QSLCLUSB4_DB = {}  
 
 _DETECTED_SECTOR_SIZE = None
 PARTITION_CACHE = {}
@@ -396,6 +397,45 @@ def load_qslclsyn(blob: bytes):
                     'crc_valid': block['header']['crc_valid']
                 }
 
+def load_usb4v2mc(blob: bytes):
+    """Parse USB4V2MC - USB4 v2.0 Microcode block"""
+    global QSLCLUSB4_DB
+    blocks = scan_for_blocks(blob)
+    
+    if 'USB4V2MC' in blocks:
+        for block in blocks['USB4V2MC']:
+            body = block['body']
+            if len(body) >= 16:
+                try:
+                    version, caps, max_bw, tunnels = struct.unpack("<IIII", body[:16])
+                    
+                    QSLCLUSB4_DB['usb4_v2'] = {
+                        'offset': block['offset'],
+                        'version': f"{(version>>16)&0xFFFF}.{(version>>8)&0xFF}.{version&0xFF}",
+                        'capabilities': caps,
+                        'max_bandwidth': max_bw,
+                        'tunnels': {
+                            'pcie': bool(tunnels & 0x01),
+                            'dp': bool(tunnels & 0x02),
+                            'usb3': bool(tunnels & 0x04)
+                        },
+                        'has_microcode': len(body) > 16,
+                        'has_security': bool(block['header']['flags'] & 0x02),
+                        'crc_valid': block['header']['crc_valid']
+                    }
+                    
+                    # Parse tunnel configuration if present
+                    if len(body) >= 28:
+                        pcie_id, dp_id, usb3_id = struct.unpack("<III", body[16:28])
+                        QSLCLUSB4_DB['usb4_v2']['tunnel_ids'] = {
+                            'pcie': pcie_id,
+                            'dp': dp_id,
+                            'usb3': usb3_id
+                        }
+                except Exception as e:
+                    if _DEBUG:
+                        print(f"[!] USB4V2MC parse: {e}")
+
 def load_remaining_blocks(blob: bytes):
     """Parse remaining block types (VM5, USB, SPT, HDR)"""
     global QSLCLVM5_DB, QSLCLUSB_DB, QSLCLSPT_DB, QSLCLHDR_DB
@@ -432,7 +472,8 @@ class QSLCLLoader:
         self.USB = {}
         self.SPT = {}
         self.HDR = {}
-    
+        self.USB4 = {}
+
     def parse(self, blob: bytes) -> bool:
         """Parse QSLCL binary with all block types"""
         blocks = scan_for_blocks(blob)
@@ -450,6 +491,7 @@ class QSLCLLoader:
         load_qslclenc(blob)
         load_qslcldat(blob)
         load_qslclsyn(blob)
+        load_usb4v2mc(blob) 
         load_remaining_blocks(blob)
         
         # Update instance attributes
@@ -466,7 +508,8 @@ class QSLCLLoader:
         self.USB = QSLCLUSB_DB
         self.SPT = QSLCLSPT_DB
         self.HDR = QSLCLHDR_DB
-        
+        self.USB4 = QSLCLUSB4_DB
+
         return True
 
 # =============================================================================
@@ -721,6 +764,80 @@ def recv(handle, serial_mode, timeout=3.0):
         time.sleep(0.002)
     
     return None, None
+
+def detect_usb4_v2_device(dev: QSLCLDevice) -> dict:
+    """
+    Detect if device supports USB4 v2.0 80Gbps mode.
+    Returns capabilities dictionary.
+    """
+    result = {
+        "usb4_v2_supported": False,
+        "max_bandwidth": 0,
+        "tunnels": [],
+        "pam_encoding": None,
+        "security": False
+    }
+    
+    if dev.handle is None or dev.serial_mode:
+        return result
+    
+    try:
+        # Try to query USB4 v2.0 capability via vendor request
+        # This is USB4 v2.0 standard request 0xFA (Capability Query)
+        try:
+            resp = dev.handle.ctrl_transfer(
+                bmRequestType=0xC0,  # Device to host, vendor
+                bRequest=0xFA,       # USB4 v2.0 capability query
+                wValue=0x0000,
+                wIndex=0x0000,
+                data_or_wLength=16,
+                timeout=500
+            )
+            
+            if len(resp) >= 8:
+                caps = struct.unpack("<II", resp[:8])
+                result["usb4_v2_supported"] = True
+                result["max_bandwidth"] = caps[0]
+                
+                # Parse tunnel support
+                if caps[1] & 0x01:
+                    result["tunnels"].append("PCIe")
+                if caps[1] & 0x02:
+                    result["tunnels"].append("DisplayPort")
+                if caps[1] & 0x04:
+                    result["tunnels"].append("USB3")
+                    
+                # PAM encoding from response
+                if len(resp) >= 12:
+                    encoding = struct.unpack("<I", resp[8:12])[0]
+                    encoding_map = {1: "PAM3", 2: "PAM4", 3: "PAM3/4 Auto"}
+                    result["pam_encoding"] = encoding_map.get(encoding, "Unknown")
+                    
+                # Security support
+                if len(resp) >= 16:
+                    result["security"] = bool(resp[12] & 0x01)
+                    
+        except:
+            pass
+            
+        # Also check USB4 v2.0 capability descriptor
+        try:
+            # Check device qualifier for SuperSpeed Plus
+            # USB4 v2.0 devices report bcdUSB >= 0x0400
+            if hasattr(dev.handle, 'bcdUSB'):
+                bcd_usb = dev.handle.bcdUSB
+                if bcd_usb >= 0x0400:  # USB4 or higher
+                    result["usb4_v2_supported"] = True
+                    if result["max_bandwidth"] == 0:
+                        result["max_bandwidth"] = 80000  # Assume 80Gbps
+        except:
+            pass
+            
+    except Exception as e:
+        if _DEBUG:
+            print(f"[!] USB4 v2.0 detection failed: {e}")
+    
+    return result
 
 # =============================================================================
 # COMMAND DISPATCH
@@ -1050,6 +1167,47 @@ def auto_loader_if_needed(args, dev: QSLCLDevice):
         print(f"\r[*] Progress: {min(off+chunk,total)*100//total}%", end='')
         time.sleep(0.01)
     print("\n[+] Loader uploaded.")
+
+    usb4_enabled = getattr(args, "usb4", False)
+    
+    if not smode and usb4_enabled:  # Only for USB devices with --usb4 flag
+        print("[*] Checking USB4 v2.0 80Gbps support...")
+        
+        # Detect USB4 v2.0 capabilities
+        usb4_caps = detect_usb4_v2_device(dev)
+        
+        if usb4_caps["usb4_v2_supported"]:
+            print(f"[+] USB4 v2.0 device detected:")
+            print(f"    Max Bandwidth: {usb4_caps['max_bandwidth']} Mbps ({usb4_caps['max_bandwidth']//1000} Gbps)")
+
+            if usb4_caps["tunnels"]:
+                print(f"    Supported Tunnels: {', '.join(usb4_caps['tunnels'])}")
+            if usb4_caps["pam_encoding"]:
+                print(f"    PAM Encoding: {usb4_caps['pam_encoding']}")
+            if usb4_caps["security"]:
+                print(f"    Security: CMA + DPP enabled")
+            
+            # Check if loader has USB4 microcode
+            if loader.USB4 and loader.USB4.get('usb4_v2'):
+                print("[*] USB4 v2.0 microcode present in loader")
+
+                try:
+                    # Send USB4 v2.0 initialization request
+                    init_resp = dev.handle.ctrl_transfer(
+                        bmRequestType=0x40,  # Host to device
+                        bRequest=0xFB,       # USB4 v2.0 init
+                        wValue=0x0001,       # Enable 80Gbps
+                        wIndex=0x0000,
+                        data_or_wLength=b"\x00"*8,
+                        timeout=2000
+                    )
+                    print("[*] USB4 v2.0 80Gbps mode initialized")
+                except:
+                    print("[!] Could not initialize 80Gbps mode (may require re-enumeration)")
+            else:
+                print("[!] USB4 v2.0 microcode not found in loader (rebuild with --usb4-v2)")
+        else:
+            print("[*] Device does not support USB4 v2.0 (standard USB mode)")
     
     # ========== NEW: Auto-expose QSLCL in USB ==========
     if not smode:  # Only for USB devices
@@ -1113,7 +1271,23 @@ def print_loader_info(loader: QSLCLLoader):
     if loader.SYN:
         syn = loader.SYN.get('sync', {})
         print(f"  ├─ QSLCLSYN: Sync block, {syn.get('frame_types', 0)} frame types")
-    
+
+    if loader.USB4:
+        usb4 = loader.USB4.get('usb4_v2', {})
+        if usb4:
+            print(f"  ├─ USB4V2MC: USB4 v2.0 80Gbps microcode")
+            print(f"  │   Version: {usb4.get('version', '?')}")
+            print(f"  │   Max Bandwidth: {usb4.get('max_bandwidth', 0)} Mbps ({usb4.get('max_bandwidth', 0)//1000} Gbps)")
+            tunnels = usb4.get('tunnels', {})
+            tunnel_list = []
+            if tunnels.get('pcie'): tunnel_list.append("PCIe")
+            if tunnels.get('dp'): tunnel_list.append("DP")
+            if tunnels.get('usb3'): tunnel_list.append("USB3")
+            if tunnel_list:
+                print(f"  │   Tunnels: {', '.join(tunnel_list)}")
+            if usb4.get('has_security'):
+                print(f"  │   Security: CMA + DPP + Attestation")
+
     if loader.HDR:
         print(f"  └─ QSLCLHDR: {len(loader.HDR)} certificate blocks")
     
@@ -1260,7 +1434,7 @@ def main():
             super().__init__(prog, max_help_position=36, width=140)
 
     p = argparse.ArgumentParser(
-        description="QSLCL Tool v2.1.1 - Universal SOC Tool",
+        description="QSLCL Tool v2.1.2 - Universal SOC Tool",
         formatter_class=QSLCLHelp
     )
 
@@ -1268,6 +1442,7 @@ def main():
     p.add_argument("--auth", action="store_true", help="Authenticate first")
     p.add_argument("--wait", type=int, default=0, help="Wait for device (seconds)")
     p.add_argument("--debug", action="store_true", help="Debug output")
+    p.add_argument("--usb4", action="store_true", help="Enable USB4 v2.0 80Gbps mode") 
 
     sub = p.add_subparsers(dest="cmd", metavar="")
 

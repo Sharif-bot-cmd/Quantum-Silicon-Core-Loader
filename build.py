@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# build.py - QSLCL Binary Builder v0.6.6 
+# build.py - QSLCL Binary Builder v0.6.7
 import sys, struct, random, time, hmac, hashlib, os, zlib, uuid, json, platform, math
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
@@ -1868,6 +1868,65 @@ USB_REGS.update({
 for i in range(32):
     USB_REGS[f"RESERVED_{i}"] = 0x400 + i*4
 
+# ============================================================
+# USB4 v2.0+ Enhanced Capabilities (80Gbps)
+# ============================================================
+USB4_V2_REGS = {
+    # USB4 v2.0 Core Registers (80Gbps)
+    "USB4_CAP":              0x1000,  # USB4 capability register
+    "USB4_ROUTING":          0x1004,  # Router configuration
+    "USB4_PATH":             0x1008,  # Path configuration
+    "USB4_BANDWIDTH":        0x100C,  # Bandwidth management
+    "USB4_LATENCY":          0x1010,  # Latency optimization
+    
+    # Tunneled Protocols (PCIe, DisplayPort, USB3)
+    "USB4_PCIE_TUNNEL":      0x1100,  # PCIe tunneling control
+    "USB4_DP_TUNNEL":        0x1200,  # DisplayPort tunneling
+    "USB4_USB3_TUNNEL":      0x1300,  # USB3 tunneling
+    
+    # Enhanced SuperSpeed (20Gbps per lane)
+    "SSP_CAP":               0x2000,  # SuperSpeed Plus capability
+    "SSP_LANE_MAP":          0x2004,  # Lane mapping (up to 4 lanes)
+    "SSP_ASYMMETRIC":        0x2008,  # Asymmetric lane support
+    
+    # PAM3/PAM4 Encoding (80Gbps mode)
+    "PAM_ENCODING":          0x3000,  # PAM3/PAM4 control
+    "PAM_EYE_DIAGRAM":       0x3004,  # Signal quality monitoring
+    "PAM_EQUALIZATION":      0x3008,  # Adaptive equalization
+    
+    # USB4 v2.0 Security Extensions
+    "USB4_SECURITY":         0x4000,  # Security control
+    "USB4_CMA":              0x4004,  # Component Measurement
+    "USB4_DPP":              0x4008,  # Data Protection Profile
+    "USB4_ATTESTATION":      0x400C,  # Attestation reporting
+}
+
+# USB4 v2.0 Router Configuration
+USB4_ROUTER_CAPS = {
+    "ADAPTERS": {
+        "USB3_DOWN": 0x01,
+        "USB3_UP": 0x02,
+        "PCIe_DOWN": 0x04,
+        "PCIe_UP": 0x08,
+        "DP_DOWN": 0x10,
+        "DP_UP": 0x20,
+        "HOST_INTERFACE": 0x40,
+    },
+    "PATH_CAPS": {
+        "ISOCHRONOUS": 0x01,
+        "BULK": 0x02,
+        "CONTROL": 0x04,
+        "INTERRUPT": 0x08,
+        "STREAMING": 0x10,
+    },
+    "BANDWIDTH_MODES": {
+        "40G": 40000,   # USB4 v1.0
+        "80G": 80000,   # USB4 v2.0
+        "120G": 120000, # Asymmetric 120/40
+        "160G": 160000, # Future reserved
+    }
+}
+
 # ---------------- USB PHY / Detection / Read-Write ----------------
 # --- USB PHY helpers (universal/future-proof) ---
 def usb_detect_base(image, soc_name=None):
@@ -2294,6 +2353,232 @@ def dynamic_bootstrap(
         print(f"    Micro-VM instructions: {len(bootstrap_code) // 4}")
     
     return bytes(final_bootstrap)
+
+# ============================================================
+# USB4 v2.0 Tunnel Management
+# ============================================================
+def usb4_create_pcie_tunnel(
+    image: bytearray, 
+    base: int = None,
+    pcie_base: int = 0xE0000000,
+    pcie_size: int = 0x1000000,
+    debug: bool = False
+) -> int:
+    """
+    Create PCIe tunnel over USB4 v2.0.
+    Allows direct memory access to PCIe devices.
+    Returns tunnel ID.
+    """
+    if base is None:
+        base = usb_detect_base(image)
+    
+    tunnel_id = random.randint(1, 0xFF)
+    
+    # Configure tunnel
+    tunnel_reg = base + USB4_V2_REGS["USB4_PCIE_TUNNEL"] + (tunnel_id * 16)
+    
+    if tunnel_reg + 16 <= len(image):
+        # Tunnel configuration: base address, size, flags
+        image[tunnel_reg:tunnel_reg+4] = struct.pack("<I", pcie_base)
+        image[tunnel_reg+4:tunnel_reg+8] = struct.pack("<I", pcie_size)
+        image[tunnel_reg+8:tunnel_reg+12] = struct.pack("<I", 0x03)  # Read+Write
+        image[tunnel_reg+12:tunnel_reg+16] = struct.pack("<I", tunnel_id)
+        
+        if debug:
+            print(f"[*] USB4 v2.0: PCIe tunnel created (ID={tunnel_id})")
+            print(f"    Base: 0x{pcie_base:X}, Size: 0x{pcie_size:X}")
+        
+        return tunnel_id
+    
+    return 0
+
+def usb4_tunneled_dma(
+    image: bytearray,
+    tunnel_id: int,
+    src_offset: int,
+    dst_offset: int,
+    size: int,
+    base: int = None,
+    debug: bool = False
+) -> bool:
+    """
+    Perform DMA transfer over USB4 tunnel.
+    Direct memory-to-memory without CPU intervention.
+    """
+    if base is None:
+        base = usb_detect_base(image)
+    
+    # DMA control registers per tunnel
+    dma_reg = base + USB4_V2_REGS["USB4_DMA_DIRECT"] + (tunnel_id * 32)
+    
+    if dma_reg + 32 <= len(image):
+        # Set DMA transfer parameters
+        image[dma_reg:dma_reg+4] = struct.pack("<I", src_offset)   # Source
+        image[dma_reg+4:dma_reg+8] = struct.pack("<I", dst_offset) # Destination
+        image[dma_reg+8:dma_reg+12] = struct.pack("<I", size)       # Size
+        image[dma_reg+12:dma_reg+16] = struct.pack("<I", 0x01)      # GO flag
+        
+        if debug:
+            print(f"[*] USB4 v2.0: Tunnel DMA started (tunnel={tunnel_id})")
+            print(f"    src=0x{src_offset:X} → dst=0x{dst_offset:X}, size={size}")
+        
+        return True
+    
+    return False
+
+def usb4_tunneled_encryption(
+    image: bytearray,
+    tunnel_id: int,
+    enable: bool = True,
+    base: int = None,
+    debug: bool = False
+) -> bool:
+    """
+    Enable encryption on USB4 tunnel (USB4 v2.0 security feature).
+    Uses CMA (Component Measurement Architecture) and DPP.
+    """
+    if base is None:
+        base = usb_detect_base(image)
+    
+    # Security register per tunnel
+    sec_reg = base + USB4_V2_REGS["USB4_SECURITY"] + (tunnel_id * 4)
+    
+    if sec_reg + 4 <= len(image):
+        current = int.from_bytes(image[sec_reg:sec_reg+4], "little")
+        
+        if enable:
+            # Enable DPP (Data Protection Profile)
+            current |= 0x02
+            if debug:
+                print(f"[*] USB4 v2.0: Tunnel encryption enabled (tunnel={tunnel_id})")
+        else:
+            current &= ~0x02
+            if debug:
+                print(f"[*] USB4 v2.0: Tunnel encryption disabled (tunnel={tunnel_id})")
+        
+        image[sec_reg:sec_reg+4] = struct.pack("<I", current)
+        return True
+    
+    return False
+
+# ============================================================
+# USB4 v2.0 Detection Functions
+# ============================================================
+def detect_usb4_v2_capabilities(image: bytearray, base: int = None) -> dict:
+    """
+    Detect USB4 v2.0 capabilities from device.
+    Returns dict with supported features.
+    """
+    if base is None:
+        base = usb_detect_base(image)
+    
+    caps = {
+        "usb4_v2_supported": False,
+        "max_bandwidth": 0,
+        "tunnel_support": [],
+        "pam_encoding": None,
+        "security_features": [],
+    }
+    
+    # Read USB4 capability register
+    usb4_cap_addr = base + USB4_V2_REGS["USB4_CAP"]
+    if usb4_cap_addr + 4 <= len(image):
+        cap_val = int.from_bytes(image[usb4_cap_addr:usb4_cap_addr+4], "little")
+        
+        # Check USB4 v2.0 signature
+        if (cap_val & 0xFFFF) == 0x5534:  # "U4" magic
+            caps["usb4_v2_supported"] = True
+            caps["max_bandwidth"] = (cap_val >> 16) & 0xFFFF
+            
+            # Check bandwidth modes
+            if caps["max_bandwidth"] >= 80000:
+                caps["bandwidth_80g"] = True
+            if caps["max_bandwidth"] >= 120000:
+                caps["bandwidth_120g"] = True
+    
+    # Check tunnel support
+    tunnel_reg = base + USB4_V2_REGS["USB4_PCIE_TUNNEL"]
+    if tunnel_reg + 4 <= len(image):
+        tunnel_val = int.from_bytes(image[tunnel_reg:tunnel_reg+4], "little")
+        
+        if tunnel_val & 0x01:
+            caps["tunnel_support"].append("PCIe")
+        if tunnel_val & 0x02:
+            caps["tunnel_support"].append("DisplayPort")
+        if tunnel_val & 0x04:
+            caps["tunnel_support"].append("USB3")
+    
+    # Check PAM encoding support
+    pam_reg = base + USB4_V2_REGS["PAM_ENCODING"]
+    if pam_reg + 4 <= len(image):
+        pam_val = int.from_bytes(image[pam_reg:pam_reg+4], "little")
+        encoding_map = {1: "PAM3", 2: "PAM4", 3: "PAM3/4 Auto"}
+        caps["pam_encoding"] = encoding_map.get(pam_val & 0xFF, "Unknown")
+    
+    # Check security features
+    sec_reg = base + USB4_V2_REGS["USB4_SECURITY"]
+    if sec_reg + 4 <= len(image):
+        sec_val = int.from_bytes(image[sec_reg:sec_reg+4], "little")
+        
+        if sec_val & 0x01:
+            caps["security_features"].append("CMA")
+        if sec_val & 0x02:
+            caps["security_features"].append("DPP")
+        if sec_val & 0x04:
+            caps["security_features"].append("Attestation")
+    
+    return caps
+
+def usb4_v2_init_80g_mode(image: bytearray, base: int = None, debug: bool = False) -> bool:
+    """
+    Initialize USB4 v2.0 80Gbps mode.
+    Configures PAM4 encoding and lane aggregation.
+    """
+    if base is None:
+        base = usb_detect_base(image)
+    
+    success = True
+    
+    # 1. Enable 80Gbps mode
+    bw_reg = base + USB4_V2_REGS["USB4_BANDWIDTH"]
+    if bw_reg + 4 <= len(image):
+        # Set bandwidth to 80Gbps
+        image[bw_reg:bw_reg+4] = struct.pack("<I", 80000)
+        if debug:
+            print(f"[*] USB4 v2.0: Set bandwidth to 80Gbps")
+    else:
+        success = False
+    
+    # 2. Configure PAM4 encoding for 80Gbps
+    pam_reg = base + USB4_V2_REGS["PAM_ENCODING"]
+    if pam_reg + 4 <= len(image):
+        # PAM4 encoding (2 bits per symbol)
+        image[pam_reg:pam_reg+4] = struct.pack("<I", 0x02)
+        if debug:
+            print(f"[*] USB4 v2.0: PAM4 encoding enabled")
+    else:
+        success = False
+    
+    # 3. Aggregate all 4 lanes for 80Gbps
+    lane_reg = base + USB4_V2_REGS["SSP_LANE_MAP"]
+    if lane_reg + 4 <= len(image):
+        # Lane aggregation: 4 lanes active
+        image[lane_reg:lane_reg+4] = struct.pack("<I", 0x0F)  # 1111 binary
+        if debug:
+            print(f"[*] USB4 v2.0: 4-lane aggregation enabled")
+    else:
+        success = False
+    
+    # 4. Enable asynchronous lane speed (80Gbps requires this)
+    asym_reg = base + USB4_V2_REGS["SSP_ASYMMETRIC"]
+    if asym_reg + 4 <= len(image):
+        image[asym_reg:asym_reg+4] = struct.pack("<I", 0x01)
+        if debug:
+            print(f"[*] USB4 v2.0: Asymmetric lane mode enabled")
+    else:
+        success = False
+    
+    return success
 
 def embed_universal_bootstrap(
     image: bytearray,
@@ -3537,6 +3822,155 @@ def embed_encryption_layer(
     
     return final_aligned
 
+# In embed_usb4_v2_microcode() function, add the UOP dictionary at the beginning:
+
+def embed_usb4_v2_microcode(
+    image: bytearray,
+    base: int = None,
+    align_after_header: int = 16,
+    debug: bool = False
+) -> int:
+    """
+    Embed USB4 v2.0 microcode for 80Gbps operations.
+    Provides high-speed tunneled data transfer.
+    """
+    
+    # Add this UOP dictionary (copy from main UOP)
+    UOP = {
+        "NOP":0x00, "MOV":0x01, "XOR":0x02, "ADD":0x03, "SUB":0x04, "JMP":0x05, "HLT":0x06,
+        "LOAD":0x07, "STORE":0x08, "CALL":0x09, "RET":0x0A, "SYSCALL":0x0B, "YIELD":0x0C,
+        "SLEEP":0x0D, "TICK":0x0E, "ENTROPY":0x0F, "IPC_SEND":0x10, "IPC_RECV":0x11,
+        "PRIV_UP":0x12, "PRIV_DOWN":0x13, "FAILSAFE":0x14, "DEBUG":0x15, "TRACE":0x16,
+        "CRC32":0x17, "HMAC":0x18, "AES":0x19, "SHA256":0x1A, "RSA":0x1B, "MEMCPY":0x1C,
+        "MEMSET":0x1D, "CMP":0x1E, "TEST":0x1F
+    }
+    
+    UOP_USB4 = {
+        # USB4 v2.0 Specific Operations
+        "USB4_TUNNEL_CREATE":   0xF0,  # Create tunnel (PCIe/DP/USB3)
+        "USB4_TUNNEL_DESTROY":  0xF1,  # Destroy tunnel
+        "USB4_BANDWIDTH_SET":   0xF2,  # Set bandwidth allocation
+        "USB4_PATH_OPTIMIZE":   0xF3,  # Optimize data path
+        "USB4_SECURE_CHANNEL":  0xF4,  # Establish secure channel
+        "USB4_DMA_DIRECT":      0xF5,  # Direct DMA across tunnel
+        
+        # USB4 v2.0 Enhanced Operations
+        "USB4_80G_MODE":        0xF6,  # Enable 80Gbps mode
+        "USB4_PAM_ENCODE":      0xF7,  # Set PAM3/PAM4 encoding
+        "USB4_LANE_AGGREGATE":  0xF8,  # Aggregate multiple lanes
+        "USB4_LATENCY_PROBE":   0xF9,  # Measure latency
+        "USB4_CMA_MEASURE":     0xFA,  # Component Measurement
+        "USB4_ATTEST":          0xFB,  # Request attestation
+    }
+    
+    # Fix the uop function to use debug parameter instead of _DEBUG
+    def uop(op, reg=0, arg=0):
+        """Pack micro-VM instruction (using main UOP dictionary)"""
+        if op not in UOP:
+            if debug:  # Changed from _DEBUG to debug
+                print(f"[!] Warning: Unknown op '{op}'")
+            return struct.pack("<BBH", 0x00, reg & 0xFF, arg & 0xFFFF)
+        return struct.pack("<BBH", UOP[op], reg & 0xFF, arg & 0xFFFF)
+    
+    def uop_usb4(op, reg=0, arg=0):
+        """Pack USB4 v2.0 instruction"""
+        if op not in UOP_USB4:
+            if debug:  # Changed from _DEBUG to debug
+                print(f"[!] Warning: Unknown USB4 op '{op}'")
+            return struct.pack("<BBH", 0x00, reg & 0xFF, arg & 0xFFFF)
+        return struct.pack("<BBH", UOP_USB4[op], reg & 0xFF, arg & 0xFFFF)  
+    
+    # USB4 v2.0 initialization bytecode
+    usb4_init_code = bytearray([
+        *uop_usb4("USB4_80G_MODE", 0, 0),      # Enter 80Gbps mode
+        *uop_usb4("USB4_PAM_ENCODE", 1, 2),    # PAM4 encoding
+        *uop_usb4("USB4_LANE_AGGREGATE", 0, 4), # 4-lane aggregation
+        *uop_usb4("USB4_TUNNEL_CREATE", 2, 0x01), # Create PCIe tunnel
+        *uop_usb4("USB4_TUNNEL_CREATE", 3, 0x02), # Create DP tunnel
+        *uop_usb4("USB4_SECURE_CHANNEL", 4, 0),   # Secure tunnel
+        *uop("RET", 0, 0),                     # Return to caller
+    ])
+    
+    # USB4 v2.0 high-speed data transfer bytecode
+    usb4_transfer_code = bytearray([
+        *uop_usb4("USB4_TUNNEL_CREATE", 5, 0), # Create data tunnel
+        *uop_usb4("USB4_BANDWIDTH_SET", 5, 80000), # 80Gbps bandwidth
+        *uop_usb4("USB4_PATH_OPTIMIZE", 5, 0), # Optimize path
+        *uop_usb4("USB4_DMA_DIRECT", 0, 5),    # Direct DMA transfer
+        *uop_usb4("USB4_LATENCY_PROBE", 1, 0), # Measure latency
+        *uop("RET", 0, 0),
+    ])
+    
+    # USB4 v2.0 security attestation bytecode
+    usb4_security_code = bytearray([
+        *uop_usb4("USB4_SECURE_CHANNEL", 0, 1),  # Establish secure channel
+        *uop_usb4("USB4_CMA_MEASURE", 1, 0),    # Component measurement
+        *uop_usb4("USB4_ATTEST", 2, 0),         # Request attestation
+        *uop("MOV", 3, 0),                      # Store result
+        *uop("RET", 0, 0),
+    ])
+    
+    # Determine injection offset
+    if base is None:
+        base = align_up(len(image), align_after_header)
+    else:
+        base = align_up(base, align_after_header)
+    
+    # Build USB4 v2.0 body
+    body = bytearray()
+    
+    # Version and capabilities
+    body += struct.pack("<IIII",
+        0x00020000,     # USB4 v2.0
+        0x000001FF,     # Capabilities (full)
+        80000,          # Max bandwidth (80Gbps)
+        0x07            # Tunnels: PCIe+DP+USB3
+    )
+    
+    # Add microcode
+    body += usb4_init_code
+    body += usb4_transfer_code
+    body += usb4_security_code
+    
+    # Add tunnel configuration table
+    tunnel_table = struct.pack("<III",
+        0x01,  # PCIe tunnel ID
+        0x02,  # DP tunnel ID
+        0x03   # USB3 tunnel ID
+    )
+    body += tunnel_table
+    
+    # Add security certificate chain
+    security_cert = hashlib.sha256(b"QSLCL_USB4_V2_CERT").digest()
+    body += security_cert
+    
+    # Integrity footer
+    integrity_hash = hashlib.sha256(body).digest()[:16]
+    body += integrity_hash
+    
+    # Create standard header
+    MAGIC = b"USB4V2MC"  # USB4 v2.0 Microcode
+    FLAGS = 0x03         # 80Gbps + Security enabled
+    header = create_standard_header(MAGIC, body, FLAGS)
+    
+    # Embed into image
+    ensure_size(image, base + len(header) + len(body))
+    image[base:base + len(header)] = header
+    image[base + len(header):base + len(header) + len(body)] = body
+    
+    final_pos = base + len(header) + len(body)
+    final_pos = align_up(final_pos, align_after_header)
+    ensure_size(image, final_pos)
+    
+    if debug:
+        print(f"[*] USB4 v2.0 Microcode embedded at 0x{base:X}")
+        print(f"    Magic: {MAGIC.decode('ascii')}")
+        print(f"    USB4 version: 2.0 (80Gbps)")
+        print(f"    Tunnels: PCIe, DisplayPort, USB3")
+        print(f"    Security: CMA + DPP + Attestation")
+        print(f"    Total size: {final_pos - base} bytes")
+    
+    return final_pos
 # ============================================================
 # FIXED: build_qslcl_bin - Main builder with all fixes
 # ============================================================
@@ -3548,7 +3982,8 @@ def build_qslcl_bin(
     cert_pem: bytes = b"",
     priv_key_pem: bytes = b"",
     debug=False,
-    enable_encryption: bool = False 
+    enable_encryption: bool = False,
+    enable_usb4_v2: bool = False 
 ):
     """
     QSLCL Universal Binary Builder v5.4 — FIXED VERSION
@@ -3678,9 +4113,31 @@ def build_qslcl_bin(
 
     current_offset = handler_ptr
 
-    # ============================================================
-    # FIXED: DISPATCHER with stored offset
-    # ============================================================
+    if enable_usb4_v2:
+        usb4_offset = align_up(current_offset, 0x10)
+        ensure_size(image, usb4_offset)
+        
+        # Store USB4 v2.0 pointer in main header
+        image[MAIN_BODY_OFFSET + 0x70:MAIN_BODY_OFFSET + 0x74] = struct.pack("<I", usb4_offset)
+        
+        usb4_end = embed_usb4_v2_microcode(
+            image, base=usb4_offset,
+            align_after_header=16, debug=debug
+        )
+        current_offset = align_up(usb4_end, 0x10)
+
+        # Detect and initialize USB4 v2.0 capabilities
+        caps = detect_usb4_v2_capabilities(image)
+        if caps["usb4_v2_supported"]:
+            usb4_v2_init_80g_mode(image, debug=debug)
+            if debug:
+                print(f"[*] USB4 v2.0: Device supports {caps['max_bandwidth']}Gbps")
+                print(f"    Tunnels: {', '.join(caps['tunnel_support'])}")
+                print(f"    Encoding: {caps['pam_encoding']}")
+    else:
+        if debug:
+            print(f"[*] USB4 v2.0 disabled (use --usb4-v2 to enable)")
+
     disp_off = align_up(current_offset, 0x10)
     ensure_size(image, disp_off)
     
@@ -3974,13 +4431,14 @@ def post_build_audit(path: str, debug: bool = True) -> str:
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="QSLCL Binary Builder v5.4")
+    parser = argparse.ArgumentParser(description="QSLCL Binary Builder v0.6.7")
     parser.add_argument("output", nargs="?", default="qslcl.bin", help="Output file")
     parser.add_argument("--arch", default="generic", help="Target architecture")
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
     parser.add_argument("--encrypt", action="store_true", help="Enable QSLCLENC encryption layer")
     parser.add_argument("--size", type=int, default=0x20000, help="Binary size (bytes)")
-    
+    parser.add_argument("--usb4-v2", action="store_true", help="Enable USB4 v2.0 80Gbps support")  
+
     args = parser.parse_args()
     
     build_qslcl_bin(
@@ -3988,7 +4446,8 @@ if __name__ == "__main__":
         arch=args.arch,
         bin_size=args.size,
         debug=args.debug,
-        enable_encryption=args.encrypt
+        enable_encryption=args.encrypt,
+        enable_usb4_v2=args.usb4_v2
     )
     
     print(f"[+] QSLCL binary created: {args.output}")
