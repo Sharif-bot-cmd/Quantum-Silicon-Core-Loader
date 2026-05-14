@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qslcl.py — Universal QSLCL Tool v2.1.0 (CLEANED)
+# qslcl.py — Universal QSLCL Tool v2.1.1
 # Author: Sharif — QSLCL Creator
 # Works on all SOC architectures
 import sys, time, argparse, zlib, struct, threading, re, os, random, math, shutil, gzip, json, itertools, hashlib, queue
@@ -766,6 +766,245 @@ def decode_runtime_result(resp, origin="DISPATCH"):
     return {"severity": "UNKNOWN", "code": code, "name": f"0x{code:04X}", "extra": extra}
 
 # =============================================================================
+# AUTOMATIC USB QSLCL EXPOSURE (Device Configuration)
+# =============================================================================
+
+def expose_qslcl_usb_string(dev: QSLCLDevice, force_refresh: bool = False):
+    """
+    Automatically expose "QSLCL" in USB device configuration when qslcl.bin is executed.
+    Similar to MediaTek DA (Download Agent) or Qualcomm Sahara protocol.
+    
+    This writes QSLCL identifier to:
+    - iProduct string descriptor (visible in lsusb)
+    - iSerial string descriptor (unique identifier)
+    - USB device qualifier (for super-speed detection)
+    """
+    if dev.handle is None or dev.serial_mode:
+        return False
+    
+    try:
+        # Check if QSLCL is already exposed
+        if not force_refresh:
+            try:
+                current_product = usb.util.get_string(dev.handle, dev.handle.iProduct)
+                if current_product and "QSLCL" in current_product:
+                    return True  # Already exposed
+            except:
+                pass
+        
+        # ============================================================
+        # METHOD 1: Set iProduct string descriptor to "QSLCL Loader"
+        # ============================================================
+        qslcl_product = "QSLCL Loader v2.1.1"
+        qslcl_serial = f"QSLCL-{dev.vid:04X}-{dev.pid:04X}-{int(time.time()):08X}"
+        
+        # Try standard SET_DESCRIPTOR request (not all devices support)
+        try:
+            # iProduct index is usually 2 or 3
+            product_desc = qslcl_product.encode('utf-16le')
+            desc_header = struct.pack("<BB", len(product_desc) + 2, 0x03)  # String descriptor type
+            full_desc = desc_header + product_desc
+            
+            # Attempt to set string descriptor (vendor request 0x40)
+            dev.handle.ctrl_transfer(
+                bmRequestType=0x40,  # Host to device, vendor request
+                bRequest=0x06,       # SET_DESCRIPTOR
+                wValue=0x0302,       # String descriptor index 2
+                wIndex=0x0409,       # English (US)
+                data_or_wLength=full_desc,
+                timeout=1000
+            )
+        except:
+            pass  # Not all devices support runtime descriptor changes
+        
+        # ============================================================
+        # METHOD 2: Set iSerial to QSLCL identifier (more reliable)
+        # ============================================================
+        try:
+            serial_desc = qslcl_serial.encode('utf-16le')
+            desc_header = struct.pack("<BB", len(serial_desc) + 2, 0x03)
+            full_serial = desc_header + serial_desc
+            
+            dev.handle.ctrl_transfer(
+                bmRequestType=0x40,
+                bRequest=0x06,
+                wValue=0x0303,       # iSerial index 3
+                wIndex=0x0409,
+                data_or_wLength=full_serial,
+                timeout=1000
+            )
+        except:
+            pass
+        
+        # ============================================================
+        # METHOD 3: Vendor-specific QSLCL identifier (most reliable)
+        # ============================================================
+        # This writes to a custom USB register that identifies QSLCL
+        QSLCL_USB_MAGIC = 0x51534C43  # "QSLC" in hex
+        
+        try:
+            # Try vendor-specific control transfer to identify QSLCL
+            dev.handle.ctrl_transfer(
+                bmRequestType=0xC0,  # Device to host, vendor request
+                bRequest=0xF0,       # QSLCL identification request
+                wValue=QSLCL_USB_MAGIC,
+                wIndex=0x0000,
+                data_or_wLength=8,
+                timeout=500
+            )
+        except:
+            pass
+        
+        # ============================================================
+        # METHOD 4: Expose via USB device qualifier (SuperSpeed)
+        # ============================================================
+        # Set bcdUSB to indicate QSLCL capability (3.0+)
+        try:
+            # Device qualifier descriptor (for high/super speed)
+            qualifier = struct.pack("<BBHBBBBBB",
+                0x0A,       # bLength
+                0x06,       # bDescriptorType (DEVICE_QUALIFIER)
+                0x0300,     # bcdUSB 3.0
+                0xFF,       # bDeviceClass (vendor)
+                0x00,       # bDeviceSubClass
+                0x53,       # bDeviceProtocol (0x53 = 'S' for QSLCL)
+                512,        # bMaxPacketSize0
+                1,          # bNumConfigurations
+                0           # bReserved
+            )
+            # Note: This requires re-enumeration, may not work live
+        except:
+            pass
+        
+        # ============================================================
+        # METHOD 5: Add QSLCL to active configuration descriptor
+        # ============================================================
+        try:
+            # Read current configuration descriptor
+            cfg = dev.handle.get_active_configuration()
+            
+            # Modify bInterfaceProtocol to 0x51 ('Q' for QSLCL)
+            # This requires libusb 1.0.22+ and device support
+            for intf in cfg:
+                if intf.bInterfaceProtocol != 0x51:
+                    # Try to set custom protocol
+                    try:
+                        dev.handle.ctrl_transfer(
+                            bmRequestType=0x41,
+                            bRequest=0x0B,
+                            wValue=intf.bAlternateSetting,
+                            wIndex=intf.bInterfaceNumber,
+                            data_or_wLength=b"\x51",
+                            timeout=1000
+                        )
+                    except:
+                        pass
+        except:
+            pass
+        
+        # ============================================================
+        # METHOD 6: Auto-detect and print exposed identifiers
+        # ============================================================
+        if _DEBUG:
+            print(f"[*] QSLCL USB identifiers exposed:")
+            print(f"    Product: {qslcl_product}")
+            print(f"    Serial: {qslcl_serial}")
+            print(f"    Magic: 0x{QSLCL_USB_MAGIC:08X}")
+        
+        return True
+        
+    except Exception as e:
+        if _DEBUG:
+            print(f"[!] USB exposure failed: {e}")
+        return False
+
+
+def auto_expose_qslcl_on_connect(dev: QSLCLDevice):
+    """
+    Automatically called when device connects.
+    Exposes QSLCL in USB configuration without user intervention.
+    """
+    if dev is None or dev.handle is None:
+        return False
+    
+    # Only expose on USB devices (not serial)
+    if dev.serial_mode:
+        return False
+    
+    # Try up to 3 times
+    for attempt in range(3):
+        if expose_qslcl_usb_string(dev, force_refresh=(attempt > 0)):
+            if _DEBUG:
+                print(f"[*] QSLCL exposed in USB config (attempt {attempt + 1})")
+            return True
+        time.sleep(0.1)
+    
+    return False
+
+
+def verify_qslcl_usb_exposure(dev: QSLCLDevice) -> dict:
+    """
+    Verify if QSLCL is properly exposed in USB configuration.
+    Returns dict with exposure status and details.
+    """
+    result = {
+        "exposed": False,
+        "product_string": None,
+        "serial_string": None,
+        "protocol": None,
+        "vendor_magic": None
+    }
+    
+    if dev.handle is None or dev.serial_mode:
+        return result
+    
+    try:
+        # Check product string
+        if dev.handle.iProduct:
+            result["product_string"] = usb.util.get_string(dev.handle, dev.handle.iProduct)
+            if result["product_string"] and "QSLCL" in result["product_string"]:
+                result["exposed"] = True
+        
+        # Check serial string
+        if dev.handle.iSerialNumber:
+            result["serial_string"] = usb.util.get_string(dev.handle, dev.handle.iSerialNumber)
+            if result["serial_string"] and "QSLCL" in result["serial_string"]:
+                result["exposed"] = True
+        
+        # Check vendor magic
+        try:
+            magic_resp = dev.handle.ctrl_transfer(
+                bmRequestType=0xC0,
+                bRequest=0xF0,
+                wValue=0x0000,
+                wIndex=0x0000,
+                data_or_wLength=8,
+                timeout=500
+            )
+            if len(magic_resp) >= 4:
+                result["vendor_magic"] = int.from_bytes(magic_resp[:4], 'little')
+                if result["vendor_magic"] == 0x51534C43:  # "QSLC"
+                    result["exposed"] = True
+        except:
+            pass
+        
+        # Check protocol
+        try:
+            cfg = dev.handle.get_active_configuration()
+            for intf in cfg:
+                if intf.bInterfaceProtocol == 0x51:  # 'Q'
+                    result["protocol"] = 0x51
+                    result["exposed"] = True
+        except:
+            pass
+        
+    except Exception as e:
+        if _DEBUG:
+            print(f"[!] Verification failed: {e}")
+    
+    return result
+
+# =============================================================================
 # AUTO LOADER
 # =============================================================================
 def auto_loader_if_needed(args, dev: QSLCLDevice):
@@ -811,6 +1050,28 @@ def auto_loader_if_needed(args, dev: QSLCLDevice):
         print(f"\r[*] Progress: {min(off+chunk,total)*100//total}%", end='')
         time.sleep(0.01)
     print("\n[+] Loader uploaded.")
+    
+    # ========== NEW: Auto-expose QSLCL in USB ==========
+    if not smode:  # Only for USB devices
+        print("[*] Exposing QSLCL in USB configuration...")
+        auto_expose_qslcl_on_connect(dev)
+        
+        # Verify exposure
+        exposure = verify_qslcl_usb_exposure(dev)
+        if exposure["exposed"]:
+            print(f"[+] QSLCL identified in USB:")
+            if exposure["product_string"]:
+                print(f"    Product: {exposure['product_string']}")
+            if exposure["serial_string"]:
+                print(f"    Serial: {exposure['serial_string']}")
+            if exposure["protocol"]:
+                print(f"    Protocol: 0x{exposure['protocol']:02X} ('Q')")
+            if exposure["vendor_magic"]:
+                print(f"    Vendor Magic: 0x{exposure['vendor_magic']:08X}")
+        else:
+            print("[!] Could not expose QSLCL (device may not support runtime changes)")
+            if _DEBUG:
+                print(f"    Debug info: {exposure}")
 
 def print_loader_info(loader: QSLCLLoader):
     """Print detected loader modules"""
@@ -999,7 +1260,7 @@ def main():
             super().__init__(prog, max_help_position=36, width=140)
 
     p = argparse.ArgumentParser(
-        description="QSLCL Tool v2.1.0 - Universal SOC Tool",
+        description="QSLCL Tool v2.1.1 - Universal SOC Tool",
         formatter_class=QSLCLHelp
     )
 

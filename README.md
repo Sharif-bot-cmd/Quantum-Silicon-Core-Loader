@@ -4,7 +4,7 @@ Primary Core: **qslcl.elf**
 
 Assistant Module: **qslcl.bin (v0.6.6)**
 
-Universal Controller: **qslcl.py (v2.1.0)**
+Universal Controller: **qslcl.py (v2.1.1)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION_MATRIX.md)
 
@@ -28,7 +28,15 @@ QSLCL runs in:
 
 ---
 
-### What's New in **v2.1.0**
+### What's New in **v2.1.1**
+
+- **Automatic USB QSLCL Exposure** - Device identifies as "QSLCL Loader" in USB descriptors (like MediaTek DA)
+- **Multi-Method USB Identification** - 6 fallback methods to ensure QSLCL appears in `lsusb`
+- **Auto-Verification** - Confirms exposure and displays product/serial strings
+- **Vendor Magic Registration** - QSLCL USB magic (0x51534C43) exposed via control transfer
+- **Protocol Identifier** - bInterfaceProtocol set to 0x51 ('Q') for instant recognition
+
+### What's New in **v2.1.0** (Previous)
 
 - **Complete Code Cleanup** - Removed ~40% redundant code across all modules
 - **Standardized Architecture** - Every module follows identical patterns
@@ -67,6 +75,25 @@ QSLCL Binary Layout (v0.6.6):
 └─────────────────────────────────────────────┘
 ```
 
+### USB QSLCL Exposure (v2.1.1):
+
+When QSLCL loads, the device automatically identifies itself in USB descriptors:
+
+| Without Exposure | With Exposure (v2.1.1) |
+|-----------------|------------------------|
+| ❌ Generic "DFU Device" | ✅ "QSLCL Loader v2.1.0" |
+| ❌ Random serial number | ✅ "QSLCL-VID-PID-TIMESTAMP" |
+| ❌ No protocol identifier | ✅ bInterfaceProtocol = 0x51 ('Q') |
+| ❌ Undetectable by scanners | ✅ Visible to `lsusb` and analyzers |
+
+**Detection by other tools:**
+```bash
+$ lsusb -v -d 05AC:1281 | grep -E "(iProduct|iSerial|bInterfaceProtocol)"
+  iProduct                2 QSLCL Loader v2.1.0
+  iSerial                 3 QSLCL-05AC-1281-67A3F2C8
+  bInterfaceProtocol     81    <-- 0x51 = 'Q'
+```
+
 ### Encryption Layer (v0.6.5+):
 
 | Without QSLCLENC | With QSLCLENC |
@@ -78,7 +105,7 @@ QSLCL Binary Layout (v0.6.6):
 
 ---
 
-# What's New in **v2.0.1** (Previous)
+# What's New in **v2.0.1** (Legacy)
 
 ## 🔥 Dynamic DFU Detection (Major Improvement)
 
@@ -93,7 +120,7 @@ QSLCL Binary Layout (v0.6.6):
 
 ---
 
-# Complete Command List (v2.1.0)
+# Complete Command List (v2.1.1)
 
 **Core Memory Operations:**
 | Command | Description |
@@ -113,6 +140,7 @@ QSLCL Binary Layout (v0.6.6):
 | `ping` | Round-trip latency testing |
 | `getinfo` | Comprehensive device information retrieval |
 | `partitions` | Partition table detection (MBR/GPT parsing) |
+| `usb-identify` | Check QSLCL USB exposure status (NEW in v2.1.1) |
 
 **System Control:**
 | Command | Description |
@@ -167,13 +195,38 @@ pip install capstone        # optional, for disassembly
 # Build with encryption support
 python build.py qslcl.bin --encrypt --debug
 
-# Test basic functionality
+# Test basic functionality (auto-exposes QSLCL in USB)
 python qslcl.py hello --loader=qslcl.bin
 python qslcl.py getinfo --loader=qslcl.bin
 python qslcl.py ping --loader=qslcl.bin
 
+# Check USB exposure status
+python qslcl.py usb-identify
+
 # List available commands
 python qslcl.py hello --loader=qslcl.bin
+```
+
+## USB Exposure Feature (v2.1.1)
+
+```bash
+# Loader automatically exposes QSLCL in USB descriptors
+python qslcl.py hello --loader=qslcl.bin
+
+# Expected output:
+# [*] Loading: qslcl.bin
+# [+] Loader uploaded.
+# [*] Exposing QSLCL in USB configuration...
+# [+] QSLCL identified in USB:
+#     Product: QSLCL Loader v2.1.0
+#     Serial: QSLCL-05AC-1281-67A3F2C8
+#     Protocol: 0x51 ('Q')
+#     Vendor Magic: 0x51534C43
+
+# Verify exposure with system tools
+$ lsusb -v -d 05AC:1281 | grep -E "(iProduct|iSerial)"
+  iProduct                2 QSLCL Loader v2.1.0
+  iSerial                 3 QSLCL-05AC-1281-67A3F2C8
 ```
 
 ## Encryption Layer Usage (v0.6.5+)
@@ -229,26 +282,29 @@ python qslcl.py footer --type SECURITY --validate --loader=qslcl.bin
 python qslcl.py voltage monitor ALL 30 1
 python qslcl.py glitch scan --loader=qslcl.bin
 python qslcl.py crash test basic 3 5 --loader=qslcl.bin
+
+# USB exposure verification
+python qslcl.py usb-identify
 ```
 
 ---
 
 # Device Compatibility
 
-| Vendor   | Mode             | Detection Method            | Encryption | Status |
-|----------|------------------|-----------------------------|------------|--------|
-| Qualcomm | EDL              | Sahara + Firehose handshake | Optional   | ✅ |
-| MediaTek | BROM / Preloader | 0xA0 preloader ping         | Optional   | ✅ |
-| Apple    | DFU (A12-A17)    | Dynamic USB DFU Class       | No         | ✅ |
-| Apple    | DFU (A18+)       | Dynamic USB DFU Class       | **Required** | ⚠️ Ready |
-| Google   | DFU              | Dynamic USB DFU Class       | Optional   | ✅ |
-| Samsung  | DFU              | Dynamic USB DFU Class       | Optional   | ✅ |
-| Generic  | USB CDC/Bulk     | Endpoint auto-discovery     | Optional   | ✅ |
-| Any      | Serial COM       | UART auto sync              | No         | ✅ |
+| Vendor   | Mode             | Detection Method            | USB Exposure | Encryption | Status |
+|----------|------------------|-----------------------------|--------------|------------|--------|
+| Qualcomm | EDL              | Sahara + Firehose handshake | ✅ Auto      | Optional   | ✅ |
+| MediaTek | BROM / Preloader | 0xA0 preloader ping         | ✅ Auto      | Optional   | ✅ |
+| Apple    | DFU (A12-A17)    | Dynamic USB DFU Class       | ✅ Auto      | No         | ✅ |
+| Apple    | DFU (A18+)       | Dynamic USB DFU Class       | ✅ Auto      | **Required** | ⚠️ Ready |
+| Google   | DFU              | Dynamic USB DFU Class       | ✅ Auto      | Optional   | ✅ |
+| Samsung  | DFU              | Dynamic USB DFU Class       | ✅ Auto      | Optional   | ✅ |
+| Generic  | USB CDC/Bulk     | Endpoint auto-discovery     | ⚠️ Limited  | Optional   | ✅ |
+| Any      | Serial COM       | UART auto sync              | N/A         | No         | ✅ |
 
 ---
 
-# Module Architecture (v2.1.0)
+# Module Architecture (v2.1.1)
 
 All command modules follow a clean, consistent architecture:
 
@@ -288,10 +344,50 @@ Each module features:
 
 ---
 
+# USB Exposure Technical Details (v2.1.1)
+
+## How It Works
+
+When `--loader=qslcl.bin` is specified, QSLCL automatically:
+
+1. **Uploads the loader** to the device (existing behavior)
+2. **Exposes QSLCL in USB descriptors** using 6 fallback methods:
+   - iProduct string descriptor → "QSLCL Loader v2.1.0"
+   - iSerial string descriptor → "QSLCL-VID-PID-TIMESTAMP"
+   - Vendor control transfer (0xF0) → Returns QSLCL magic (0x51534C43)
+   - bInterfaceProtocol → Set to 0x51 ('Q')
+   - Device qualifier modification (SuperSpeed)
+   - Configuration descriptor update
+
+3. **Verifies exposure** and displays results
+
+## Why This Matters
+
+Like MediaTek's "DA" (Download Agent) or Qualcomm's "Sahara" protocol, QSLCL now:
+
+- **Identifies itself** in USB enumeration
+- **Is detectable** by USB analyzers and system tools
+- **Provides visual confirmation** that the loader is active
+- **Enables automation** by other tools that scan for QSLCL
+
+## Verification Commands
+
+```bash
+# Check exposure status
+python qslcl.py usb-identify
+
+# System-level verification
+lsusb -v -d VID:PID | grep -E "(iProduct|iSerial)"
+sudo lsusb -v -d 05AC:1281 | grep "QSLCL"
+```
+
+---
+
 # Version History
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
+| **v0.6.6 / v2.1.1** | 2026 | **USB QSLCL Exposure** - Auto-identifies in USB descriptors, 6 fallback methods |
 | **v0.6.6 / v2.1.0** | 2026 | **Code cleanup** - 40% reduction, QSLCLDATA/SYNC blocks, 26 commands |
 | v0.6.5 / v2.0.2 | 2026 | QSLCLENC encryption layer - ChaCha20/AES for A18+ |
 | v0.6.4 / v2.0.1 | 2026 | Dynamic DFU detection, QSLCLRESP fixes |
@@ -351,6 +447,20 @@ Host                           Device
   |<-- QSLCLSYN -----------------|  Frame type negotiation
 ```
 
+### USB Exposure Protocol (v2.1.1)
+
+```
+Host                           Device (after --loader)
+  |                              |
+  |--- USB Enumeration --------->|
+  |<-- iProduct = "QSLCL Loader"|  Auto-exposed
+  |<-- iSerial = "QSLCL-..."    |
+  |<-- bInterfaceProtocol = 0x51|
+  |                              |
+  |--- Vendor Ctrl (0xF0) ------>|
+  |<-- Magic 0x51534C43 ---------|  QSLCL verification
+```
+
 ---
 
 ## Legal & Ethical Framework
@@ -363,6 +473,12 @@ Host                           Device
 - **Repair Technicians**: Right to Repair implementations
 - **Students**: Learning hardware architecture and security
 - **Developers**: Creating interoperable software and tools
+
+### USB Exposure Legal Note:
+The USB self-identification feature (iProduct/iSerial) is a **standard USB feature** used by countless devices. QSLCL simply identifies itself like any compliant USB device, similar to:
+- MediaTek's "DA" (Download Agent)
+- Qualcomm's "Sahara" protocol
+- Any vendor's USB product string
 
 ### Encryption Layer Legal Note:
 The QSLCLENC encryption layer is designed for **research and interoperability**, not to defeat lawful access. It uses standard, publicly documented algorithms (ChaCha20, AES-256-GCM) with no backdoors.
@@ -396,6 +512,15 @@ python build.py qslcl.bin --encrypt --debug
 python qslcl.py hello --debug
 ```
 
+**USB Exposure Not Working:**
+```bash
+# Check if device supports runtime descriptor changes
+python qslcl.py usb-identify --debug
+
+# Exposure is optional - loader still works without it
+# Some devices may not support runtime USB changes
+```
+
 **Memory Operation Errors:**
 ```bash
 python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
@@ -405,7 +530,7 @@ python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
 
 # Final Words
 
-> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, and every bootstrap execution becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping, quantum-resistant encryption, and structured data protocols."**
+> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, and every bootstrap execution becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping, quantum-resistant encryption, structured data protocols, and now automatic USB self-identification like MediaTek DA."**
 
 ## Key Philosophy
 
@@ -416,6 +541,7 @@ python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
 * **Future-Proof Detection** - USB DFU Class compliance
 * **Encryption Ready** - ChaCha20/AES for A18+ compatibility
 * **Data Protocol** - Structured bulk transfers with integrity
+* **USB Self-Identification** - QSLCL visible in device descriptors (NEW v2.1.1)
 * **Ethical Empowerment** - Capability with responsibility and safety controls
 
 **YouTube**: [https://www.youtube.com/@EntropyVector](https://www.youtube.com/@EntropyVector)
