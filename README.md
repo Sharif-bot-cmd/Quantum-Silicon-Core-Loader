@@ -298,7 +298,7 @@ python qslcl.py usb-identify
 | Apple    | DFU (A12-A17)    | Dynamic USB DFU Class       | ✅ Auto      | No         | ✅ |
 | Apple    | DFU (A18+)       | Dynamic USB DFU Class       | ✅ Auto      | **Required** | ⚠️ Ready |
 | Google   | DFU              | Dynamic USB DFU Class       | ✅ Auto      | Optional   | ✅ |
-| Samsung  | DFU              | Dynamic USB DFU Class       | ✅ Auto      | Optional   | ✅ |
+| Samsung  | EUB              | Dynamic USB DFU Class       | ✅ Auto      | Optional   | ✅ |
 | Generic  | USB CDC/Bulk     | Endpoint auto-discovery     | ⚠️ Limited  | Optional   | ✅ |
 | Any      | Serial COM       | UART auto sync              | N/A         | No         | ✅ |
 
