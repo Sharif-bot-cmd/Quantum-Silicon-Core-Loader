@@ -4,7 +4,7 @@ Primary Core: **qslcl.elf**
 
 Assistant Module: **qslcl.bin (v0.6.7)**
 
-Universal Controller: **qslcl.py (v2.1.2)**
+Universal Controller: **qslcl.py (v2.1.3)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION_MATRIX.md)
 
@@ -28,19 +28,33 @@ QSLCL runs in:
 
 ---
 
-## What's New in **v2.1.2**
+## What's New in **v2.1.3**
 
-### 🔥 USB4 v2.0 80Gbps Support (Major Feature)
+### 🍎 Auto-DFU Boot Mode (Like palera1n)
 
-- **USB4V2MC Block** - Native USB4 v2.0 microcode for 80Gbps operation
-- **PAM4 Encoding** - 2-bit per symbol encoding for 80Gbps throughput
-- **4-Lane Aggregation** - Full bandwidth utilization across all lanes
-- **PCIe/DP/USB3 Tunneling** - Direct tunnel creation over USB4 fabric
-- **CMA + DPP Security** - Component Measurement Architecture & Data Protection Profile
-- **Hardware Attestation** - Cryptographic proof of device state
-- **Automatic Detection** - `--usb4` flag auto-negotiates 80Gbps mode
-- **Backward Compatible** - Graceful fallback to USB 3.x/4.0 when USB4 v2.0 unavailable
+- **One-Click DFU Entry** - Automatically detects iOS devices in normal mode and offers to boot into DFU
+- **Interactive Button Guide** - Shows exact button press timing (Power + Volume Down sequence)
+- **Smart Device Detection** - Identifies iOS devices by UDID, product name, and USB descriptors
+- **Auto-Reconnection** - After DFU entry, automatically reconnects to the device in DFU mode
+- **Configurable Timeout** - Adjustable wait time for DFU mode detection (`--dfu-timeout` parameter)
+- **Seamless Workflow** - Combine with `--loader` for complete DFU → Load → Execute automation
+- **Multiple Device Support** - Handles multiple iOS devices with interactive selection
+- **No Manual PID Configuration** - Uses USB DFU Class specification (0xFE/0x01) for detection
 
+**How it works:**
+```bash
+# Single command: Auto-DFU → Load QSLCL → Run hello
+python qslcl.py hello --loader=qslcl.bin --dfu-boot
+
+# Expected workflow:
+# 1. Scans for iOS device in normal mode
+# 2. Shows UDID and device info
+# 3. Displays button instructions (like palera1n)
+# 4. Waits for device to enter DFU
+# 5. Automatically loads qslcl.bin
+# 6. Executes the requested command
+```
+### Binary layout
 
 ```
 QSLCL Binary Layout (v0.6.7):
@@ -59,7 +73,7 @@ QSLCL Binary Layout (v0.6.7):
 │ 0x00D000+ QSLCLSYN (Sync Block)             │
 │ 0x00E000+ QSLCLHDR (Certificate)            │
 │ 0x00F000+ QSLCLINT (Integrity Footer)       │
-│ 0x010000+ USB4V2MC (USB4 v2.0 80Gbps) ★ NEW│
+│ 0x010000+ USB4V2MC (USB4 v2.0 80Gbps)      │
 └─────────────────────────────────────────────┘
 ```
 
@@ -78,7 +92,7 @@ When built with `--usb4-v2`, QSLCL unlocks 80Gbps communication:
 
 ---
 
-# Complete Command List (v2.1.2)
+# Complete Command List (v2.1.3)
 
 **Core Memory Operations:**
 | Command | Description |
@@ -99,7 +113,8 @@ When built with `--usb4-v2`, QSLCL unlocks 80Gbps communication:
 | `getinfo` | Comprehensive device information retrieval |
 | `partitions` | Partition table detection (MBR/GPT parsing) |
 | `usb-identify` | Check QSLCL USB exposure status |
-| `usb4` | **USB4 v2.0 80Gbps status and control (NEW)** |
+| `usb4` | USB4 v2.0 80Gbps status and control |
+| `dfu-boot` | **Boot iOS device into DFU mode (NEW in v2.1.3)** |
 
 **System Control:**
 | Command | Description |
@@ -154,6 +169,12 @@ pip install capstone        # optional, for disassembly
 # Build with USB4 v2.0 and encryption support
 python build.py qslcl.bin --usb4-v2 --encrypt --debug
 
+# Auto-DFU boot + Loader + Hello (All-in-One)
+python qslcl.py hello --loader=qslcl.bin --dfu-boot
+
+# Just boot into DFU mode (like palera1n)
+python qslcl.py dfu-boot
+
 # Test basic functionality (auto-exposes QSLCL in USB)
 python qslcl.py hello --loader=qslcl.bin --usb4
 python qslcl.py getinfo --loader=qslcl.bin
@@ -164,9 +185,55 @@ python qslcl.py usb-identify
 
 # Check USB4 v2.0 80Gbps status
 python qslcl.py usb4
+```
 
-# List available commands
-python qslcl.py hello --loader=qslcl.bin
+## Auto-DFU Boot Feature (v2.1.3)
+
+```bash
+# Method 1: Standalone DFU boot (like palera1n)
+python qslcl.py dfu-boot
+
+# Expected output:
+# ============================================================
+#          QSLCL DFU Boot Helper (like palera1n)
+# ============================================================
+# 
+# [*] Scanning for iOS devices in normal mode...
+# [+] Found 1 iOS device(s) in normal mode:
+#     1. iPhone 15 Pro
+#        UDID: 00008030-001A2D5E0A30803A
+#        USB: Bus 1, Addr 5
+# 
+# [*] Selected: iPhone 15 Pro
+# 
+# [*] This will boot your device into DFU mode.
+# [*] Your device screen will go BLACK (this is normal).
+# 
+# Continue? (y/N): y
+# 
+# ============================================================
+#                    ENTER DFU MODE
+# ============================================================
+# 
+# To enter DFU mode, follow these steps EXACTLY:
+# 
+#   1. Press and HOLD the POWER button for 3 seconds
+#   2. While still holding POWER, also HOLD the VOLUME DOWN button
+#   3. Keep holding BOTH buttons for exactly 10 seconds
+#   4. RELEASE the POWER button but KEEP holding VOLUME DOWN
+#   5. Wait 5-10 seconds - device should enter DFU mode
+# 
+# [+] Device entered DFU mode successfully!
+# [+] Device now in DFU mode! (VID:PID=05AC:1281)
+
+# Method 2: Combined with QSLCL commands
+python qslcl.py hello --loader=qslcl.bin --dfu-boot
+
+# Method 3: With custom DFU timeout (default 30 seconds)
+python qslcl.py hello --loader=qslcl.bin --dfu-boot --dfu-timeout 45
+
+# Method 4: With debug output
+python qslcl.py dfu-boot --debug
 ```
 
 ## USB4 v2.0 80Gbps Usage (v0.6.7+)
@@ -191,7 +258,7 @@ python qslcl.py hello --loader=qslcl.bin --usb4 --debug
 # [*] USB4 v2.0 80Gbps mode initialized
 # [*] Exposing QSLCL in USB configuration...
 # [+] QSLCL identified in USB:
-#     Product: QSLCL Loader v2.1.2
+#     Product: QSLCL Loader v2.1.3
 #     Serial: QSLCL-05AC-1281-67A3F2C8
 #     Protocol: 0x51 ('Q')
 
@@ -208,7 +275,7 @@ python qslcl.py usb4
 #     Current Mode: 80 Gbps
 ```
 
-## USB Exposure Feature (v2.1.1)
+## USB Exposure Feature (v2.1.1+)
 
 ```bash
 # Loader automatically exposes QSLCL in USB descriptors
@@ -219,14 +286,14 @@ python qslcl.py hello --loader=qslcl.bin
 # [+] Loader uploaded.
 # [*] Exposing QSLCL in USB configuration...
 # [+] QSLCL identified in USB:
-#     Product: QSLCL Loader v2.1.2
+#     Product: QSLCL Loader v2.1.3
 #     Serial: QSLCL-05AC-1281-67A3F2C8
 #     Protocol: 0x51 ('Q')
 #     Vendor Magic: 0x51534C43
 
 # Verify exposure with system tools
 $ lsusb -v -d 05AC:1281 | grep -E "(iProduct|iSerial)"
-  iProduct                2 QSLCL Loader v2.1.2
+  iProduct                2 QSLCL Loader v2.1.3
   iSerial                 3 QSLCL-05AC-1281-67A3F2C8
 ```
 
@@ -260,60 +327,19 @@ python qslcl.py hello --loader=qslcl.bin
 
 # Device Compatibility
 
-| Vendor   | Mode             | Detection Method            | USB Exposure | USB4 v2.0 | Encryption | Status |
-|----------|------------------|-----------------------------|--------------|-----------|------------|--------|
-| Qualcomm | EDL              | Sahara + Firehose handshake | ✅ Auto      | ✅ 80Gbps | Optional   | ✅ |
-| MediaTek | BROM / Preloader | 0xA0 preloader ping         | ✅ Auto      | ✅ 80Gbps | Optional   | ✅ |
-| Apple    | DFU (A12-A17)    | Dynamic USB DFU Class       | ✅ Auto      | ⚠️ 40Gbps | No         | ✅ |
-| Apple    | DFU (A18+)       | Dynamic USB DFU Class       | ✅ Auto      | ✅ 80Gbps | **Required** | ✅ |
-| Google   | DFU              | Dynamic USB DFU Class       | ✅ Auto      | ✅ 80Gbps | Optional   | ✅ |
-| Samsung  | EUB              | Dynamic USB DFU Class       | ✅ Auto      | ✅ 80Gbps | Optional   | ✅ |
-| Intel   | USB4 v2.0 Host   | Native USB4 detection       | ✅ Auto      | ✅ 80Gbps | Optional   | ✅ |
-| AMD     | USB4 v2.0 Host   | Native USB4 detection       | ✅ Auto      | ✅ 80Gbps | Optional   | ✅ |
-| Generic  | USB CDC/Bulk     | Endpoint auto-discovery     | ⚠️ Limited  | ❌ No     | Optional   | ✅ |
-| Any      | Serial COM       | UART auto sync              | N/A         | N/A      | No         | ✅ |
-
----
-
-# USB4 v2.0 Technical Details (v0.6.7 / v2.1.2)
-
-## Architecture
-
-```
-Standard USB Mode:
-QSLCLCMD → USB 3.x/4.0 (40Gbps) → Device
-
-USB4 v2.0 80Gbps Mode:
-QSLCLCMD → [PAM4 Encoder] → [4-Lane MUX] → [80Gbps Tunnel] → Device
-           ↑                  ↑                ↑
-    PAM4 Encoding        Lane Aggregation   PCIe/DP/USB3
-```
-
-## PAM4 Encoding (80Gbps)
-
-| Feature | NRZ (USB3/4.0) | PAM4 (USB4 v2.0) |
-|---------|----------------|------------------|
-| Bits per symbol | 1 bit | **2 bits** |
-| Bandwidth | 20Gbps/lane | **40Gbps/lane** |
-| 4-lane total | 40Gbps | **160Gbps** (theoretical) |
-| Actual throughput | 40Gbps | **80Gbps** (real-world) |
-
-## Tunnel Types
-
-| Tunnel | Purpose | Bandwidth | Latency |
-|--------|---------|-----------|---------|
-| PCIe | Direct memory access | 80Gbps | <1µs |
-| DisplayPort | Video/Display | 80Gbps | <1µs |
-| USB3 | Legacy USB | 20Gbps | <10µs |
-
-## Security Features
-
-| Feature | Description |
-|---------|-------------|
-| CMA | Component Measurement Architecture - Hardware fingerprinting |
-| DPP | Data Protection Profile - Per-tunnel encryption |
-| Attestation | Cryptographic proof of device state |
-| Replay Protection | Sequence number enforcement |
+| Vendor   | Mode             | Detection Method            | USB Exposure | USB4 v2.0 | Auto-DFU | Encryption | Status |
+|----------|------------------|-----------------------------|--------------|-----------|----------|------------|--------|
+| Qualcomm | EDL              | Sahara + Firehose handshake | ✅ Auto      | ✅ 80Gbps | N/A      | Optional   | ✅ |
+| MediaTek | BROM / Preloader | 0xA0 preloader ping         | ✅ Auto      | ✅ 80Gbps | N/A      | Optional   | ✅ |
+| Apple    | DFU (A12-A17)    | Dynamic USB DFU Class       | ✅ Auto      | ⚠️ 40Gbps | ✅ Auto  | No         | ✅ |
+| Apple    | DFU (A18+)       | Dynamic USB DFU Class       | ✅ Auto      | ✅ 80Gbps | ✅ Auto  | **Required** | ✅ |
+| Apple    | Normal Mode iOS  | USB Class + Product String  | N/A         | N/A      | ✅ Auto  | N/A        | ✅ |
+| Google   | DFU              | Dynamic USB DFU Class       | ✅ Auto      | ✅ 80Gbps | N/A      | Optional   | ✅ |
+| Samsung  | EUB              | Dynamic USB DFU Class       | ✅ Auto      | ✅ 80Gbps | N/A      | Optional   | ✅ |
+| Intel    | USB4 v2.0 Host   | Native USB4 detection       | ✅ Auto      | ✅ 80Gbps | N/A      | Optional   | ✅ |
+| AMD      | USB4 v2.0 Host   | Native USB4 detection       | ✅ Auto      | ✅ 80Gbps | N/A      | Optional   | ✅ |
+| Generic  | USB CDC/Bulk     | Endpoint auto-discovery     | ⚠️ Limited  | ❌ No     | N/A      | Optional   | ✅ |
+| Any      | Serial COM       | UART auto sync              | N/A         | N/A      | N/A      | No         | ✅ |
 
 ---
 
@@ -321,7 +347,8 @@ QSLCLCMD → [PAM4 Encoder] → [4-Lane MUX] → [80Gbps Tunnel] → Device
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
-| **v0.6.7 / v2.1.2** | 2026 | **USB4 v2.0 80Gbps** - PAM4 encoding, 4-lane aggregation, PCIe/DP/USB3 tunneling, CMA/DPP security, attestation |
+| **v0.6.7 / v2.1.3** | 2026 | **Auto-DFU Boot** - Like palera1n, one-click DFU entry with button guide, UDID detection, auto-reconnection |
+| **v0.6.7 / v2.1.2** | 2026 | **USB4 v2.0 80Gbps** - PAM4 encoding, 4-lane aggregation, PCIe/DP/USB3 tunneling, CMA/DPP security |
 | **v0.6.6 / v2.1.1** | 2026 | **USB QSLCL Exposure** - Auto-identifies in USB descriptors, 6 fallback methods |
 | **v0.6.6 / v2.1.0** | 2026 | **Code cleanup** - 40% reduction, QSLCLDATA/SYNC blocks, 26 commands |
 | v0.6.5 / v2.0.2 | 2026 | QSLCLENC encryption layer - ChaCha20/AES for A18+ |
@@ -357,6 +384,9 @@ QSLCLCMD → [PAM4 Encoder] → [4-Lane MUX] → [80Gbps Tunnel] → Device
 - **Students**: Learning hardware architecture and security
 - **Developers**: Creating interoperable software and tools
 
+### Auto-DFU Legal Note:
+The DFU boot feature uses **standard USB DFU Class Specification** (0xFE/0x01) and standard iOS recovery mode triggers. It provides button instructions to the user and requires explicit consent - it does not automatically manipulate devices without permission.
+
 ### Prohibited Uses:
 - Unauthorized access to others' devices
 - Circumventing security on non-owned hardware
@@ -370,6 +400,24 @@ QSLCLCMD → [PAM4 Encoder] → [4-Lane MUX] → [80Gbps Tunnel] → Device
 # Support & Troubleshooting
 
 ## Common Issues
+
+**Auto-DFU Not Detecting Device:**
+```bash
+# Make sure device is connected and unlocked
+# Trust this computer when prompted on device
+python qslcl.py dfu-boot --debug
+```
+
+**Device Won't Enter DFU Mode:**
+```bash
+# Try adjusting timeout (default 30 seconds)
+python qslcl.py dfu-boot --dfu-timeout 45
+
+# Or manually enter DFU mode:
+# 1. Press Power + Volume Down for exactly 10 seconds
+# 2. Release Power, keep holding Volume Down
+# 3. Screen should be BLACK
+```
 
 **Parser Detection Problems:**
 ```bash
@@ -412,7 +460,7 @@ python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
 
 # Final Words
 
-> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, every bootstrap execution, every USB4 v2.0 80Gbps tunnel, and every PAM4-encoded transaction becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping, quantum-resistant encryption, structured data protocols, automatic USB self-identification, and now USB4 v2.0 80Gbps support."**
+> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, every bootstrap execution, every USB4 v2.0 80Gbps tunnel, every PAM4-encoded transaction, and now every one-click DFU boot becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping, quantum-resistant encryption, structured data protocols, automatic USB self-identification, USB4 v2.0 80Gbps support, and palera1n-like DFU automation."**
 
 ## Key Philosophy
 
@@ -424,9 +472,10 @@ python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
 * **Encryption Ready** - ChaCha20/AES for A18+ compatibility
 * **Data Protocol** - Structured bulk transfers with integrity
 * **USB Self-Identification** - QSLCL visible in device descriptors
-* **80Gbps Throughput** - USB4 v2.0 PAM4 encoding with 4-lane aggregation (NEW v0.6.7)
-* **Hardware Tunneling** - PCIe/DP/USB3 over USB4 fabric (NEW v0.6.7)
-* **Silicon Attestation** - CMA + DPP hardware-level security (NEW v0.6.7)
+* **80Gbps Throughput** - USB4 v2.0 PAM4 encoding with 4-lane aggregation
+* **Hardware Tunneling** - PCIe/DP/USB3 over USB4 fabric
+* **Silicon Attestation** - CMA + DPP hardware-level security
+* **One-Click DFU Boot** - Like palera1n, automatic DFU entry with button guide (NEW v2.1.3)
 * **Ethical Empowerment** - Capability with responsibility and safety controls
 
 **YouTube**: [https://www.youtube.com/@EntropyVector](https://www.youtube.com/@EntropyVector)

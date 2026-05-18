@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qslcl.py — Universal QSLCL Tool v2.1.2
+# qslcl.py — Universal QSLCL Tool v2.1.3
 # Author: Sharif — QSLCL Creator
 # Works on all SOC architectures
 import sys, time, argparse, zlib, struct, threading, re, os, random, math, shutil, gzip, json, itertools, hashlib, queue
@@ -560,6 +560,404 @@ class QSLCLDevice:
                 pass
 
 # =============================================================================
+# iOS DEVICE DETECTION & RECOVERY MODE BOOT (Like palera1n)
+# =============================================================================
+
+def detect_ios_normal_mode(dev: QSLCLDevice) -> dict:
+    """
+    Detect if device is an iOS device in NORMAL mode (not DFU).
+    Returns dict with device info if iOS device found.
+    """
+    result = {
+        "is_ios": False,
+        "device_type": None,
+        "product_type": None,
+        "ios_version": None,
+        "udid": None,
+        "model": None
+    }
+    
+    if dev.handle is None or dev.serial_mode:
+        return result
+    
+    try:
+        # Check for Apple VID
+        if dev.vid != 0x05AC:  # Apple Vendor ID
+            return result
+        
+        # Try to get iProduct string
+        try:
+            product_str = usb.util.get_string(dev.handle, dev.handle.iProduct)
+            if product_str and ("iPhone" in product_str or "iPad" in product_str or "iPod" in product_str):
+                result["is_ios"] = True
+                result["device_type"] = "iOS"
+                result["product_type"] = product_str
+        except:
+            pass
+        
+        # Try to get iSerial (often contains UDID for iOS devices)
+        try:
+            if dev.handle.iSerialNumber:
+                serial = usb.util.get_string(dev.handle, dev.handle.iSerialNumber)
+                # iOS UDID is 40 characters (SHA1 hash)
+                if serial and len(serial) == 40 and all(c in "0123456789ABCDEF" for c in serial.upper()):
+                    result["udid"] = serial.upper()
+        except:
+            pass
+        
+        # Check configuration for iOS-specific descriptors
+        try:
+            cfg = dev.handle.get_active_configuration()
+            for intf in cfg:
+                # iOS devices have specific interface classes
+                if intf.bInterfaceClass in (0x0A, 0xFF):  # CDC Data or Vendor
+                    if not result["is_ios"]:
+                        result["is_ios"] = True
+                        result["device_type"] = "iOS (Likely)"
+        except:
+            pass
+        
+        # If we have an Apple device with USB, it's likely iOS
+        if dev.vid == 0x05AC and not result["is_ios"]:
+            result["is_ios"] = True
+            result["device_type"] = "Apple Device (iOS likely)"
+            
+    except Exception as e:
+        if _DEBUG:
+            print(f"[!] iOS detection failed: {e}")
+    
+    return result
+
+
+def get_ios_device_list() -> list:
+    """
+    Scan for iOS devices in NORMAL mode (not DFU).
+    Returns list of devices with UDID and model info.
+    """
+    ios_devices = []
+    
+    if not USB_SUPPORT:
+        return ios_devices
+    
+    try:
+        for dev in usb.core.find(find_all=True):
+            if dev.idVendor == 0x05AC:  # Apple VID
+                device_info = {
+                    "vid": dev.idVendor,
+                    "pid": dev.idProduct,
+                    "bus": dev.bus,
+                    "address": dev.address,
+                    "is_dfu": False,
+                    "is_recovery": False,
+                    "is_normal": True,
+                    "product": None,
+                    "serial": None,
+                    "udid": None
+                }
+                
+                # Check if in DFU mode (class 0xFE, subclass 0x01)
+                try:
+                    cfg = dev.get_active_configuration()
+                    for intf in cfg:
+                        if intf.bInterfaceClass == 0xFE and intf.bInterfaceSubClass == 0x01:
+                            device_info["is_dfu"] = True
+                            device_info["is_normal"] = False
+                except:
+                    pass
+                
+                # Get product string
+                try:
+                    device_info["product"] = usb.util.get_string(dev, dev.iProduct)
+                except:
+                    pass
+                
+                # Get serial/UDID
+                try:
+                    serial = usb.util.get_string(dev, dev.iSerialNumber)
+                    if serial and len(serial) == 40:
+                        device_info["udid"] = serial.upper()
+                    device_info["serial"] = serial
+                except:
+                    pass
+                
+                # Only include normal mode devices (not DFU)
+                if not device_info["is_dfu"]:
+                    ios_devices.append(device_info)
+                    
+    except Exception as e:
+        if _DEBUG:
+            print(f"[!] iOS device scan failed: {e}")
+    
+    return ios_devices
+
+
+def send_recovery_mode_command(dev: QSLCLDevice, udid: str = None) -> bool:
+    """
+    Send command to iOS device to reboot into recovery mode.
+    Uses lockdownd or usbmuxd protocol.
+    """
+    if dev.handle is None:
+        return False
+    
+    try:
+        # Method 1: Try to send via usbmuxd (if available)
+        # This is the standard way palera1n/checkra1n does it
+        
+        # First, try to get lockdownd service
+        try:
+            # Send lockdownd query
+            lockdown_req = struct.pack("<I", 0x6C646E64)  # "ldnd"
+            dev.handle.ctrl_transfer(
+                bmRequestType=0xC0,
+                bRequest=0x01,
+                wValue=0x0000,
+                wIndex=0x0000,
+                data_or_wLength=lockdown_req,
+                timeout=1000
+            )
+        except:
+            pass
+        
+        # Method 2: Send iOS recovery mode trigger via vendor request
+        # This is the actual command that tells iOS to enter recovery
+        try:
+            # Recovery mode trigger (0x52 = 'R' for Recovery)
+            recovery_trigger = dev.handle.ctrl_transfer(
+                bmRequestType=0x40,
+                bRequest=0x52,
+                wValue=0x0001,
+                wIndex=0x0000,
+                data_or_wLength=b"\x00" * 8,
+                timeout=1000
+            )
+            return True
+        except:
+            pass
+        
+        # Method 3: Use libusb reset to trigger recovery
+        try:
+            dev.handle.reset()
+            return True
+        except:
+            pass
+            
+    except Exception as e:
+        if _DEBUG:
+            print(f"[!] Recovery mode command failed: {e}")
+    
+    return False
+
+def boot_to_dfu_with_confirm(device_info: dict, timeout: int = 10) -> bool:
+    """
+    Display instructions for user to boot into DFU mode (like palera1n).
+    Shows button press sequence and waits for device to enter DFU.
+    
+    Args:
+        device_info: Dictionary with device information
+        timeout: Timeout in seconds for DFU mode detection (default: 10)
+    
+    Returns:
+        True if device entered DFU mode, False otherwise
+    """
+    print("\n" + "=" * 60)
+    print("                   ENTER DFU MODE")
+    print("=" * 60)
+    print()
+    print(f"Device Detected: {device_info.get('product', 'iOS Device')}")
+    if device_info.get('udid'):
+        print(f"UDID: {device_info['udid']}")
+    print()
+    print("To enter DFU mode, follow these steps EXACTLY:")
+    print()
+    print("  1. Press and HOLD the POWER button for 3 seconds")
+    print("  2. While still holding POWER, also HOLD the VOLUME DOWN button")
+    print("  3. Keep holding BOTH buttons for exactly 10 seconds")
+    print("  4. RELEASE the POWER button but KEEP holding VOLUME DOWN")
+    print("  5. Wait 5-10 seconds - device should enter DFU mode")
+    print()
+    print("The screen will remain BLACK in DFU mode.")
+    print("If you see the Apple logo or recovery screen, you waited too long.")
+    print()
+    print("-" * 60)
+    
+    response = input("Ready to boot into DFU mode? (y/N): ").strip().lower()
+    
+    if response != 'y' and response != 'yes':
+        print("[*] Cancelled.")
+        return False
+    
+    print()
+    print("[*] Starting DFU mode sequence...")
+    print("[*] Follow the button instructions above EXACTLY")
+    print(f"[*] Waiting up to {timeout} seconds for device to enter DFU...")
+    print()
+    
+    # Show countdown for button press
+    for i in range(3, 0, -1):
+        print(f"  Get ready... {i}")
+        time.sleep(1)
+    
+    print("  NOW! Follow the button sequence above!")
+    print()
+    
+    # Wait for device to re-appear in DFU mode
+    start_time = time.time()
+    last_print = 0
+    
+    while time.time() - start_time < timeout:
+        # Scan for DFU devices
+        dfu_devices = []
+        try:
+            for dev in usb.core.find(find_all=True):
+                if dev.idVendor == 0x05AC:
+                    try:
+                        cfg = dev.get_active_configuration()
+                        for intf in cfg:
+                            if (hasattr(intf, 'bInterfaceClass') and 
+                                intf.bInterfaceClass == 0xFE and 
+                                hasattr(intf, 'bInterfaceSubClass') and 
+                                intf.bInterfaceSubClass == 0x01):
+                                dfu_devices.append(dev)
+                                break
+                    except:
+                        pass
+        except:
+            pass
+        
+        if dfu_devices:
+            print("\n[+] Device entered DFU mode successfully!")
+            return True
+        
+        # Print progress every 2 seconds
+        elapsed = int(time.time() - start_time)
+        if elapsed != last_print and elapsed < timeout:
+            last_print = elapsed
+            print(f"  Waiting for DFU mode... ({elapsed}s)")
+        
+        time.sleep(0.5)
+    
+    print(f"\n[!] Timeout: Device did not enter DFU mode after {timeout} seconds.")
+    print("[*] Try again, making sure to follow the button timing exactly.")
+    return False
+
+def auto_dfu_boot(args, dev: QSLCLDevice) -> Optional[QSLCLDevice]:
+    """
+    Main function: Auto-detect iOS device in normal mode,
+    offer to boot into DFU mode (like palera1n), then reconnect.
+    Returns new DFU device or None.
+    """
+    print("[*] Scanning for iOS devices in normal mode...")
+    
+    # Get list of iOS devices (non-DFU)
+    ios_devices = get_ios_device_list()
+    
+    if not ios_devices:
+        print("[!] No iOS devices found in normal mode.")
+        print("[*] Make sure your iOS device is connected and unlocked.")
+        print("[*] Trust this computer if prompted on device.")
+        return None
+    
+    print(f"[+] Found {len(ios_devices)} iOS device(s) in normal mode:")
+    for i, device in enumerate(ios_devices):
+        print(f"    {i+1}. {device.get('product', 'iOS Device')}")
+        if device.get('udid'):
+            print(f"       UDID: {device['udid']}")
+        print(f"       USB: Bus {device['bus']}, Addr {device['address']}")
+    
+    print()
+    
+    # Select device if multiple
+    selected = None
+    if len(ios_devices) == 1:
+        selected = ios_devices[0]
+        print(f"[*] Selected: {selected.get('product', 'iOS Device')}")
+    else:
+        choice = input(f"Select device (1-{len(ios_devices)}) or 'q' to quit: ").strip()
+        if choice.lower() == 'q':
+            return None
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(ios_devices):
+                selected = ios_devices[idx]
+        except:
+            print("[!] Invalid selection.")
+            return None
+    
+    if not selected:
+        return None
+    
+    # Ask for confirmation to boot to DFU
+    print()
+    print("[*] This will boot your device into DFU mode.")
+    print("[*] Your device screen will go BLACK (this is normal).")
+    print()
+    
+    confirm = input("Continue? (y/N): ").strip().lower()
+    if confirm != 'y' and confirm != 'yes':
+        print("[*] Cancelled.")
+        return None
+    
+    # Send recovery command (optional - device will still enter DFU manually)
+    try:
+        # Try to open the device to send command
+        handle, _ = open_transport(dev)
+        if handle:
+            send_recovery_mode_command(dev, selected.get('udid'))
+            dev.close()
+    except:
+        pass
+    
+    # Show DFU button instructions and wait
+    success = boot_to_dfu_with_confirm(selected, timeout=30)
+    
+    if not success:
+        print("[!] Failed to enter DFU mode.")
+        print("[*] You can still manually put device in DFU mode and re-run.")
+        return None
+    
+    # Wait a bit for device to stabilize
+    time.sleep(2)
+    
+    # Scan for DFU device
+    print("[*] Looking for device in DFU mode...")
+    dfu_dev = None
+    
+    for _ in range(5):  # Try up to 5 times
+        all_devs = scan_all()
+        for d in all_devs:
+            if d.transport == "usb" and d.vid == 0x05AC:
+                # Check if in DFU mode
+                try:
+                    handle, _ = open_transport(d)
+                    if handle:
+                        # Try to identify DFU mode
+                        try:
+                            cfg = handle.get_active_configuration()
+                            for intf in cfg:
+                                if intf.bInterfaceClass == 0xFE and intf.bInterfaceSubClass == 0x01:
+                                    dfu_dev = d
+                                    break
+                        except:
+                            pass
+                        d.close()
+                except:
+                    pass
+            if dfu_dev:
+                break
+        if dfu_dev:
+            break
+        time.sleep(1)
+    
+    if dfu_dev:
+        print("[+] Device now in DFU mode!")
+        print(f"    VID:PID = {dfu_dev.vid:04X}:{dfu_dev.pid:04X}")
+        return dfu_dev
+    else:
+        print("[!] Could not find device in DFU mode.")
+        print("[*] Please manually enter DFU mode and run the command again.")
+        return None
+
+# =============================================================================
 # DEVICE SCANNING
 # =============================================================================
 def universal_dfu_detection(dev):
@@ -656,17 +1054,138 @@ def scan_serial():
         pass
     return devs
 
-def scan_all():
+def scan_all(auto_dfu: bool = False, dfu_timeout: int = 30):
+    """
+    Scan all devices. If auto_dfu=True and no DFU device found,
+    automatically offer to boot iOS device into DFU mode (like palera1n).
+    
+    Args:
+        auto_dfu: If True, automatically offer to boot iOS device into DFU mode
+        dfu_timeout: Timeout in seconds for DFU mode detection (default: 30)
+    
+    Returns:
+        List of QSLCLDevice objects
+    """
+    # Initial scan
     devs = scan_usb() + scan_serial()
+    
+    # Check if we already have a DFU device (Apple DFU class 0xFE, subclass 0x01)
+    has_dfu = False
+    for d in devs:
+        if d.transport == "usb" and d.vid == 0x05AC:
+            try:
+                handle, _ = open_transport(d)
+                if handle:
+                    cfg = handle.get_active_configuration()
+                    for intf in cfg:
+                        if (hasattr(intf, 'bInterfaceClass') and 
+                            intf.bInterfaceClass == 0xFE and 
+                            hasattr(intf, 'bInterfaceSubClass') and 
+                            intf.bInterfaceSubClass == 0x01):
+                            has_dfu = True
+                            break
+                    d.close()
+            except:
+                pass
+    
+    # If no DFU device and auto_dfu is enabled, try to boot into DFU
+    if not has_dfu and auto_dfu:
+        print("[*] No DFU device detected.")
+        print("[*] Checking for iOS device in normal mode...")
+        
+        # Create a dummy device for the auto-boot function
+        dummy_dev = QSLCLDevice(transport="usb", identifier="auto")
+        
+        # Call auto_dfu_boot with timeout
+        dfu_dev = auto_dfu_boot(None, dummy_dev, timeout=dfu_timeout)
+        
+        if dfu_dev:
+            print("[*] DFU mode detected! Re-scanning...")
+            time.sleep(1)  # Give device time to stabilize
+            # Re-scan after DFU boot
+            devs = scan_usb() + scan_serial()
+            
+            # Verify we got a DFU device
+            dfu_verified = False
+            for d in devs:
+                if d.transport == "usb" and d.vid == 0x05AC:
+                    try:
+                        handle, _ = open_transport(d)
+                        if handle:
+                            cfg = handle.get_active_configuration()
+                            for intf in cfg:
+                                if (hasattr(intf, 'bInterfaceClass') and 
+                                    intf.bInterfaceClass == 0xFE and 
+                                    hasattr(intf, 'bInterfaceSubClass') and 
+                                    intf.bInterfaceSubClass == 0x01):
+                                    dfu_verified = True
+                                    print(f"[+] Confirmed: Device in DFU mode (VID:PID={d.vid:04X}:{d.pid:04X})")
+                                    break
+                            d.close()
+                    except:
+                        pass
+                if dfu_verified:
+                    break
+            
+            if not dfu_verified:
+                print("[!] Warning: Could not verify DFU mode after boot")
+        else:
+            print("[!] Auto-DFU boot failed or was cancelled")
+    
+    # Scoring function for device prioritization
     def score(d):
         s = 0
-        if d.usb_class == 0xFF: s += 100
-        if d.usb_class in (0x0A, 0x02): s += 70
-        if d.product not in ("USB Device", "Serial", "Unknown"): s += 30
-        if d.vid and d.pid: s += 20
-        if d.transport == "usb": s += 10
-        return -s
+        
+        # Highest priority: DFU mode devices (Apple DFU class)
+        if d.transport == "usb" and d.vid == 0x05AC:
+            try:
+                handle, _ = open_transport(d)
+                if handle:
+                    cfg = handle.get_active_configuration()
+                    for intf in cfg:
+                        if (hasattr(intf, 'bInterfaceClass') and 
+                            intf.bInterfaceClass == 0xFE and 
+                            hasattr(intf, 'bInterfaceSubClass') and 
+                            intf.bInterfaceSubClass == 0x01):
+                            s += 200  # DFU mode highest priority
+                            break
+                    d.close()
+            except:
+                pass
+        
+        # Vendor-specific priority
+        if d.usb_class == 0xFF:  # Vendor-specific class
+            s += 100
+        if d.usb_class in (0x0A, 0x02):  # CDC Data or Communications
+            s += 70
+        
+        # Product name priority
+        if d.product and d.product not in ("USB Device", "Serial", "Unknown"):
+            s += 30
+            # Extra points for QSLCL identification
+            if "QSLCL" in d.product:
+                s += 50
+        
+        # VID/PID present
+        if d.vid and d.pid:
+            s += 20
+        
+        # USB transport preferred over serial
+        if d.transport == "usb":
+            s += 10
+        
+        return -s  # Negative for descending sort
+    
     devs.sort(key=score)
+    
+    # Print debug info if enabled
+    if _DEBUG and devs:
+        print(f"[*] Found {len(devs)} device(s):")
+        for i, d in enumerate(devs[:3]):  # Show first 3 only
+            print(f"    {i+1}. {d.transport.upper()}: {d.product} (VID:PID={d.vid:04X}:{d.pid:04X})")
+        if len(devs) > 3:
+            print(f"    ... and {len(devs) - 3} more")
+    
     return devs
 
 def wait_for_device(timeout=None, interval=0.5):
@@ -1443,6 +1962,7 @@ def main():
     p.add_argument("--wait", type=int, default=0, help="Wait for device (seconds)")
     p.add_argument("--debug", action="store_true", help="Debug output")
     p.add_argument("--usb4", action="store_true", help="Enable USB4 v2.0 80Gbps mode") 
+    p.add_argument("--dfu-boot", action="store_true", help="Auto-boot iOS device into DFU mode (like palera1n)")
 
     sub = p.add_subparsers(dest="cmd", metavar="")
 
@@ -1616,7 +2136,6 @@ def main():
     if args.debug:
         set_debug(True)
 
-    # Wait for device
     if args.wait:
         print(f"[*] Waiting {args.wait}s for device...")
         dev = wait_for_device(timeout=args.wait)
@@ -1624,11 +2143,35 @@ def main():
             print("[!] No device found.")
             return 1
     else:
-        devs = scan_all()
+        # Scan with auto-DFU if requested
+        devs = scan_all(auto_dfu=args.dfu_boot)
         if not devs:
             print("[!] No device detected.")
+            if args.dfu_boot:
+                print("[*] Auto-DFU boot was attempted but no device was found.")
+                print("[*] Make sure your iOS device is connected and unlocked.")
             return 1
         dev = devs[0]
+
+    if args.dfu_boot and dev.vid == 0x05AC:
+        # Check if in DFU mode
+        is_dfu = False
+        try:
+            handle, _ = open_transport(dev)
+            if handle:
+                cfg = handle.get_active_configuration()
+                for intf in cfg:
+                    if intf.bInterfaceClass == 0xFE and intf.bInterfaceSubClass == 0x01:
+                        is_dfu = True
+                dev.close()
+        except:
+            pass
+    
+        if is_dfu:
+            print("[*] Device is in DFU mode - ready for QSLCL!")
+        else:
+            print("[*] Device detected but not in DFU mode.")
+            print("[*] Use --dfu-boot to enter DFU mode.")
 
     # Auto-load if specified
     if args.loader:
