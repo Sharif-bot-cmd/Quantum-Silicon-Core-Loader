@@ -1154,7 +1154,7 @@ def auto_loader_if_needed(args, dev: QSLCLDevice):
     total = len(blob)
     for off in range(0, total, chunk):
         blk = blob[off:off+chunk]
-        pkt = encode_qslcl_structure(b"QSLCLDATA", blk)
+        pkt = encode_qslcl_structure(b"QSLCLDAT", blk)
         if smode:
             handle.write(pkt)
         else:
@@ -1344,7 +1344,7 @@ def load_partitions(dev: QSLCLDevice):
                     if entry[0] != 0:
                         start = int.from_bytes(entry[8:12], 'little') * sector_size
                         size = int.from_bytes(entry[12:16], 'little') * sector_size
-                        type_names = {0x0C: "fat32", 0x83: "linux", 0x07: "ntfs", 0xEE: "gpt", 0xEF: "efi"}
+                        type_names = {0x0C: "fat32", 0x83: "linux", 0x07: "ntfs", 0xEE: "gpt", 0xEF: "efi", 0x84: "hfs"}
                         name = type_names.get(entry[4], f"part_{i}")
                         if size > 0:
                             partitions.append({"name": name, "offset": start, "size": size})
