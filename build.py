@@ -4047,7 +4047,7 @@ def build_qslcl_bin(
        "VERIFY","OEM","ODM","AUTHENTICATE","POWER",
        "GETCONFIG","PATCH","BYPASS","GLITCH","RESET","GPT",
        "CRASH","VOLTAGE","BRUTEFORCE","RAWMODE","SETCONFIG",
-       "FOOTER","RAWSTATE","FUZZ","TEST","EFFICIENCY"
+       "FOOTER","RAWSTATE"
     ]
 
     # ============================================================
