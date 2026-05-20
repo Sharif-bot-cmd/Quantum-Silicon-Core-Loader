@@ -36,7 +36,6 @@ QSLCL runs in:
 - **Interactive Button Guide** - Shows exact button press timing (Power + Volume Down sequence)
 - **Smart Device Detection** - Identifies iOS devices by UDID, product name, and USB descriptors
 - **Auto-Reconnection** - After DFU entry, automatically reconnects to the device in DFU mode
-- **Configurable Timeout** - Adjustable wait time for DFU mode detection (`--dfu-timeout` parameter)
 - **Seamless Workflow** - Combine with `--loader` for complete DFU → Load → Execute automation
 - **Multiple Device Support** - Handles multiple iOS devices with interactive selection
 - **No Manual PID Configuration** - Uses USB DFU Class specification (0xFE/0x01) for detection
