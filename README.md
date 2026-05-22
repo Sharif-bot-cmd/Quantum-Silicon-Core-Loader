@@ -4,7 +4,7 @@ Primary Core: **qslcl.elf**
 
 Assistant Module: **qslcl.bin (v0.6.7)**
 
-Universal Controller: **qslcl.py (v2.1.3)**
+Universal Controller: **qslcl.py (v2.1.4)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION_MATRIX.md)
 
@@ -28,32 +28,33 @@ QSLCL runs in:
 
 ---
 
-## What's New in **v2.1.3**
+## What's New in **v2.1.4**
 
-### 🍎 Auto-DFU Boot Mode (Like palera1n)
+### 🔥 Automatic Watchdog Disabler (No User Intervention)
 
-- **One-Click DFU Entry** - Automatically detects iOS devices in normal mode and offers to boot into DFU
-- **Interactive Button Guide** - Shows exact button press timing (Power + Volume Down sequence)
-- **Smart Device Detection** - Identifies iOS devices by UDID, product name, and USB descriptors
-- **Auto-Reconnection** - After DFU entry, automatically reconnects to the device in DFU mode
-- **Seamless Workflow** - Combine with `--loader` for complete DFU → Load → Execute automation
-- **Multiple Device Support** - Handles multiple iOS devices with interactive selection
-- **No Manual PID Configuration** - Uses USB DFU Class specification (0xFE/0x01) for detection
+- **Zero-Configuration** - Automatically detects and disables watchdog on every connection
+- **Multi-SoC Support** - Works on Apple, Qualcomm, MediaTek, Samsung, Broadcom, Rockchip, Allwinner, NVIDIA
+- **Smart Offset Detection** - Tries known watchdog register offsets per SoC
+- **Multiple Disable Methods** - Write-zero, write-sequence, bit-clear, and more
+- **Verification Read-Back** - Confirms watchdog is actually disabled
+- **No Flags or Commands** - Runs silently in background, no user action needed
+- **Graceful Failure** - If no watchdog detected, continues normally
 
-**How it works:**
+**How it works (automatic):**
 ```bash
-# Single command: Auto-DFU → Load QSLCL → Run hello
-python qslcl.py hello --loader=qslcl.bin --dfu-boot
+# Just run normally - watchdog disables automatically!
+python qslcl.py hello --loader=qslcl.bin
 
-# Expected workflow:
-# 1. Scans for iOS device in normal mode
-# 2. Shows UDID and device info
-# 3. Displays button instructions (like palera1n)
-# 4. Waits for device to enter DFU
-# 5. Automatically loads qslcl.bin
-# 6. Executes the requested command
+# Expected output:
+# [+] Loader uploaded.
+# [*] Auto-disabling watchdog...
+# [*] Detected SoC type: APPLE
+# [*] Checking 10 candidate offsets...
+# [*] Watchdog detected at 0x20E00000 = 0x00000001
+# [+] Watchdog disabled at offset 0x20E00000
+# [*] Exposing QSLCL in USB configuration...
 ```
-### Binary layout
+### 🔧 Binary Layout (v0.6.7)
 
 ```
 QSLCL Binary Layout (v0.6.7):
@@ -76,22 +77,9 @@ QSLCL Binary Layout (v0.6.7):
 └─────────────────────────────────────────────┘
 ```
 
-### USB4 v2.0 80Gbps Support (v0.6.7+):
-
-When built with `--usb4-v2`, QSLCL unlocks 80Gbps communication:
-
-| Without USB4 | With USB4 v2.0 (v0.6.7) |
-|--------------|-------------------------|
-| ❌ 40Gbps maximum | ✅ **80Gbps throughput** |
-| ❌ NRZ encoding | ✅ **PAM4 encoding** (2-bit/symbol) |
-| ❌ 2 lanes max | ✅ **4-lane aggregation** |
-| ❌ No hardware tunneling | ✅ **PCIe/DP/USB3 tunnels** |
-| ❌ Basic security | ✅ **CMA + DPP + Attestation** |
-| ❌ Microsecond latency | ✅ **Sub-microsecond latency** |
-
 ---
 
-# Complete Command List (v2.1.3)
+# Complete Command List (v2.1.4)
 
 **Core Memory Operations:**
 | Command | Description |
@@ -186,6 +174,33 @@ python qslcl.py usb-identify
 python qslcl.py usb4
 ```
 
+## Automatic Watchdog Disabler (v2.1.4)
+
+The watchdog disabler runs **automatically** on every USB connection - no flags needed!
+
+```bash
+# Just run any command - watchdog disables automatically
+python qslcl.py hello --loader=qslcl.bin
+
+# Expected output (watchdog section):
+# [+] Loader uploaded.
+# [*] Auto-disabling watchdog...
+# [*] Detected SoC type: APPLE
+# [*] Checking 10 candidate offsets...
+# [*] Watchdog detected at 0x20E00000 = 0x00000001
+# [+] Watchdog disabled at offset 0x20E00000
+
+# Supported SoCs (auto-detected by VID):
+# - Apple (0x05AC): A series offsets
+# - Qualcomm (0x05C6): EDL offsets
+# - MediaTek (0x0E8D): BROM offsets
+# - Samsung (0x04E8): Exynos offsets
+# - Broadcom (0x14E4): BCM offsets
+# - Rockchip (0x2207): RK offsets
+# - Allwinner (0x1F3A): Sunxi offsets
+# - NVIDIA (0x10DE): Tegra offsets
+```
+
 ## Auto-DFU Boot Feature (v2.1.3)
 
 ```bash
@@ -255,23 +270,9 @@ python qslcl.py hello --loader=qslcl.bin --usb4 --debug
 #     Security: CMA + DPP enabled
 # [*] USB4 v2.0 microcode present in loader
 # [*] USB4 v2.0 80Gbps mode initialized
-# [*] Exposing QSLCL in USB configuration...
-# [+] QSLCL identified in USB:
-#     Product: QSLCL Loader v2.1.3
-#     Serial: QSLCL-05AC-1281-67A3F2C8
-#     Protocol: 0x51 ('Q')
 
 # Check USB4 status separately
 python qslcl.py usb4
-
-# Expected output:
-# [*] Checking USB4 v2.0 status...
-# [+] USB4 v2.0 supported:
-#     Bandwidth: 80000 Mbps
-#     Tunnels: PCIe, DisplayPort, USB3
-#     Encoding: PAM4
-#     Security: Enabled
-#     Current Mode: 80 Gbps
 ```
 
 ## USB Exposure Feature (v2.1.1+)
@@ -285,14 +286,14 @@ python qslcl.py hello --loader=qslcl.bin
 # [+] Loader uploaded.
 # [*] Exposing QSLCL in USB configuration...
 # [+] QSLCL identified in USB:
-#     Product: QSLCL Loader v2.1.3
+#     Product: QSLCL Loader v2.1.4
 #     Serial: QSLCL-05AC-1281-67A3F2C8
 #     Protocol: 0x51 ('Q')
 #     Vendor Magic: 0x51534C43
 
 # Verify exposure with system tools
 $ lsusb -v -d 05AC:1281 | grep -E "(iProduct|iSerial)"
-  iProduct                2 QSLCL Loader v2.1.3
+  iProduct                2 QSLCL Loader v2.1.4
   iSerial                 3 QSLCL-05AC-1281-67A3F2C8
 ```
 
@@ -326,19 +327,21 @@ python qslcl.py hello --loader=qslcl.bin
 
 # Device Compatibility
 
-| Vendor   | Mode             | Detection Method            | USB Exposure | USB4 v2.0 | Auto-DFU | Encryption | Status |
-|----------|------------------|-----------------------------|--------------|-----------|----------|------------|--------|
-| Qualcomm | EDL              | Sahara + Firehose handshake | ✅ Auto      | ✅ 80Gbps | N/A      | Optional   | ✅ |
-| MediaTek | BROM / Preloader | 0xA0 preloader ping         | ✅ Auto      | ✅ 80Gbps | N/A      | Optional   | ✅ |
-| Apple    | DFU (A12-A17)    | Dynamic USB DFU Class       | ✅ Auto      | ⚠️ 40Gbps | ✅ Auto  | No         | ✅ |
-| Apple    | DFU (A18+)       | Dynamic USB DFU Class       | ✅ Auto      | ✅ 80Gbps | ✅ Auto  | **Required** | ✅ |
-| Apple    | Normal Mode iOS  | USB Class + Product String  | N/A         | N/A      | ✅ Auto  | N/A        | ✅ |
-| Google   | DFU              | Dynamic USB DFU Class       | ✅ Auto      | ✅ 80Gbps | N/A      | Optional   | ✅ |
-| Samsung  | EUB              | Dynamic USB DFU Class       | ✅ Auto      | ✅ 80Gbps | N/A      | Optional   | ✅ |
-| Intel    | USB4 v2.0 Host   | Native USB4 detection       | ✅ Auto      | ✅ 80Gbps | N/A      | Optional   | ✅ |
-| AMD      | USB4 v2.0 Host   | Native USB4 detection       | ✅ Auto      | ✅ 80Gbps | N/A      | Optional   | ✅ |
-| Generic  | USB CDC/Bulk     | Endpoint auto-discovery     | ⚠️ Limited  | ❌ No     | N/A      | Optional   | ✅ |
-| Any      | Serial COM       | UART auto sync              | N/A         | N/A      | N/A      | No         | ✅ |
+| Vendor   | Mode             | Detection Method            | USB Exposure | USB4 v2.0 | Auto-DFU | Watchdog | Encryption | Status |
+|----------|------------------|-----------------------------|--------------|-----------|----------|----------|------------|--------|
+| Qualcomm | EDL              | Sahara + Firehose handshake | ✅ Auto      | ✅ 80Gbps | N/A      | ✅ Auto  | Optional   | ✅ |
+| MediaTek | BROM / Preloader | 0xA0 preloader ping         | ✅ Auto      | ✅ 80Gbps | N/A      | ✅ Auto  | Optional   | ✅ |
+| Apple    | DFU (A12-A17)    | Dynamic USB DFU Class       | ✅ Auto      | ⚠️ 40Gbps | ✅ Auto  | ✅ Auto  | No         | ✅ |
+| Apple    | DFU (A18+)       | Dynamic USB DFU Class       | ✅ Auto      | ✅ 80Gbps | ✅ Auto  | ✅ Auto  | **Required** | ✅ |
+| Apple    | Normal Mode iOS  | USB Class + Product String  | N/A         | N/A      | ✅ Auto  | N/A     | N/A        | ✅ |
+| Google   | DFU              | Dynamic USB DFU Class       | ✅ Auto      | ✅ 80Gbps | N/A      | ✅ Auto  | Optional   | ✅ |
+| Samsung  | EUB              | Dynamic USB DFU Class       | ✅ Auto      | ✅ 80Gbps | N/A      | ✅ Auto  | Optional   | ✅ |
+| Broadcom | BCM Boot         | VID detection               | ✅ Auto      | ❌ No     | N/A      | ✅ Auto  | Optional   | ✅ |
+| Rockchip | Mask ROM         | VID detection               | ✅ Auto      | ❌ No     | N/A      | ✅ Auto  | Optional   | ✅ |
+| Intel    | USB4 v2.0 Host   | Native USB4 detection       | ✅ Auto      | ✅ 80Gbps | N/A      | N/A     | Optional   | ✅ |
+| AMD      | USB4 v2.0 Host   | Native USB4 detection       | ✅ Auto      | ✅ 80Gbps | N/A      | N/A     | Optional   | ✅ |
+| Generic  | USB CDC/Bulk     | Endpoint auto-discovery     | ⚠️ Limited  | ❌ No     | N/A      | ⚠️ Limited| Optional | ✅ |
+| Any      | Serial COM       | UART auto sync              | N/A         | N/A      | N/A      | N/A     | No         | ✅ |
 
 ---
 
@@ -346,6 +349,7 @@ python qslcl.py hello --loader=qslcl.bin
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
+| **v0.6.7 / v2.1.4** | 2026 | **Automatic Watchdog Disabler** - Zero-config, multi-SoC support, 9+ SoC families, auto-detection, no flags needed |
 | **v0.6.7 / v2.1.3** | 2026 | **Auto-DFU Boot** - Like palera1n, one-click DFU entry with button guide, UDID detection, auto-reconnection |
 | **v0.6.7 / v2.1.2** | 2026 | **USB4 v2.0 80Gbps** - PAM4 encoding, 4-lane aggregation, PCIe/DP/USB3 tunneling, CMA/DPP security |
 | **v0.6.6 / v2.1.1** | 2026 | **USB QSLCL Exposure** - Auto-identifies in USB descriptors, 6 fallback methods |
@@ -354,6 +358,34 @@ python qslcl.py hello --loader=qslcl.bin
 | v0.6.4 / v2.0.1 | 2026 | Dynamic DFU detection, QSLCLRESP fixes |
 | v0.6.3 / v2.0.0 | 2026 | Complete module rewrite |
 | v0.5.x / v1.x | 2025 | Legacy versions |
+
+---
+
+## Automatic Watchdog Disabler Technical Details (v2.1.4)
+
+### Supported Watchdog Offsets by SoC
+
+| SoC Family | Watchdog Offsets |
+|------------|------------------|
+| Apple (A series) | 0x20E00000, 0x20E01000, 0x20E02000+ |
+| Qualcomm | 0x02000000, 0x02000004, 0x02000008, 0x0200000C, 0x02000010 |
+| MediaTek | 0x10000000, 0x10000004, 0x10000008, 0x1C000000+ |
+| Samsung Exynos | 0x10060000, 0x10060004, 0x10060008, 0x10070000+ |
+| Broadcom | 0x18000000, 0x18000004, 0x18000008, 0x18001000+ |
+| Rockchip | 0x20000000, 0x20000004, 0x20004000+ |
+| Allwinner | 0x01C20000, 0x01C20004, 0x01C20CA0+ |
+| NVIDIA Tegra | 0x60005000, 0x60005004, 0x60005100+ |
+
+### Disable Methods
+
+| Method | Description |
+|--------|-------------|
+| Write Zero | Write 0x00000000 to watchdog register |
+| Write Ones | Write 0xFFFFFFFF to watchdog register |
+| Write Magic | Write 0xDEADBEEF to watchdog register |
+| Write Sequence | Write multiple values in sequence (0x12345678, 0x87654321, 0x5A5A5A5A) |
+| Bit Clear | Read, clear specific bit, write back |
+| Bit Set | Read, set specific bit, write back |
 
 ---
 
@@ -386,6 +418,9 @@ python qslcl.py hello --loader=qslcl.bin
 ### Auto-DFU Legal Note:
 The DFU boot feature uses **standard USB DFU Class Specification** (0xFE/0x01) and standard iOS recovery mode triggers. It provides button instructions to the user and requires explicit consent - it does not automatically manipulate devices without permission.
 
+### Watchdog Disabler Legal Note:
+The watchdog disabler modifies hardware registers on **your own device** to prevent automatic resets during debugging and analysis. This is a standard practice in embedded systems development and hardware security research.
+
 ### Prohibited Uses:
 - Unauthorized access to others' devices
 - Circumventing security on non-owned hardware
@@ -399,6 +434,16 @@ The DFU boot feature uses **standard USB DFU Class Specification** (0xFE/0x01) a
 # Support & Troubleshooting
 
 ## Common Issues
+
+**Watchdog Not Disabling:**
+```bash
+# Run with debug to see what's happening
+python qslcl.py hello --loader=qslcl.bin --debug
+
+# Watchdog disabler runs automatically - check output for:
+# [*] Detected SoC type: XXX
+# [*] Watchdog detected at 0xXXXXXXXX
+```
 
 **Auto-DFU Not Detecting Device:**
 ```bash
@@ -459,7 +504,7 @@ python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
 
 # Final Words
 
-> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, every bootstrap execution, every USB4 v2.0 80Gbps tunnel, every PAM4-encoded transaction, and now every one-click DFU boot becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping, quantum-resistant encryption, structured data protocols, automatic USB self-identification, USB4 v2.0 80Gbps support, and palera1n-like DFU automation."**
+> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, every bootstrap execution, every USB4 v2.0 80Gbps tunnel, every PAM4-encoded transaction, every one-click DFU boot, and now every automatic watchdog disabler becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping, quantum-resistant encryption, structured data protocols, automatic USB self-identification, USB4 v2.0 80Gbps support, palera1n-like DFU automation, and zero-configuration watchdog bypass."**
 
 ## Key Philosophy
 
@@ -474,7 +519,8 @@ python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
 * **80Gbps Throughput** - USB4 v2.0 PAM4 encoding with 4-lane aggregation
 * **Hardware Tunneling** - PCIe/DP/USB3 over USB4 fabric
 * **Silicon Attestation** - CMA + DPP hardware-level security
-* **One-Click DFU Boot** - Like palera1n, automatic DFU entry with button guide (NEW v2.1.3)
+* **One-Click DFU Boot** - Like palera1n, automatic DFU entry with button guide
+* **Zero-Config Watchdog** - Automatic detection and disabling on every connection (NEW v2.1.4)
 * **Ethical Empowerment** - Capability with responsibility and safety controls
 
 **YouTube**: [https://www.youtube.com/@EntropyVector](https://www.youtube.com/@EntropyVector)

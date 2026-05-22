@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qslcl.py — Universal QSLCL Tool v2.1.3
+# qslcl.py — Universal QSLCL Tool v2.1.4
 # Author: Sharif — QSLCL Creator
 # Works on all SOC architectures
 import sys, time, argparse, zlib, struct, threading, re, os, random, math, shutil, gzip, json, itertools, hashlib, queue
@@ -1641,6 +1641,394 @@ def verify_qslcl_usb_exposure(dev: QSLCLDevice) -> dict:
     return result
 
 # =============================================================================
+# AUTOMATIC WATCHDOG DISABLER (Runs on every connection)
+# =============================================================================
+# Watchdog register offsets for different SoCs
+WATCHDOG_DATABASE = {
+    # Qualcomm
+    "qualcomm": {
+        "offsets": [0x02000000, 0x02000004, 0x02000008, 0x0200000C, 0x02000010],
+        "magic_values": [0x00000001, 0x00000000, 0x00000000],
+        "disable_value": 0x00000000,
+        "write_methods": ["write32", "write32", "write32"]
+    },
+    # MediaTek
+    "mediatek": {
+        "offsets": [0x10000000, 0x10000004, 0x10000008, 0x1000000C, 0x10000010,
+                    0x1C000000, 0x1C000004, 0x1C000008, 0x1C00000C, 0x1C000010],
+        "magic_values": [0x00000005, 0x00000001, 0x22000000],
+        "disable_value": 0x00000000,
+        "write_methods": ["write32", "write32", "write32", "write16"]
+    },
+    # Apple (A series)
+    "apple": {
+        "offsets": [0x20E00000, 0x20E00004, 0x20E00008, 0x20E0000C,
+                    0x20E01000, 0x20E01004, 0x20E01008, 0x20E0100C,
+                    0x20E02000, 0x20E02004],
+        "magic_values": [0x00000000, 0x00000000],
+        "disable_value": 0x00000000,
+        "write_methods": ["write32"]
+    },
+    # Samsung Exynos
+    "samsung": {
+        "offsets": [0x10060000, 0x10060004, 0x10060008, 0x1006000C,
+                    0x10070000, 0x10070004],
+        "magic_values": [0x00000001, 0x00000000],
+        "disable_value": 0x00000000,
+        "write_methods": ["write32"]
+    },
+    # Broadcom (BCM)
+    "broadcom": {
+        "offsets": [0x18000000, 0x18000004, 0x18000008, 0x1800000C,
+                    0x18001000, 0x18001004],
+        "magic_values": [0x00000000, 0x00000000],
+        "disable_value": 0x00000000,
+        "write_methods": ["write32"]
+    },
+    # Rockchip
+    "rockchip": {
+        "offsets": [0x20000000, 0x20000004, 0x20000008, 0x2000000C,
+                    0x20004000, 0x20004004],
+        "magic_values": [0x00000001, 0x00000000],
+        "disable_value": 0x00000000,
+        "write_methods": ["write32"]
+    },
+    # Allwinner
+    "allwinner": {
+        "offsets": [0x01C20000, 0x01C20004, 0x01C20008, 0x01C20CA0, 0x01C20CA4],
+        "magic_values": [0x00000000, 0x00000000],
+        "disable_value": 0x00000000,
+        "write_methods": ["write32"]
+    },
+    # Amlogic
+    "amlogic": {
+        "offsets": [0xC1100000, 0xC1100004, 0xC1100008, 0xC110000C,
+                    0xC1108000, 0xC1108004],
+        "magic_values": [0x00000001, 0x00000000],
+        "disable_value": 0x00000000,
+        "write_methods": ["write32"]
+    },
+    # NVIDIA Tegra
+    "nvidia": {
+        "offsets": [0x60005000, 0x60005004, 0x60005008, 0x6000500C,
+                    0x60005100, 0x60005104],
+        "magic_values": [0x00000001, 0x00000000],
+        "disable_value": 0x00000000,
+        "write_methods": ["write32"]
+    },
+    # Generic ARM
+    "generic_arm": {
+        "offsets": [0x40000000, 0x40000004, 0x40000008, 0x4000000C,
+                    0x40001000, 0x40001004, 0x40001008, 0x4000100C],
+        "magic_values": [0x00000000, 0x00000000],
+        "disable_value": 0x00000000,
+        "write_methods": ["write32"]
+    },
+}
+
+# Watchdog disable sequences (different methods)
+WATCHDOG_DISABLE_SEQUENCES = {
+    "write_zero": {
+        "value": 0x00000000,
+        "method": "write"
+    },
+    "write_ones": {
+        "value": 0xFFFFFFFF,
+        "method": "write"
+    },
+    "write_magic": {
+        "value": 0xDEADBEEF,
+        "method": "write"
+    },
+    "write_sequence": {
+        "values": [0x12345678, 0x87654321, 0x5A5A5A5A],
+        "method": "sequence"
+    },
+    "clear_bit": {
+        "bit": 0,
+        "method": "bit_clear"
+    },
+    "set_bit": {
+        "bit": 31,
+        "method": "bit_set"
+    }
+}
+
+def detect_watchdog_offset(dev: QSLCLDevice, base_offset: int, debug: bool = False) -> int:
+    """
+    Detect watchdog offset by reading memory and checking for magic values.
+    Returns offset if found, None otherwise.
+    """
+    if dev.handle is None or dev.serial_mode:
+        return None
+    
+    # Try to read from candidate offset
+    for offset_try in range(0, 0x1000, 0x100):  # Try sub-offsets
+        addr = base_offset + offset_try
+        
+        try:
+            # Try to read 4 bytes from this address
+            # Use QSLCL dispatch to read memory
+            payload = struct.pack("<II", addr, 4)
+            resp = qslcl_dispatch(dev, "READ", payload, timeout=1.0)
+            
+            if resp and len(resp) >= 4:
+                value = int.from_bytes(resp[:4], 'little')
+                
+                # Check if this looks like a watchdog register
+                # Watchdog registers often have specific patterns
+                if value in [0x00000000, 0x00000001, 0xDEADBEEF, 0x12345678]:
+                    if debug:
+                        print(f"[*] Possible watchdog register at 0x{addr:08X} = 0x{value:08X}")
+                    return addr
+                    
+        except Exception as e:
+            if debug:
+                print(f"[!] Read failed at 0x{addr:08X}: {e}")
+            continue
+    
+    return None
+
+def disable_watchdog_at_offset(dev: QSLCLDevice, offset: int, soc_type: str = None, debug: bool = False) -> bool:
+    """
+    Disable watchdog at specific offset using appropriate method.
+    Returns True if successful.
+    """
+    if dev.handle is None:
+        return False
+    
+    # Get disable sequence for this SoC type
+    soc_info = WATCHDOG_DATABASE.get(soc_type, WATCHDOG_DATABASE.get("generic_arm"))
+    
+    if soc_info:
+        disable_val = soc_info.get("disable_value", 0x00000000)
+        write_methods = soc_info.get("write_methods", ["write32"])
+    else:
+        disable_val = 0x00000000
+        write_methods = ["write32"]
+    
+    success_count = 0
+    
+    for method in write_methods:
+        try:
+            if method == "write32" or method == "write":
+                # Write 32-bit disable value
+                payload = struct.pack("<III", offset, 4, disable_val)
+                resp = qslcl_dispatch(dev, "WRITE", payload, timeout=1.0)
+                success_count += 1
+                
+            elif method == "write16":
+                # Write 16-bit disable value
+                payload = struct.pack("<IIH", offset, 2, disable_val & 0xFFFF)
+                resp = qslcl_dispatch(dev, "WRITE", payload, timeout=1.0)
+                success_count += 1
+                
+            elif method == "bit_clear":
+                # Read, clear bit, write back
+                read_payload = struct.pack("<II", offset, 4)
+                resp = qslcl_dispatch(dev, "READ", read_payload, timeout=1.0)
+                if resp and len(resp) >= 4:
+                    current = int.from_bytes(resp[:4], 'little')
+                    bit = WATCHDOG_DISABLE_SEQUENCES["clear_bit"]["bit"]
+                    new_val = current & ~(1 << bit)
+                    write_payload = struct.pack("<III", offset, 4, new_val)
+                    qslcl_dispatch(dev, "WRITE", write_payload, timeout=1.0)
+                    success_count += 1
+                    
+        except Exception as e:
+            if debug:
+                print(f"[!] Disable method {method} failed: {e}")
+    
+    # Also try common disable sequences
+    for seq_name, seq in WATCHDOG_DISABLE_SEQUENCES.items():
+        try:
+            if seq["method"] == "write":
+                payload = struct.pack("<III", offset, 4, seq["value"])
+                qslcl_dispatch(dev, "WRITE", payload, timeout=0.5)
+                success_count += 1
+            elif seq["method"] == "sequence":
+                for val in seq["values"]:
+                    payload = struct.pack("<III", offset, 4, val)
+                    qslcl_dispatch(dev, "WRITE", payload, timeout=0.5)
+                success_count += len(seq["values"])
+        except:
+            pass
+    
+    if debug and success_count > 0:
+        print(f"[*] Watchdog disabled at 0x{offset:08X} ({success_count} operations)")
+    
+    return success_count > 0
+
+def auto_detect_and_disable_watchdog(dev: QSLCLDevice, debug: bool = False) -> dict:
+    """
+    Automatically detect and disable watchdog on connected device.
+    Runs without any user intervention.
+    
+    Returns dict with detection results.
+    """
+    result = {
+        "watchdog_detected": False,
+        "watchdog_disabled": False,
+        "soc_type": None,
+        "offsets_tried": [],
+        "successful_offset": None,
+        "method_used": None
+    }
+    
+    if dev.handle is None or dev.serial_mode:
+        if debug:
+            print("[!] Cannot disable watchdog: No USB device or serial mode")
+        return result
+    
+    if debug:
+        print("[*] Auto-detecting watchdog registers...")
+    
+    # Try to identify SoC type from device info
+    soc_type = None
+    if dev.vid:
+        # VID to SoC mapping
+        vid_map = {
+            0x05AC: "apple",      # Apple
+            0x05C6: "qualcomm",   # Qualcomm
+            0x0E8D: "mediatek",   # MediaTek
+            0x04E8: "samsung",    # Samsung
+            0x14E4: "broadcom",   # Broadcom
+            0x2207: "rockchip",   # Rockchip
+            0x1F3A: "allwinner",  # Allwinner
+            0x10DE: "nvidia",     # NVIDIA
+        }
+        soc_type = vid_map.get(dev.vid, None)
+        result["soc_type"] = soc_type
+        if debug and soc_type:
+            print(f"[*] Detected SoC type: {soc_type.upper()}")
+    
+    # Get candidate offsets for this SoC
+    candidate_offsets = []
+    
+    if soc_type and soc_type in WATCHDOG_DATABASE:
+        candidate_offsets = WATCHDOG_DATABASE[soc_type]["offsets"]
+    else:
+        # Try all known offsets
+        for soc, info in WATCHDOG_DATABASE.items():
+            candidate_offsets.extend(info["offsets"])
+        candidate_offsets = list(set(candidate_offsets))  # Remove duplicates
+    
+    if debug:
+        print(f"[*] Checking {len(candidate_offsets)} candidate offsets...")
+    
+    # Try each candidate offset
+    for offset in candidate_offsets:
+        result["offsets_tried"].append(offset)
+        
+        # Try to detect watchdog at this offset
+        try:
+            # Read current value
+            payload = struct.pack("<II", offset, 4)
+            resp = qslcl_dispatch(dev, "READ", payload, timeout=1.0)
+            
+            if resp and len(resp) >= 4:
+                current_val = int.from_bytes(resp[:4], 'little')
+                
+                # Watchdog registers often have non-zero values
+                if current_val != 0xFFFFFFFF and current_val != 0x00000000:
+                    result["watchdog_detected"] = True
+                    
+                    if debug:
+                        print(f"[*] Watchdog detected at 0x{offset:08X} = 0x{current_val:08X}")
+                    
+                    # Try to disable it
+                    success = disable_watchdog_at_offset(dev, offset, soc_type, debug)
+                    
+                    if success:
+                        result["watchdog_disabled"] = True
+                        result["successful_offset"] = offset
+                        
+                        # Verify it's disabled (read back)
+                        try:
+                            verify_resp = qslcl_dispatch(dev, "READ", payload, timeout=1.0)
+                            if verify_resp and len(verify_resp) >= 4:
+                                new_val = int.from_bytes(verify_resp[:4], 'little')
+                                if debug:
+                                    print(f"[*] Verification: 0x{offset:08X} now = 0x{new_val:08X}")
+                        except:
+                            pass
+                        
+                        break  # Success, stop trying
+                        
+        except Exception as e:
+            if debug:
+                print(f"[!] Check failed at 0x{offset:08X}: {e}")
+            continue
+    
+    # If no specific offset found, try brute force detection
+    if not result["watchdog_detected"] and soc_type is None:
+        if debug:
+            print("[*] No specific watchdog detected, trying generic detection...")
+        
+        # Try common ARM watchdog ranges
+        generic_ranges = [
+            (0x40000000, 0x40001000),  # Generic ARM
+            (0x60000000, 0x60001000),  # Another range
+            (0x80000000, 0x80001000),  # Another range
+        ]
+        
+        for start, end in generic_ranges:
+            for offset in range(start, end, 0x1000):
+                if offset in result["offsets_tried"]:
+                    continue
+                    
+                result["offsets_tried"].append(offset)
+                detected = detect_watchdog_offset(dev, offset, debug)
+                
+                if detected:
+                    result["watchdog_detected"] = True
+                    success = disable_watchdog_at_offset(dev, detected, None, debug)
+                    
+                    if success:
+                        result["watchdog_disabled"] = True
+                        result["successful_offset"] = detected
+                        break
+            
+            if result["watchdog_disabled"]:
+                break
+    
+    # Final status message
+    if result["watchdog_disabled"]:
+        if debug:
+            print(f"[+] Watchdog successfully disabled at 0x{result['successful_offset']:08X}")
+    elif result["watchdog_detected"]:
+        if debug:
+            print("[!] Watchdog detected but could not be disabled")
+    else:
+        if debug:
+            print("[*] No watchdog detected (or device has no watchdog)")
+    
+    return result
+
+# =============================================================================
+# AUTO-RUN ON CONNECTION (Integrate into existing code)
+# =============================================================================
+def auto_disable_watchdog_on_connect(dev: QSLCLDevice, debug: bool = False) -> bool:
+    """
+    Automatically called when device connects.
+    Detects and disables watchdog without any user intervention.
+    """
+    if dev is None or dev.handle is None:
+        return False
+    
+    # Only run on USB devices
+    if dev.serial_mode:
+        return False
+    
+    # Wait a moment for device to stabilize
+    time.sleep(0.5)
+    
+    # Run watchdog disabler
+    result = auto_detect_and_disable_watchdog(dev, debug)
+    
+    return result["watchdog_disabled"]
+
+# =============================================================================
 # AUTO LOADER
 # =============================================================================
 def auto_loader_if_needed(args, dev: QSLCLDevice):
@@ -1686,6 +2074,17 @@ def auto_loader_if_needed(args, dev: QSLCLDevice):
         print(f"\r[*] Progress: {min(off+chunk,total)*100//total}%", end='')
         time.sleep(0.01)
     print("\n[+] Loader uploaded.")
+
+    if not smode:  # Only for USB devices
+        print("[*] Auto-disabling watchdog...")
+        watchdog_result = auto_detect_and_disable_watchdog(dev, debug=_DEBUG)
+        
+        if watchdog_result["watchdog_disabled"]:
+            print(f"[+] Watchdog disabled at offset 0x{watchdog_result['successful_offset']:08X}")
+        elif watchdog_result["watchdog_detected"]:
+            print("[!] Watchdog detected but could not be disabled")
+        else:
+            print("[*] No watchdog detected")
 
     usb4_enabled = getattr(args, "usb4", False)
     
@@ -1953,7 +2352,7 @@ def main():
             super().__init__(prog, max_help_position=36, width=140)
 
     p = argparse.ArgumentParser(
-        description="QSLCL Tool v2.1.2 - Universal SOC Tool",
+        description="QSLCL Tool v2.1.4 - Universal SOC Tool",
         formatter_class=QSLCLHelp
     )
 
