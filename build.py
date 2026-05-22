@@ -3822,8 +3822,6 @@ def embed_encryption_layer(
     
     return final_aligned
 
-# In embed_usb4_v2_microcode() function, add the UOP dictionary at the beginning:
-
 def embed_usb4_v2_microcode(
     image: bytearray,
     base: int = None,
@@ -3835,7 +3833,6 @@ def embed_usb4_v2_microcode(
     Provides high-speed tunneled data transfer.
     """
     
-    # Add this UOP dictionary (copy from main UOP)
     UOP = {
         "NOP":0x00, "MOV":0x01, "XOR":0x02, "ADD":0x03, "SUB":0x04, "JMP":0x05, "HLT":0x06,
         "LOAD":0x07, "STORE":0x08, "CALL":0x09, "RET":0x0A, "SYSCALL":0x0B, "YIELD":0x0C,
@@ -4436,7 +4433,7 @@ if __name__ == "__main__":
     parser.add_argument("--arch", default="generic", help="Target architecture")
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
     parser.add_argument("--encrypt", action="store_true", help="Enable QSLCLENC encryption layer")
-    parser.add_argument("--size", type=int, default=0x20000, help="Binary size (bytes)")
+    parser.add_argument("--size", type=int, default=0x14000, help="Binary size (bytes)")
     parser.add_argument("--usb4-v2", action="store_true", help="Enable USB4 v2.0 80Gbps support")  
 
     args = parser.parse_args()

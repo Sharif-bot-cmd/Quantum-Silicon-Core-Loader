@@ -2,7 +2,7 @@
 
 Primary Core: **qslcl.elf**
 
-Assistant Module: **qslcl.bin (v0.6.7)**
+Assistant Module: **qslcl.bin (v0.6.8)**
 
 Universal Controller: **qslcl.py (v2.1.4)**
 
@@ -54,10 +54,13 @@ python qslcl.py hello --loader=qslcl.bin
 # [+] Watchdog disabled at offset 0x20E00000
 # [*] Exposing QSLCL in USB configuration...
 ```
-### 🔧 Binary Layout (v0.6.7)
+### Update in v0.6.8: 
+
+- Adjust the size into 80 kb to trim some useless zero filled in EOF.
+
 
 ```
-QSLCL Binary Layout (v0.6.7):
+QSLCL Binary Layout:
 ┌─────────────────────────────────────────────┐
 │ 0x000000  QSLCLBIN (Main Header + Ptrs)     │
 │ 0x000200+ QSLCLCMD (27 Commands)            │
