@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-crash.py - QSLCL CRASH Command Module v2.1 (CLEANED)
-Controlled crash injection and system stability testing
+crash.py - QSLCL CRASH Command Module v2.2 (REWRITTEN)
+Silent crash injection - Like MediaTek preloader crash but platform-agnostic
+No kernel panics, no visible alerts - just silent execution halt
 """
 
 import os
 import sys
 import struct
 import time
+import random
 from typing import Optional, List, Tuple, Dict
 
 # =============================================================================
@@ -41,357 +43,645 @@ except ImportError:
 # =============================================================================
 # CONSTANTS
 # =============================================================================
-TIMEOUT = 15.0
-MAX_ITER = 100
-MAX_DELAY = 300
+TIMEOUT = 5.0  # Short timeout - crash is immediate
+MAX_ITER = 50
 
-# Opcodes
-OP_CAPABILITIES = 0x00
-OP_KERNEL_PANIC = 0x01
-OP_NULL_POINTER = 0x02
-OP_STACK_OVERFLOW = 0x03
-OP_HEAP_CORRUPT = 0x04
-OP_DIVIDE_ZERO = 0x05
-OP_MEM_CORRUPT = 0x06
-OP_WATCHDOG = 0x07
-OP_IRQ_STORM = 0x08
-OP_DMA_OVERFLOW = 0x09
-OP_CUSTOM = 0x0A
-OP_ANALYSIS = 0x20
+# Silent crash opcodes (minimal, stealthy)
+OP_SILENT_HALT = 0x01      # Silent execution halt (no panic)
+OP_PRELOADER_STYLE = 0x02  # MediaTek preloader-style crash
+OP_BAD_BRANCH = 0x03       # Branch to invalid address
+OP_INVALID_INSN = 0x04     # Execute invalid instruction
+OP_REGISTER_CORRUPT = 0x05 # Corrupt critical register
+OP_STACK_POISON = 0x06     # Poison stack pointer
+OP_RETURN_HOOK = 0x07      # Hook return address to bad location
+OP_DIVERSION = 0x08        # Diversion attack (redirect execution)
+OP_MEM_FENCE = 0x09        # Memory fence violation
+OP_TIMING_BOMB = 0x0A      # Delayed execution halt
+OP_CACHE_POISON = 0x0B     # Poison instruction cache
+OP_TLB_SHOOTDOWN = 0x0C    # TLB invalidation crash
+OP_VECTOR_OVERRIDE = 0x0D  # Override exception vector
+OP_DOUBLE_FAULT = 0x0E     # Double fault (silent on some architectures)
 
-# Crash type definitions
-CRASH_TYPES = {
-    'KERNEL_PANIC':      {'opcode': OP_KERNEL_PANIC,   'risk': 'HIGH',   'recovery': 'MANUAL'},
-    'NULL_POINTER':      {'opcode': OP_NULL_POINTER,    'risk': 'MEDIUM', 'recovery': 'AUTO'},
-    'STACK_OVERFLOW':    {'opcode': OP_STACK_OVERFLOW,  'risk': 'MEDIUM', 'recovery': 'AUTO'},
-    'HEAP_CORRUPTION':   {'opcode': OP_HEAP_CORRUPT,    'risk': 'HIGH',   'recovery': 'MANUAL'},
-    'DIVIDE_ZERO':       {'opcode': OP_DIVIDE_ZERO,     'risk': 'LOW',    'recovery': 'AUTO'},
-    'MEMORY_CORRUPTION': {'opcode': OP_MEM_CORRUPT,     'risk': 'HIGH',   'recovery': 'MANUAL'},
-    'WATCHDOG':          {'opcode': OP_WATCHDOG,        'risk': 'MEDIUM', 'recovery': 'AUTO'},
-    'IRQ_STORM':         {'opcode': OP_IRQ_STORM,       'risk': 'MEDIUM', 'recovery': 'AUTO'},
-    'DMA_OVERFLOW':      {'opcode': OP_DMA_OVERFLOW,    'risk': 'HIGH',   'recovery': 'MANUAL'},
+# Crash characteristics
+CRASH_STYLES = {
+    'silent': {
+        'desc': 'No alert, no panic - just stops responding',
+        'visible': False,
+        'recoverable': True,
+        'detectable': False,
+    },
+    'preloader': {
+        'desc': 'MediaTek preloader style - silent USB disconnect',
+        'visible': False,
+        'recoverable': True,
+        'detectable': False,
+    },
+    'halt': {
+        'desc': 'Execution halt - device freezes with no output',
+        'visible': False,
+        'recoverable': True,
+        'detectable': False,
+    },
+    'usb_kill': {
+        'desc': 'USB controller crash - device disappears from bus',
+        'visible': True,  # USB disconnects
+        'recoverable': True,
+        'detectable': True,  # Can see USB removal
+    },
 }
 
-HEAP_TYPES = ['DOUBLE_FREE', 'USE_AFTER_FREE', 'BUFFER_OVERFLOW', 'RACE_CONDITION']
-
+# Crash targets by SoC
+SOC_CRASH_VECTORS = {
+    'APPLE': {
+        'preferred': 'SILENT_HALT',
+        'vectors': [0x00000000, 0xFFFFFFF0, 0xFFFF0000],
+        'registers': ['LR', 'PC', 'SP'],
+    },
+    'QUALCOMM': {
+        'preferred': 'PRELOADER_STYLE',
+        'vectors': [0x00000000, 0xFC000000, 0xFE000000],
+        'registers': ['PC', 'LR', 'R14'],
+    },
+    'MEDIATEK': {
+        'preferred': 'PRELOADER_STYLE',  # Their preloader crashes silently
+        'vectors': [0x00000000, 0x00100000, 0x20000000],
+        'registers': ['PC', 'LR', 'R15'],
+    },
+    'SAMSUNG': {
+        'preferred': 'BAD_BRANCH',
+        'vectors': [0x00000000, 0x80000000],
+        'registers': ['PC', 'LR'],
+    },
+    'GENERIC': {
+        'preferred': 'SILENT_HALT',
+        'vectors': [0x00000000, 0xFFFFFFFF],
+        'registers': ['PC', 'SP'],
+    },
+}
 
 # =============================================================================
 # UTILITY FUNCTIONS
 # =============================================================================
-def parse_addr(s: str) -> int:
-    s = str(s).strip().lower()
-    if s.startswith('0x'): return int(s[2:], 16)
-    try: return int(s, 16)
-    except: return int(s, 10)
-
-
 def confirm(msg: str, req: str, force: bool) -> bool:
-    if force: return True
+    """Safety confirmation"""
+    if force:
+        return True
     print(f"\n[!] {msg}")
-    try: return input(f"    Type '{req}': ") == req
-    except: return False
+    try:
+        return input(f"    Type '{req}': ") == req
+    except (EOFError, KeyboardInterrupt):
+        return False
 
 
-def crash_cmd(dev, payload: bytes) -> Tuple[bool, str, bytes]:
-    """Send crash command"""
-    for attempt in range(2):
-        try:
-            if "CRASH" in QSLCLCMD_DB:
-                resp = qslcl_dispatch(dev, "CRASH", payload, timeout=TIMEOUT)
-            else:
-                pkt = encode_qslcl_structure(b"QSLCLCMD", payload)
-                dev.write(pkt)
-                _, resp = dev.read(timeout=TIMEOUT)
-            
-            if resp:
-                status = decode_runtime_result(resp)
-                return status.get("severity") == "SUCCESS", status.get("name", "?"), status.get("extra", b"")
-        except:
-            if attempt == 0: time.sleep(0.1)
+def detect_soc(dev) -> str:
+    """Auto-detect SoC family from device"""
+    # Try to identify from VID
+    if hasattr(dev, 'vid'):
+        vid_map = {
+            0x05AC: 'APPLE',
+            0x05C6: 'QUALCOMM',
+            0x0E8D: 'MEDIATEK',
+            0x04E8: 'SAMSUNG',
+            0x1F3A: 'ALLWINNER',
+            0x2207: 'ROCKCHIP',
+        }
+        return vid_map.get(dev.vid, 'GENERIC')
     
-    return False, "NO_RESPONSE", b""
+    # Try from product string
+    product = getattr(dev, 'product', '').upper()
+    if 'APPLE' in product or 'IPHONE' in product or 'IPAD' in product:
+        return 'APPLE'
+    if 'QUALCOMM' in product or 'QCOM' in product:
+        return 'QUALCOMM'
+    if 'MEDIATEK' in product or 'MTK' in product:
+        return 'MEDIATEK'
+    if 'SAMSUNG' in product or 'EXYNOS' in product:
+        return 'SAMSUNG'
+    
+    return 'GENERIC'
 
 
-def ping(dev) -> bool:
-    """Quick health check"""
-    ok, _, _ = crash_cmd(dev, b"")
-    return ok
+def crash_cmd(dev, opcode: int, data: bytes = b"", timeout: float = TIMEOUT) -> Tuple[bool, str, bytes]:
+    """Send crash command - expects NO response (silent crash)"""
+    payload = struct.pack("<B", opcode) + data
+    
+    try:
+        if "CRASH" in QSLCLCMD_DB:
+            resp = qslcl_dispatch(dev, "CRASH", payload, timeout=timeout)
+        else:
+            pkt = encode_qslcl_structure(b"QSLCLCMD", payload)
+            dev.write(pkt)
+            _, resp = dev.read(timeout=timeout)
+        
+        # For silent crashes, we EXPECT no response or timeout
+        # That means success!
+        if resp is None:
+            return True, "SILENT_CRASH", b""
+        
+        # If we got a response, crash might have failed
+        status = decode_runtime_result(resp)
+        return status.get("severity") == "SUCCESS", status.get("name", "?"), status.get("extra", b"")
+        
+    except Exception as e:
+        # Exception/timeout is EXPECTED for silent crashes
+        # The device stopped responding - that's success!
+        if "timeout" in str(e).lower() or "no response" in str(e).lower():
+            return True, "SILENT_CRASH", b""
+        return False, str(e), b""
 
 
-def monitor_recovery(dev, timeout: int = 30):
-    """Monitor device recovery after crash"""
-    print(f"\n[*] Monitoring recovery ({timeout}s)...")
+def verify_crash(dev, timeout: float = 3.0) -> dict:
+    """
+    Verify device is crashed (silently)
+    Returns dict with crash status and details
+    """
+    result = {
+        'crashed': False,
+        'responsive': False,
+        'usb_present': False,
+        'silent': True,
+        'recovery_needed': True,
+    }
+    
+    # Try to ping the device
+    try:
+        if "PING" in QSLCLCMD_DB:
+            resp = qslcl_dispatch(dev, "PING", b"", timeout=timeout)
+            if resp:
+                result['responsive'] = True
+                result['crashed'] = False
+                return result
+    except:
+        pass
+    
+    # No response = crashed
+    result['responsive'] = False
+    result['crashed'] = True
+    
+    # Check if USB device still present
+    try:
+        devs = scan_all()
+        for d in devs:
+            if hasattr(d, 'identifier') and d.identifier == getattr(dev, 'identifier', None):
+                result['usb_present'] = True
+                result['silent'] = True  # USB present but not responding = silent crash
+                return result
+    except:
+        pass
+    
+    result['usb_present'] = False
+    result['silent'] = False  # USB disconnected = visible crash
+    
+    return result
+
+
+def wait_for_recovery(dev, timeout: float = 30.0, check_interval: float = 1.0) -> bool:
+    """
+    Wait for device to recover from silent crash
+    Returns True if recovered
+    """
+    print(f"\n[*] Waiting for recovery ({timeout}s)...")
     start = time.time()
     
     while time.time() - start < timeout:
         elapsed = time.time() - start
-        remaining = timeout - int(elapsed)
-        bar = '█' * (int(elapsed) % 20) + '░' * (20 - (int(elapsed) % 20))
-        print(f"\r    [{bar}] {remaining}s", end="", flush=True)
+        remaining = timeout - elapsed
         
-        if ping(dev):
-            print(f"\n[+] Recovered after {elapsed:.1f}s")
-            return True
+        # Progress indicator
+        bar_len = 30
+        filled = int(bar_len * elapsed / timeout)
+        bar = '█' * filled + '░' * (bar_len - filled)
+        print(f"\r    [{bar}] {remaining:.1f}s", end="", flush=True)
         
-        time.sleep(1)
+        try:
+            # Try to ping
+            if "PING" in QSLCLCMD_DB:
+                resp = qslcl_dispatch(dev, "PING", b"", timeout=1.0)
+                if resp:
+                    print(f"\n[+] Recovered after {elapsed:.1f}s")
+                    return True
+        except:
+            pass
+        
+        # Try to rescan for device
+        devs = scan_all()
+        for d in devs:
+            if hasattr(d, 'identifier') and d.identifier == getattr(dev, 'identifier', None):
+                # Device still present but not responding - still crashed
+                pass
+        
+        time.sleep(check_interval)
     
-    print(f"\n[!] Recovery timeout - manual intervention may be needed")
-    print("[*] Try: power cycle, recovery mode, or hardware reset")
+    print(f"\n[!] No recovery detected after {timeout}s")
+    print("[*] Manual power cycle may be required")
     return False
 
 
-class ProgressBar:
-    def __init__(self, total, prefix='', suffix='', length=40):
-        self.total = max(total, 1); self.prefix = prefix
-        self.suffix = suffix; self.length = length; self.current = 0
-    
-    def __enter__(self):
-        self.update(0); return self
-    
-    def __exit__(self, *a): print()
-    
-    def update(self, n):
-        self.current += n
-        pct = 100 * self.current / self.total
-        filled = int(self.length * self.current // self.total)
-        bar = '█' * filled + '─' * (self.length - filled)
-        print(f'\r{self.prefix} |{bar}| {pct:5.1f}% {self.suffix}', end='', flush=True)
-
-
 # =============================================================================
-# CRASH EXECUTION
+# SILENT CRASH FUNCTIONS
 # =============================================================================
-def execute_crash(dev, crash_name: str, opcode: int, data: bytes = b"",
-                  force: bool = False, timeout: int = 10) -> bool:
-    """Execute a crash with safety and recovery monitoring"""
-    info = CRASH_TYPES.get(crash_name, {'risk': 'MEDIUM', 'recovery': 'AUTO'})
-    
-    # Safety for HIGH risk
-    if info['risk'] == 'HIGH' and not force:
-        if not confirm(f"⚠️  {crash_name} - HIGH RISK!\nMay require manual recovery!", 'CRASH', force):
+
+def silent_halt(dev, force: bool = False, timeout: int = 5) -> bool:
+    """Silent execution halt - device stops responding with no alert"""
+    if not force:
+        if not confirm(
+            "⚠️  SILENT HALT - Device will freeze with no output\n"
+            "Power cycle required to recover!\n"
+            "Use only on devices you own!",
+            'HALT', force
+        ):
             return False
     
-    # Kernel panic warning
-    if crash_name == 'KERNEL_PANIC' and not force:
-        if not confirm(f"⚠️  KERNEL PANIC - System will crash completely!", 'PANIC', force):
+    print("\n[*] Triggering silent halt...")
+    success, name, _ = crash_cmd(dev, OP_SILENT_HALT, timeout=timeout)
+    
+    if success:
+        print("[+] Silent halt triggered - device frozen")
+        verify = verify_crash(dev, timeout=2.0)
+        if verify['crashed']:
+            print("    Confirmed: device not responding")
+        return True
+    
+    print(f"[!] Halt may have failed: {name}")
+    return False
+
+
+def preloader_style(dev, force: bool = False, timeout: int = 5) -> bool:
+    """
+    MediaTek preloader-style silent crash
+    USB stays connected but device stops responding
+    """
+    if not force:
+        if not confirm(
+            "⚠️  PRELOADER-STYLE CRASH - Like MediaTek BROM crash\n"
+            "Device will appear connected but not respond\n"
+            "Power cycle required!\n"
+            "Use only on devices you own!",
+            'PRELOADER', force
+        ):
             return False
     
-    payload = struct.pack("<B", opcode) + data + struct.pack("<I", timeout)
+    print("\n[*] Triggering preloader-style crash...")
     
-    print(f"\n[*] Triggering: {crash_name}")
-    ok, name, _ = crash_cmd(dev, payload)
+    # Auto-detect SoC for optimized vector
+    soc = detect_soc(dev)
+    vectors = SOC_CRASH_VECTORS.get(soc, SOC_CRASH_VECTORS['GENERIC'])['vectors']
     
-    if ok:
-        print("[+] Crash triggered")
-    else:
-        print("[*] Device may have crashed (no response)")
+    # Try multiple vectors for better success
+    for vector in vectors[:3]:
+        data = struct.pack("<I", vector)
+        success, name, _ = crash_cmd(dev, OP_PRELOADER_STYLE, data, timeout=timeout)
+        if success:
+            print(f"[+] Preloader crash at vector 0x{vector:08X}")
+            return True
+        time.sleep(0.1)
     
-    monitor_recovery(dev, timeout)
-    return True
+    # Fallback to default
+    success, name, _ = crash_cmd(dev, OP_PRELOADER_STYLE, timeout=timeout)
+    if success:
+        print("[+] Preloader crash triggered")
+        return True
+    
+    print(f"[!] Crash failed: {name}")
+    return False
+
+
+def bad_branch(dev, target: int = None, force: bool = False, timeout: int = 5) -> bool:
+    """Branch to invalid address - causes silent execution redirection"""
+    if target is None:
+        soc = detect_soc(dev)
+        vectors = SOC_CRASH_VECTORS.get(soc, SOC_CRASH_VECTORS['GENERIC'])['vectors']
+        target = vectors[0] if vectors else 0x00000000
+    
+    if not force:
+        if not confirm(
+            f"⚠️  BAD BRANCH - Redirect to 0x{target:08X}\n"
+            "Device will jump to invalid code\n"
+            "Power cycle required!\n"
+            "Use only on devices you own!",
+            'BRANCH', force
+        ):
+            return False
+    
+    print(f"\n[*] Branching to invalid address: 0x{target:08X}")
+    data = struct.pack("<I", target)
+    success, name, _ = crash_cmd(dev, OP_BAD_BRANCH, data, timeout=timeout)
+    
+    if success:
+        print("[+] Bad branch executed - device crashed")
+        return True
+    
+    print(f"[!] Branch failed: {name}")
+    return False
+
+
+def invalid_instruction(dev, insn: int = None, force: bool = False, timeout: int = 5) -> bool:
+    """Execute invalid instruction - causes undefined behavior"""
+    if insn is None:
+        # Architecture-specific invalid instructions
+        soc = detect_soc(dev)
+        if soc == 'APPLE':
+            insn = 0xD4200000  # BRK #0 on ARM64
+        elif soc in ('QUALCOMM', 'MEDIATEK'):
+            insn = 0xE7F000F0  # Undefined instruction on ARM
+        else:
+            insn = 0x00000000  # Null instruction
+    
+    if not force:
+        if not confirm(
+            f"⚠️  INVALID INSTRUCTION - Execute 0x{insn:08X}\n"
+            "Device will hit undefined opcode\n"
+            "Power cycle required!\n"
+            "Use only on devices you own!",
+            'INSN', force
+        ):
+            return False
+    
+    print(f"\n[*] Executing invalid instruction: 0x{insn:08X}")
+    data = struct.pack("<I", insn)
+    success, name, _ = crash_cmd(dev, OP_INVALID_INSN, data, timeout=timeout)
+    
+    if success:
+        print("[+] Invalid instruction executed - device crashed")
+        return True
+    
+    print(f"[!] Instruction failed: {name}")
+    return False
+
+
+def register_corruption(dev, reg: str = None, value: int = None, force: bool = False, timeout: int = 5) -> bool:
+    """Corrupt critical register - causes execution derailment"""
+    soc = detect_soc(dev)
+    registers = SOC_CRASH_VECTORS.get(soc, SOC_CRASH_VECTORS['GENERIC'])['registers']
+    target_reg = reg.upper() if reg else registers[0] if registers else 'PC'
+    
+    if value is None:
+        value = 0xDEADBEEF
+    
+    if not force:
+        if not confirm(
+            f"⚠️  REGISTER CORRUPTION - {target_reg} = 0x{value:08X}\n"
+            "Device will have corrupted execution state\n"
+            "Power cycle required!\n"
+            "Use only on devices you own!",
+            'REG', force
+        ):
+            return False
+    
+    print(f"\n[*] Corrupting register: {target_reg} = 0x{value:08X}")
+    data = target_reg.encode()[:4].ljust(4, b'\x00') + struct.pack("<I", value)
+    success, name, _ = crash_cmd(dev, OP_REGISTER_CORRUPT, data, timeout=timeout)
+    
+    if success:
+        print(f"[+] {target_reg} corrupted - device crashed")
+        return True
+    
+    print(f"[!] Corruption failed: {name}")
+    return False
+
+
+def timing_bomb(dev, delay_ms: int = 100, force: bool = False, timeout: int = 10) -> bool:
+    """
+    Delayed silent crash - crashes after specified milliseconds
+    Useful for testing recovery timing
+    """
+    delay_ms = max(10, min(10000, delay_ms))
+    
+    if not force:
+        if not confirm(
+            f"⚠️  TIMING BOMB - Will crash in {delay_ms}ms\n"
+            "Device will stop responding after delay\n"
+            "Power cycle required!\n"
+            "Use only on devices you own!",
+            'BOMB', force
+        ):
+            return False
+    
+    print(f"\n[*] Setting timing bomb: {delay_ms}ms delay")
+    data = struct.pack("<I", delay_ms)
+    success, name, _ = crash_cmd(dev, OP_TIMING_BOMB, data, timeout=timeout + (delay_ms / 1000))
+    
+    if success:
+        print(f"[+] Timing bomb set - device will crash in {delay_ms}ms")
+        # Wait for crash to happen
+        time.sleep(delay_ms / 1000)
+        verify = verify_crash(dev, timeout=2.0)
+        if verify['crashed']:
+            print("    Confirmed: device crashed as scheduled")
+        return True
+    
+    print(f"[!] Timing bomb failed: {name}")
+    return False
+
+
+def double_fault(dev, force: bool = False, timeout: int = 5) -> bool:
+    """
+    Double fault - causes immediate silent halt on most architectures
+    Most reliable method across different SoCs
+    """
+    if not force:
+        if not confirm(
+            "⚠️  DOUBLE FAULT - Most reliable silent crash\n"
+            "Device will halt immediately\n"
+            "Power cycle required!\n"
+            "Use only on devices you own!",
+            'DFAULT', force
+        ):
+            return False
+    
+    print("\n[*] Triggering double fault...")
+    success, name, _ = crash_cmd(dev, OP_DOUBLE_FAULT, timeout=timeout)
+    
+    if success:
+        print("[+] Double fault triggered - device halted")
+        return True
+    
+    print(f"[!] Double fault failed: {name}")
+    return False
+
+
+def auto_crash(dev, force: bool = False, timeout: int = 5) -> bool:
+    """Auto-select best crash method for detected SoC"""
+    soc = detect_soc(dev)
+    preferred = SOC_CRASH_VECTORS.get(soc, SOC_CRASH_VECTORS['GENERIC'])['preferred']
+    
+    print(f"\n[*] Auto-selected crash method for {soc}: {preferred}")
+    
+    methods = {
+        'SILENT_HALT': silent_halt,
+        'PRELOADER_STYLE': preloader_style,
+        'BAD_BRANCH': bad_branch,
+    }
+    
+    method = methods.get(preferred, silent_halt)
+    return method(dev, force, timeout)
 
 
 # =============================================================================
 # SUBCOMMANDS
 # =============================================================================
+
 def cmd_list(dev, args, force, timeout):
-    """List crash types"""
-    print(f"\n[*] Crash Types:\n")
-    print(f"  {'Name':<20} {'Risk':<10} {'Recovery':<10}")
-    print(f"  {'-'*20} {'-'*10} {'-'*10}")
+    """List silent crash methods"""
+    print("\n[*] Silent Crash Methods:\n")
+    print("  ┌─────────────────┬────────────────────────────────────────────┐")
+    print("  │ Method          │ Description                                │")
+    print("  ├─────────────────┼────────────────────────────────────────────┤")
+    print("  │ silent          │ Silent halt - device freezes with no alert │")
+    print("  │ preloader       │ MediaTek preloader-style silent crash      │")
+    print("  │ branch          │ Branch to invalid address                  │")
+    print("  │ invalid         │ Execute invalid instruction                │")
+    print("  │ register        │ Corrupt critical register                  │")
+    print("  │ timing          │ Delayed crash (timing bomb)                │")
+    print("  │ double          │ Double fault - most reliable               │")
+    print("  │ auto            │ Auto-select best for your SoC              │")
+    print("  └─────────────────┴────────────────────────────────────────────┘")
     
-    for name, info in CRASH_TYPES.items():
-        icon = {'LOW':'🟢', 'MEDIUM':'🟡', 'HIGH':'🔴'}[info['risk']]
-        print(f"  {icon} {name:<17} {info['risk']:<10} {info['recovery']:<10}")
+    print("\n[*] Crash Characteristics:")
+    for name, info in CRASH_STYLES.items():
+        print(f"    {name:<12} {info['desc']}")
     
-    print(f"\n[*] Heap types: {', '.join(HEAP_TYPES)}")
     return True
 
 
-def cmd_kernel(dev, args, force, timeout):
-    ptype = args[0].upper() if args else "GENERIC"
-    data = ptype.encode()[:16].ljust(16, b'\x00')
-    return execute_crash(dev, 'KERNEL_PANIC', OP_KERNEL_PANIC, data, force, timeout)
+def cmd_silent(dev, args, force, timeout):
+    """Silent halt crash"""
+    return silent_halt(dev, force, timeout)
 
-def cmd_nullptr(dev, args, force, timeout):
-    addr = parse_addr(args[0]) if args else 0
-    data = struct.pack("<I", addr)
-    return execute_crash(dev, 'NULL_POINTER', OP_NULL_POINTER, data, force, timeout)
 
-def cmd_stack(dev, args, force, timeout):
-    depth = max(10, min(100000, int(args[0]) if args else 1000))
-    data = struct.pack("<I", depth)
-    return execute_crash(dev, 'STACK_OVERFLOW', OP_STACK_OVERFLOW, data, force, timeout)
+def cmd_preloader(dev, args, force, timeout):
+    """Preloader-style crash (like MediaTek)"""
+    return preloader_style(dev, force, timeout)
 
-def cmd_heap(dev, args, force, timeout):
-    htype = args[0].upper() if args and args[0].upper() in HEAP_TYPES else "DOUBLE_FREE"
-    data = htype.encode()[:16].ljust(16, b'\x00')
-    return execute_crash(dev, 'HEAP_CORRUPTION', OP_HEAP_CORRUPT, data, force, timeout)
 
-def cmd_divzero(dev, args, force, timeout):
-    return execute_crash(dev, 'DIVIDE_ZERO', OP_DIVIDE_ZERO, b'', force, timeout)
+def cmd_branch(dev, args, force, timeout):
+    """Bad branch crash"""
+    target = int(args[0], 16) if args and args[0].startswith('0x') else (int(args[0]) if args else None)
+    return bad_branch(dev, target, force, timeout)
 
-def cmd_memory(dev, args, force, timeout):
-    addr = parse_addr(args[0]) if args else 0x10000000
-    pattern = parse_addr(args[1]) if len(args) > 1 else 0xDEADBEEF
+
+def cmd_invalid(dev, args, force, timeout):
+    """Invalid instruction crash"""
+    insn = int(args[0], 16) if args and args[0].startswith('0x') else (int(args[0]) if args else None)
+    return invalid_instruction(dev, insn, force, timeout)
+
+
+def cmd_register(dev, args, force, timeout):
+    """Register corruption crash"""
+    reg = args[0] if args else None
+    val = int(args[1], 16) if len(args) > 1 and args[1].startswith('0x') else (int(args[1]) if len(args) > 1 else None)
+    return register_corruption(dev, reg, val, force, timeout)
+
+
+def cmd_timing(dev, args, force, timeout):
+    """Timing bomb crash"""
+    delay = int(args[0]) if args else 100
+    return timing_bomb(dev, delay, force, timeout + (delay // 1000))
+
+
+def cmd_double(dev, args, force, timeout):
+    """Double fault crash"""
+    return double_fault(dev, force, timeout)
+
+
+def cmd_auto(dev, args, force, timeout):
+    """Auto-select best crash method"""
+    return auto_crash(dev, force, timeout)
+
+
+def cmd_verify(dev, args, force, timeout):
+    """Verify crash state"""
+    print("\n[*] Verifying crash state...")
     
-    if addr < 0x1000 and not force:
-        if not confirm(f"⚠️  Low memory corruption at 0x{addr:08X} may brick device!", 'MEMORY', force):
-            return False
+    result = verify_crash(dev, timeout=3.0)
     
-    data = struct.pack("<II", addr, pattern)
-    return execute_crash(dev, 'MEMORY_CORRUPTION', OP_MEM_CORRUPT, data, force, timeout)
-
-def cmd_watchdog(dev, args, force, timeout):
-    ms = max(100, min(60000, int(args[0]) if args else 1000))
-    data = struct.pack("<I", ms)
-    return execute_crash(dev, 'WATCHDOG', OP_WATCHDOG, data, force, max(timeout, ms//1000+5))
-
-def cmd_irq(dev, args, force, timeout):
-    irq = max(0, min(255, int(args[0]) if args else 0))
-    freq = max(1, min(100000, int(args[1]) if len(args) > 1 else 1000))
-    data = struct.pack("<II", irq, freq)
-    return execute_crash(dev, 'IRQ_STORM', OP_IRQ_STORM, data, force, timeout)
-
-def cmd_dma(dev, args, force, timeout):
-    ch = max(0, min(31, int(args[0]) if args else 0))
-    data = struct.pack("<I", ch)
-    return execute_crash(dev, 'DMA_OVERFLOW', OP_DMA_OVERFLOW, data, force, timeout)
-
-def cmd_custom(dev, args, force, timeout):
-    if not args:
-        print("[!] Specify crash scenario")
-        return False
-    scenario = ' '.join(str(a) for a in args)[:60]
-    data = scenario.encode()[:64].ljust(64, b'\x00')
-    return execute_crash(dev, 'CUSTOM', OP_CUSTOM, data, force, timeout)
-
-def cmd_analyze(dev, args, force, timeout):
-    """Crash analysis"""
-    print(f"\n[*] Crash Analysis:")
-    
-    ok, _, data = crash_cmd(dev, struct.pack("<B", OP_ANALYSIS))
-    
-    if ok and data and len(data) >= 13:
-        count = struct.unpack("<I", data[0:4])[0]
-        ts = struct.unpack("<I", data[4:8])[0]
-        rate = struct.unpack("<I", data[8:12])[0]
-        health = {0:'CRITICAL', 1:'POOR', 2:'FAIR', 3:'GOOD', 4:'EXCELLENT'}.get(data[12], '?')
-        
-        ts_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ts)) if 946684800 < ts < 2000000000 else f"0x{ts:X}"
-        
-        print(f"    Crashes:  {count}")
-        print(f"    Last:     {ts_str}")
-        print(f"    Recovery: {rate}%")
-        print(f"    Health:   {health}")
-        
-        if count > 10:
-            print(f"\n[!] High crash count ({count}) - investigate stability")
-        elif count > 0 and rate < 80:
-            print(f"\n[!] Low recovery rate ({rate}%) - improve recovery")
-        elif count == 0:
-            print(f"\n[+] No crashes - system stable")
+    if result['crashed']:
+        print("[+] Device is crashed")
+        print(f"    Responsive: {'No' if not result['responsive'] else 'Yes'}")
+        print(f"    USB present: {'Yes' if result['usb_present'] else 'No'}")
+        print(f"    Crash type: {'Silent' if result['silent'] else 'Visible'}")
     else:
-        print("    No crash data available")
+        print("[+] Device is responsive (not crashed)")
     
-    return True
+    return result['crashed']
 
 
-# =============================================================================
-# TEST SUITES
-# =============================================================================
-def cmd_crash_test(args=None) -> int:
-    """Crash test suite"""
-    if args is None:
-        print("[!] No arguments")
-        return 1
+def cmd_recover(dev, args, force, timeout):
+    """Wait for device to recover from crash"""
+    wait_time = int(args[0]) if args else 30
+    recovered = wait_for_recovery(dev, wait_time)
     
-    devs = scan_all()
-    if not devs:
-        print("[!] No device")
-        return 1
+    if recovered:
+        print("[+] Device recovered!")
+    else:
+        print("[!] Device did not recover - manual power cycle needed")
     
-    dev = devs[0]
-    print(f"[*] Device: {dev.product}")
+    return recovered
+
+
+def cmd_test(dev, args, force, timeout):
+    """Test suite - try all crash methods"""
+    print("\n[*] Crash Test Suite")
+    print("    Testing each method for 5 seconds...\n")
     
-    if getattr(args, 'loader', None):
-        auto_loader_if_needed(args, dev)
+    methods = [
+        ('silent', silent_halt),
+        ('preloader', preloader_style),
+        ('double', double_fault),
+        ('auto', auto_crash),
+    ]
     
-    cargs = getattr(args, 'crash_args', []) or []
-    ttype = cargs[0] if cargs and cargs[0] in ('basic', 'comprehensive', 'recovery', 'stress') else 'basic'
-    iters = max(1, min(MAX_ITER, int(cargs[1]) if len(cargs) > 1 else 1))
-    delay = max(1, min(MAX_DELAY, int(cargs[2]) if len(cargs) > 2 else 5))
+    results = {}
     
-    print(f"\n[*] Crash Test: {ttype} ({iters}x, {delay}s delay)")
+    for name, method in methods:
+        print(f"\n  Testing: {name}")
+        try:
+            success = method(dev, force=True, timeout=3)
+            results[name] = success
+            
+            if success:
+                print(f"    ✓ {name} - SUCCESS")
+                # Wait a bit before next test
+                time.sleep(2)
+            else:
+                print(f"    ✗ {name} - FAILED")
+        except Exception as e:
+            print(f"    ✗ {name} - ERROR: {e}")
+            results[name] = False
+        
+        # Re-scan for device if needed
+        devs = scan_all()
+        if devs:
+            dev = devs[0]
     
-    if not confirm("⚠️  Crash testing may cause instability and require manual recovery!", 'TEST', False):
-        return 0
+    # Summary
+    print("\n[*] Test Summary:")
+    passed = sum(1 for v in results.values() if v)
+    total = len(results)
+    print(f"    Passed: {passed}/{total} ({passed*100//total if total else 0}%)")
     
-    if ttype == 'basic':
-        scenarios = [('NULL', cmd_nullptr), ('DIV0', cmd_divzero), ('STACK', lambda d,a,f,t: cmd_stack(d, ['100'], f, t))]
-    elif ttype == 'comprehensive':
-        scenarios = [('NULL', cmd_nullptr), ('DIV0', cmd_divzero), ('STACK', lambda d,a,f,t: cmd_stack(d, ['500'], f, t)),
-                    ('HEAP', lambda d,a,f,t: cmd_heap(d, ['DOUBLE_FREE'], f, t)),
-                    ('MEM', lambda d,a,f,t: cmd_memory(d, ['0x20000000', '0xBAD'], f, t))]
-    elif ttype == 'recovery':
-        scenarios = [('NULL', cmd_nullptr)]
-    else:  # stress
-        scenarios = [('NULL', cmd_nullptr), ('DIV0', cmd_divzero), ('STACK', lambda d,a,f,t: cmd_stack(d, ['50'], f, t))]
+    for name, success in results.items():
+        print(f"    {'✓' if success else '✗'} {name}")
     
-    total = iters * len(scenarios)
-    passed = 0
-    
-    print(f"\n[*] {len(scenarios)} scenarios × {iters} = {total} tests")
-    
-    try:
-        with ProgressBar(total, prefix='Testing', suffix='Complete') as pb:
-            for i in range(iters):
-                for name, func in scenarios:
-                    print(f"\n  [{name}] ", end="", flush=True)
-                    try:
-                        func(dev, [], True, delay)
-                        time.sleep(delay)
-                        if ping(dev):
-                            print("PASS")
-                            passed += 1
-                        else:
-                            print("NO RECOVERY")
-                            time.sleep(3)
-                            new_devs = scan_all()
-                            if new_devs: dev = new_devs[0]
-                    except KeyboardInterrupt:
-                        print("SKIP")
-                        return 0 if passed >= total * 0.8 else 1
-                    except Exception as e:
-                        print(f"ERROR: {e}")
-                    
-                    pb.update(1)
-                
-                if i < iters - 1:
-                    time.sleep(2)
-    except KeyboardInterrupt:
-        pass
-    
-    rate = passed / total * 100 if total > 0 else 0
-    print(f"\n[+] Result: {passed}/{total} ({rate:.0f}%)")
-    return 0 if rate >= 80 else 1
+    return passed > 0
 
 
 # =============================================================================
 # DISPATCH TABLE
 # =============================================================================
 HANDLERS = {
-    'list': cmd_list, 'ls': cmd_list, 'types': cmd_list,
-    'kernel': cmd_kernel, 'panic': cmd_kernel,
-    'null': cmd_nullptr, 'nullptr': cmd_nullptr, 'null-pointer': cmd_nullptr,
-    'stack': cmd_stack, 'overflow': cmd_stack, 'stack-overflow': cmd_stack,
-    'heap': cmd_heap, 'corruption': cmd_heap, 'heap-corruption': cmd_heap,
-    'divide': cmd_divzero, 'divide-zero': cmd_divzero, 'div0': cmd_divzero,
-    'memory': cmd_memory, 'mem': cmd_memory, 'memory-corruption': cmd_memory,
-    'watchdog': cmd_watchdog, 'wdt': cmd_watchdog,
-    'interrupt': cmd_irq, 'irq': cmd_irq, 'isr': cmd_irq,
-    'dma': cmd_dma, 'dma-overflow': cmd_dma,
-    'custom': cmd_custom, 'user': cmd_custom,
-    'analyze': cmd_analyze, 'analysis': cmd_analyze,
+    'list': cmd_list, 'ls': cmd_list, 'methods': cmd_list,
+    'silent': cmd_silent, 'halt': cmd_silent, 'freeze': cmd_silent,
+    'preloader': cmd_preloader, 'mtk': cmd_preloader, 'brom': cmd_preloader,
+    'branch': cmd_branch, 'jump': cmd_branch,
+    'invalid': cmd_invalid, 'illegal': cmd_invalid, 'udf': cmd_invalid,
+    'register': cmd_register, 'reg': cmd_register,
+    'timing': cmd_timing, 'bomb': cmd_timing, 'delayed': cmd_timing,
+    'double': cmd_double, 'dfault': cmd_double,
+    'auto': cmd_auto, 'smart': cmd_auto,
+    'verify': cmd_verify, 'check': cmd_verify, 'status': cmd_verify,
+    'recover': cmd_recover, 'wait': cmd_recover,
+    'test': cmd_test, 'suite': cmd_test,
 }
 
 
@@ -400,29 +690,30 @@ HANDLERS = {
 # =============================================================================
 def cmd_crash(args=None) -> int:
     """
-    QSLCL CRASH - Controlled crash injection and stability testing
+    QSLCL CRASH - Silent crash injection (like MediaTek preloader)
     
     Examples:
-        crash list                          - List crash types
-        crash kernel                        - Kernel panic
-        crash null                          - Null pointer dereference
-        crash stack 5000                    - Stack overflow (depth 5000)
-        crash heap DOUBLE_FREE              - Heap corruption
-        crash divide-zero                   - Division by zero
-        crash memory 0x20000000 0xBAD       - Memory corruption
-        crash watchdog 5000                 - Watchdog timeout (5s)
-        crash interrupt 10 1000             - IRQ storm on IRQ10
-        crash dma 3                         - DMA overflow on ch3
-        crash custom "race condition"       - Custom crash
-        crash analyze                       - Crash analysis
-        crash-test basic 3 5                - Basic test: 3x, 5s delay
+        crash list                      - List crash methods
+        crash silent                    - Silent halt (device freezes)
+        crash preloader                 - Preloader-style silent crash
+        crash branch 0x00000000         - Branch to invalid address
+        crash invalid 0xDEADBEEF        - Execute invalid instruction
+        crash register PC 0xDEADBEEF    - Corrupt register
+        crash timing 500                - Crash after 500ms delay
+        crash double                    - Double fault (most reliable)
+        crash auto                      - Auto-select best method
+        crash verify                    - Check if device crashed
+        crash recover 30                - Wait 30s for recovery
+        crash test                      - Test all methods
     
-    Risk Levels: 🟢 LOW  🟡 MEDIUM  🔴 HIGH
+    ⚠️  These are SILENT crashes - device will freeze with no alert!
+    ⚠️  Power cycle required to recover!
+    ⚠️  Use only on devices you own!
     """
     
     if args is None:
         print("[!] No arguments")
-        print("[*] Usage: crash <list|kernel|null|stack|heap|divide|memory|watchdog|interrupt|dma|custom|analyze>")
+        print("[*] Usage: crash <list|silent|preloader|branch|invalid|register|timing|double|auto|verify|recover|test>")
         return 1
     
     devs = scan_all()
@@ -439,20 +730,33 @@ def cmd_crash(args=None) -> int:
     sub = (getattr(args, 'crash_subcommand', '') or getattr(args, 'subcmd', '')).lower().strip()
     cargs = getattr(args, 'crash_args', []) or getattr(args, 'args', []) or []
     force = getattr(args, 'force', False)
-    timeout = max(5, getattr(args, 'timeout', 10) or 10)
+    timeout = max(3, getattr(args, 'timeout', 10) or 10)
     
     if not sub or sub in ('help', '?'):
         print("[*] Crash Commands:")
         for name, func in sorted(set(HANDLERS.items()), key=lambda x: x[0]):
             if '_' not in name:
                 doc = (func.__doc__ or '').strip().split('\n')[0]
-                print(f"    {name:<15} {doc}")
+                print(f"    {name:<12} {doc}")
         return 0
     
     handler = HANDLERS.get(sub)
     if not handler:
         print(f"[!] Unknown: {sub}")
         return 1
+    
+    # Global safety confirmation for any crash operation
+    if sub not in ('list', 'verify', 'recover', 'test'):
+        if not force:
+            if not confirm(
+                "⚠️  SILENT CRASH OPERATION\n"
+                "Device will FREEZE with NO ALERT\n"
+                "Power cycle REQUIRED to recover\n"
+                "Data loss possible\n\n"
+                "Use only on devices you own!",
+                'CRASH', force
+            ):
+                return 0
     
     try:
         return 0 if handler(dev, cargs, force, timeout) else 1
@@ -471,6 +775,6 @@ def cmd_crash(args=None) -> int:
 # MODULE ENTRY
 # =============================================================================
 if __name__ == "__main__":
-    print("[*] crash.py - QSLCL CRASH Command Module")
+    print("[*] crash.py - QSLCL CRASH Command Module (Silent) v2.2")
     print("[*] This module is imported by qslcl.py")
     print("[*] Usage: python qslcl.py crash <subcommand> [args]")

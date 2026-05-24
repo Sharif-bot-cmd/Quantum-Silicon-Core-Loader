@@ -57,29 +57,100 @@ OP_ESCALATE = 0x07
 OP_MONITOR = 0x08
 OP_AUDIT = 0x09
 OP_RESET = 0x0A
+OP_BACKDOOR = 0x0B          # Backdoor access (undocumented)
+OP_PERSIST = 0x0C           # Persistence installation
+OP_STEALTH = 0x0D           # Stealth mode (hide activity)
+OP_SPOOF = 0x0E             # Identity spoofing
+OP_PATCH = 0x0F             # Runtime patching
+OP_INJECT = 0x10            # Code injection
+OP_HOOK = 0x11              # Function hooking
+OP_DUMP_SECURE = 0x12       # Secure memory dump
+OP_BYPASS_ALL = 0x13        # Bypass all security
+OP_UNDO = 0x14              # Undo RAWMODE changes
+OP_SAVE_STATE = 0x15        # Save current state
+OP_RESTORE_STATE = 0x16     # Restore saved state
+OP_JAILBREAK = 0x17         # Jailbreak trigger
+OP_BOOTROM_WRITE = 0x18     # BootROM write (very dangerous)
+OP_SEP_BYPASS = 0x19        # Secure Enclave bypass (Apple)
+OP_TRUSTZONE_BYPASS = 0x1A  # TrustZone bypass (ARM)
+OP_SMMU_DISABLE = 0x1B      # SMMU disable
 
-# Privilege levels
 PRIV_LEVELS = {
-    0: ("USER", "Normal user mode, limited access"),
-    1: ("PRIVILEGED", "System services, some drivers"),
-    2: ("SUPERVISOR", "OS kernel, memory management"),
-    3: ("HYPERVISOR", "VM control, hardware virtualization"),
-    4: ("ROOT", "Bare metal, all hardware access"),
-    5: ("BOOTROM", "Boot ROM level, unrestricted"),
+    0: ("USER", "Normal user mode, limited access, app sandbox"),
+    1: ("PRIVILEGED", "System services, drivers, limited kernel access"),
+    2: ("SUPERVISOR", "OS kernel, memory management, process control"),
+    3: ("HYPERVISOR", "VM control, hardware virtualization, VMM access"),
+    4: ("ROOT", "Bare metal, all hardware access, full system control"),
+    5: ("BOOTROM", "Boot ROM level, unrestricted, permanent changes possible"),
+    6: ("SECURE_MONITOR", "Secure monitor (EL3 on ARM), highest privilege"),
+    7: ("DEBUG", "Debug mode with JTAG/SWD access"),
 }
 
-PRIV_DANGEROUS = {3, 4, 5}  # HYPERVISOR and above
+PRIV_DANGEROUS = {3, 4, 5, 6}  # HYPERVISOR and above
+PRIV_IRREVERSIBLE = {5, 6}      # BOOTROM and SECURE_MONITOR can cause permanent changes
 
-# RAWMODE features
+# =============================================================================
+# EXPANDED RAWMODE FEATURES (More comprehensive)
+# =============================================================================
+
 FEATURES = {
+    # Hardware access features
     "MMU_BYPASS":       {"desc": "Bypass MMU protection", "risk": "HIGH", "priv": 2},
-    "SECURITY_DISABLE": {"desc": "Disable security features", "risk": "CRITICAL", "priv": 3},
-    "JTAG_ENABLE":      {"desc": "Enable JTAG debugging", "risk": "MEDIUM", "priv": 1},
-    "BOOTROM_ACCESS":   {"desc": "Access boot ROM regions", "risk": "CRITICAL", "priv": 4},
     "DMA_ENABLE":       {"desc": "Enable Direct Memory Access", "risk": "HIGH", "priv": 2},
+    "JTAG_ENABLE":      {"desc": "Enable JTAG debugging", "risk": "MEDIUM", "priv": 1},
+    "SWD_ENABLE":       {"desc": "Enable Serial Wire Debug", "risk": "MEDIUM", "priv": 1},
     "REGISTER_ACCESS":  {"desc": "Access protected registers", "risk": "MEDIUM", "priv": 1},
+    "BOOTROM_ACCESS":   {"desc": "Access boot ROM regions", "risk": "CRITICAL", "priv": 4},
+    "SECURE_MEMORY":    {"desc": "Access secure memory regions", "risk": "CRITICAL", "priv": 3},
+    
+    # Security bypass features
+    "SECURITY_DISABLE": {"desc": "Disable security features", "risk": "CRITICAL", "priv": 3},
+    "SIGNATURE_BYPASS": {"desc": "Bypass signature verification", "risk": "CRITICAL", "priv": 3},
+    "AMFI_DISABLE":     {"desc": "Disable Apple Mobile File Integrity", "risk": "HIGH", "priv": 2},
+    "SANDBOX_BYPASS":   {"desc": "Bypass sandbox restrictions", "risk": "HIGH", "priv": 2},
+    "CSR_DISABLE":      {"desc": "Disable System Integrity Protection", "risk": "CRITICAL", "priv": 3},
+    "KPP_BYPASS":       {"desc": "Bypass Kernel Patch Protection", "risk": "HIGH", "priv": 3},
+    "SEP_BYPASS":       {"desc": "Bypass Secure Enclave (Apple)", "risk": "CRITICAL", "priv": 4},
+    "TRUSTZONE_BYPASS": {"desc": "Bypass TrustZone (ARM)", "risk": "CRITICAL", "priv": 4},
+    
+    # Debug and trace features
     "DEBUG_ENABLE":     {"desc": "Enable debug features", "risk": "MEDIUM", "priv": 2},
-    "TRACE_ENABLE":     {"desc": "Enable tracing", "risk": "LOW", "priv": 1},
+    "TRACE_ENABLE":     {"desc": "Enable instruction tracing", "risk": "LOW", "priv": 1},
+    "PERF_MONITOR":     {"desc": "Enable performance monitoring", "risk": "LOW", "priv": 1},
+    "ETM_ENABLE":       {"desc": "Enable Embedded Trace Macrocell", "risk": "MEDIUM", "priv": 2},
+    
+    # Persistence features
+    "PERSIST_ENABLE":   {"desc": "Install persistent backdoor", "risk": "CRITICAL", "priv": 4},
+    "BOOT_HOOK":        {"desc": "Install boot-time hook", "risk": "CRITICAL", "priv": 4},
+    "FIRMWARE_PATCH":   {"desc": "Patch firmware permanently", "risk": "CRITICAL", "priv": 5},
+    
+    # Stealth features
+    "STEALTH_MODE":     {"desc": "Hide RAWMODE activity", "risk": "HIGH", "priv": 2},
+    "LOG_CLEAR":        {"desc": "Clear audit logs", "risk": "HIGH", "priv": 2},
+    "EVIDENCE_REMOVE":  {"desc": "Remove forensic evidence", "risk": "CRITICAL", "priv": 3},
+    
+    # Apple-specific (A12+)
+    "APRR_BYPASS":      {"desc": "Bypass APRR (Apple)", "risk": "HIGH", "priv": 3},
+    "PAC_DISABLE":      {"desc": "Disable Pointer Authentication", "risk": "HIGH", "priv": 3},
+    "DIT_DISABLE":      {"desc": "Disable Data Independent Timing", "risk": "MEDIUM", "priv": 2},
+    "PPL_BYPASS":       {"desc": "Bypass Page Protection Layer", "risk": "HIGH", "priv": 3},
+    
+    # Qualcomm-specific
+    "TZ_BYPASS":        {"desc": "Bypass TrustZone (Qualcomm)", "risk": "CRITICAL", "priv": 3},
+    "QFP_BYPASS":       {"desc": "Bypass Qualcomm Firewall", "risk": "HIGH", "priv": 2},
+    "SMMU_DISABLE":     {"desc": "Disable SMMU", "risk": "HIGH", "priv": 3},
+    
+    # MediaTek-specific
+    "DA_BYPASS":        {"desc": "Bypass Download Agent auth", "risk": "HIGH", "priv": 2},
+    "BROM_UNLOCK":      {"desc": "Unlock BootROM features", "risk": "CRITICAL", "priv": 4},
+    
+    # USB4 v2.0 features
+    "USB4_TUNNEL":      {"desc": "Enable USB4 tunneling", "risk": "MEDIUM", "priv": 1},
+    "PAM4_OVERRIDE":    {"desc": "Override PAM4 encoding", "risk": "LOW", "priv": 1},
+    
+    # Future/experimental
+    "QUANTUM_BYPASS":   {"desc": "Quantum-resistant bypass", "risk": "HIGH", "priv": 3},
+    "AI_OVERRIDE":      {"desc": "Override AI security", "risk": "HIGH", "priv": 3},
 }
 
 RISK_COLORS = {'LOW': '', 'MEDIUM': '', 'HIGH': '', 'CRITICAL': ''}
@@ -223,20 +294,52 @@ class Session:
 # SUBCOMMANDS
 # =============================================================================
 def cmd_list(session: Session, args: List[str], force: bool, verbose: bool) -> int:
-    """List capabilities and features"""
+    """List capabilities, features, and privilege levels"""
     print(f"\n[*] RAWMODE Feature Reference:\n")
-    for name, info in sorted(FEATURES.items()):
-        print(f"    {name:<18} Risk:{info['risk']:<10} Level:{priv_name(info['priv']):<12} {info['desc']}")
+    
+    # Group features by category
+    categories = {
+        'Hardware Access': ['MMU_BYPASS', 'DMA_ENABLE', 'JTAG_ENABLE', 'SWD_ENABLE', 'REGISTER_ACCESS', 'BOOTROM_ACCESS', 'SECURE_MEMORY'],
+        'Security Bypass': ['SECURITY_DISABLE', 'SIGNATURE_BYPASS', 'AMFI_DISABLE', 'SANDBOX_BYPASS', 'CSR_DISABLE', 'KPP_BYPASS', 'SEP_BYPASS', 'TRUSTZONE_BYPASS'],
+        'Debug & Trace': ['DEBUG_ENABLE', 'TRACE_ENABLE', 'PERF_MONITOR', 'ETM_ENABLE'],
+        'Persistence': ['PERSIST_ENABLE', 'BOOT_HOOK', 'FIRMWARE_PATCH'],
+        'Stealth': ['STEALTH_MODE', 'LOG_CLEAR', 'EVIDENCE_REMOVE'],
+        'Apple-Specific': ['APRR_BYPASS', 'PAC_DISABLE', 'DIT_DISABLE', 'PPL_BYPASS'],
+        'Qualcomm-Specific': ['TZ_BYPASS', 'QFP_BYPASS', 'SMMU_DISABLE'],
+        'MediaTek-Specific': ['DA_BYPASS', 'BROM_UNLOCK'],
+        'USB4 v2.0': ['USB4_TUNNEL', 'PAM4_OVERRIDE'],
+        'Experimental': ['QUANTUM_BYPASS', 'AI_OVERRIDE'],
+    }
+    
+    for category, feat_list in categories.items():
+        print(f"    [{category}]")
+        for name in feat_list:
+            if name in FEATURES:
+                info = FEATURES[name]
+                print(f"        {name:<20} Risk:{info['risk']:<10} Level:{priv_name(info['priv']):<12} {info['desc']}")
+        print()
     
     print(f"\n[*] Privilege Levels:")
     for level in sorted(PRIV_LEVELS):
-        dangerous = " ⚠ DANGEROUS" if level in PRIV_DANGEROUS else ""
-        print(f"    {level}: {PRIV_LEVELS[level][0]:<12} {PRIV_LEVELS[level][1]}{dangerous}")
+        dangerous = " ⚠️ DANGEROUS" if level in PRIV_DANGEROUS else ""
+        irreversible = " 💀 IRREVERSIBLE" if level in PRIV_IRREVERSIBLE else ""
+        print(f"    {level}: {PRIV_LEVELS[level][0]:<16} {PRIV_LEVELS[level][1]}{dangerous}{irreversible}")
+    
+    print(f"\n[*] Advanced Operations:")
+    print(f"    backdoor      Attempt backdoor access")
+    print(f"    persist       Install persistence (survives reboot)")
+    print(f"    stealth       Hide RAWMODE activity")
+    print(f"    spoof         Spoof device identity")
+    print(f"    patch         Apply runtime memory patch")
+    print(f"    jailbreak     Trigger jailbreak (Apple)")
+    print(f"    sep           Bypass Secure Enclave (Apple A12+)")
+    print(f"    undo          Revert RAWMODE changes")
+    print(f"    save          Save current state")
+    print(f"    restore       Restore saved state")
     
     print(f"\n[*] Session: {session.id}")
     session._log("LIST", "Capabilities displayed")
     return 0
-
 
 def cmd_status(session: Session, args: List[str], force: bool, verbose: bool) -> int:
     """Show current status"""
@@ -528,11 +631,308 @@ def cmd_reset(session: Session, args: List[str], force: bool, verbose: bool) -> 
     print(f"[!] Failed: {name}")
     return 1
 
+# =============================================================================
+# MISSING SUBCOMMANDS
+# =============================================================================
+
+def cmd_backdoor(session: Session, args: List[str], force: bool, verbose: bool) -> int:
+    """Access undocumented backdoor (if exists)"""
+    print(f"\n[*] Attempting backdoor access...")
+    
+    backdoor_type = args[0].upper() if args else "DEFAULT"
+    
+    if not confirm(
+        f"⚠️ BACKDOOR ACCESS: {backdoor_type}\n"
+        "This attempts to use undocumented backdoor channels.\n"
+        "May trigger security alerts!\n"
+        "Use only on devices you own!",
+        'BACKDOOR', force
+    ):
+        return 0
+    
+    payload = backdoor_type.encode()[:16].ljust(16, b'\x00')
+    success, name, data = session.execute(OP_BACKDOOR, payload)
+    
+    if success:
+        print(f"[+] Backdoor access granted")
+        if data and verbose:
+            print(f"    Response: {data[:32].hex()}")
+        session._log("BACKDOOR", f"Type: {backdoor_type}", "CRITICAL")
+        return 0
+    
+    print(f"[!] Backdoor failed: {name}")
+    return 1
+
+
+def cmd_persist(session: Session, args: List[str], force: bool, verbose: bool) -> int:
+    """Install persistence (survives reboot)"""
+    print(f"\n[*] Installing persistence...")
+    print("    WARNING: This will survive reboots and may be PERMANENT!")
+    
+    persist_type = args[0].upper() if args else "BOOT"
+    payload = persist_type.encode()[:16].ljust(16, b'\x00')
+    
+    if not confirm(
+        f"⚠️ PERSISTENCE INSTALLATION: {persist_type}\n"
+        "This installs code that survives reboots!\n"
+        "May be DETECTED by security software!\n"
+        "Use only on devices you own!",
+        'PERSIST', force
+    ):
+        return 0
+    
+    success, name, data = session.execute(OP_PERSIST, payload)
+    
+    if success:
+        print(f"[+] Persistence installed")
+        session._log("PERSIST", f"Type: {persist_type}", "CRITICAL")
+        return 0
+    
+    print(f"[!] Persistence failed: {name}")
+    return 1
+
+
+def cmd_stealth(session: Session, args: List[str], force: bool, verbose: bool) -> int:
+    """Enable stealth mode (hide activity)"""
+    print(f"\n[*] Enabling stealth mode...")
+    
+    level = args[0].upper() if args else "FULL"
+    
+    if not confirm(
+        f"⚠️ STEALTH MODE: {level}\n"
+        "This hides RAWMODE activity from monitoring.\n"
+        "May violate security policies!\n"
+        "Use only on devices you own!",
+        'STEALTH', force
+    ):
+        return 0
+    
+    payload = level.encode()[:16].ljust(16, b'\x00')
+    success, name, data = session.execute(OP_STEALTH, payload)
+    
+    if success:
+        print(f"[+] Stealth mode enabled (level: {level})")
+        session._log("STEALTH", f"Level: {level}", "CRITICAL")
+        return 0
+    
+    print(f"[!] Stealth mode failed: {name}")
+    return 1
+
+
+def cmd_spoof(session: Session, args: List[str], force: bool, verbose: bool) -> int:
+    """Spoof device identity"""
+    if len(args) < 2:
+        print("[!] Usage: rawmode spoof <TYPE> <VALUE>")
+        print("    Types: VID, PID, SERIAL, PRODUCT, MANUFACTURER")
+        return 1
+    
+    spoof_type = args[0].upper()
+    value = args[1]
+    
+    print(f"\n[*] Spoofing: {spoof_type} = {value}")
+    
+    if not confirm(
+        f"⚠️ IDENTITY SPOOFING\n"
+        f"This changes device identification to: {spoof_type}={value}\n"
+        "May violate laws!\n"
+        "Use only on devices you own!",
+        'SPOOF', force
+    ):
+        return 0
+    
+    payload = spoof_type.encode()[:8].ljust(8, b'\x00')
+    payload += value.encode()[:64].ljust(64, b'\x00')
+    
+    success, name, data = session.execute(OP_SPOOF, payload)
+    
+    if success:
+        print(f"[+] Spoofing applied")
+        session._log("SPOOF", f"{spoof_type}={value}", "CRITICAL")
+        return 0
+    
+    print(f"[!] Spoofing failed: {name}")
+    return 1
+
+
+def cmd_patch_runtime(session: Session, args: List[str], force: bool, verbose: bool) -> int:
+    """Apply runtime patch to memory"""
+    if len(args) < 2:
+        print("[!] Usage: rawmode patch <ADDRESS> <DATA>")
+        return 1
+    
+    try:
+        addr = int(args[0], 16) if args[0].startswith('0x') else int(args[0])
+        data = bytes.fromhex(args[1]) if len(args[1]) % 2 == 0 else args[1].encode()
+    except ValueError as e:
+        print(f"[!] Invalid address or data: {e}")
+        return 1
+    
+    print(f"\n[*] Patching at 0x{addr:08X}: {data[:16].hex()}...")
+    
+    if not confirm(
+        f"⚠️ RUNTIME PATCH\n"
+        f"Address: 0x{addr:08X}\n"
+        f"Data: {data[:16].hex()}\n"
+        "Modifies live memory!\n"
+        "May crash device!\n"
+        "Use only on devices you own!",
+        'PATCH', force
+    ):
+        return 0
+    
+    payload = struct.pack("<I", addr) + struct.pack("<I", len(data)) + data
+    success, name, extra = session.execute(OP_PATCH, payload)
+    
+    if success:
+        print(f"[+] Patch applied")
+        session._log("PATCH", f"0x{addr:08X} len={len(data)}", "WARNING")
+        return 0
+    
+    print(f"[!] Patch failed: {name}")
+    return 1
+
+
+def cmd_jailbreak(session: Session, args: List[str], force: bool, verbose: bool) -> int:
+    """Trigger jailbreak (Apple-specific)"""
+    print(f"\n[*] Triggering jailbreak sequence...")
+    
+    jb_type = args[0].upper() if args else "A12"
+    
+    if not confirm(
+        f"⚠️ JAILBREAK TRIGGER: {jb_type}\n"
+        "This attempts to jailbreak the device!\n"
+        "Voids warranty!\n"
+        "May cause boot loop!\n"
+        "Use only on devices you own!",
+        'JAILBREAK', force
+    ):
+        return 0
+    
+    payload = jb_type.encode()[:16].ljust(16, b'\x00')
+    success, name, data = session.execute(OP_JAILBREAK, payload)
+    
+    if success:
+        print(f"[+] Jailbreak triggered")
+        session._log("JAILBREAK", f"Type: {jb_type}", "CRITICAL")
+        return 0
+    
+    print(f"[!] Jailbreak failed: {name}")
+    return 1
+
+
+def cmd_sep_bypass(session: Session, args: List[str], force: bool, verbose: bool) -> int:
+    """Bypass Secure Enclave (Apple A12+)"""
+    print(f"\n[*] Attempting SEP bypass...")
+    
+    if not confirm(
+        f"⚠️ SECURE ENCLAVE BYPASS\n"
+        "This bypasses Apple's Secure Enclave!\n"
+        "May break Touch ID/Face ID!\n"
+        "Use only on devices you own!",
+        'SEPBYPASS', force
+    ):
+        return 0
+    
+    success, name, data = session.execute(OP_SEP_BYPASS)
+    
+    if success:
+        print(f"[+] SEP bypassed")
+        session._log("SEP_BYPASS", "Secure Enclave bypassed", "CRITICAL")
+        return 0
+    
+    print(f"[!] SEP bypass failed: {name}")
+    return 1
+
+
+def cmd_undo(session: Session, args: List[str], force: bool, verbose: bool) -> int:
+    """Undo RAWMODE changes"""
+    print(f"\n[*] Undoing RAWMODE changes...")
+    
+    if not confirm(
+        f"⚠️ UNDO CHANGES\n"
+        "This reverts RAWMODE modifications.\n"
+        "Some changes may be PERMANENT!\n",
+        'UNDO', force
+    ):
+        return 0
+    
+    success, name, data = session.execute(OP_UNDO)
+    
+    if success:
+        print(f"[+] Changes undone")
+        session.set_priv(0)
+        session.features.clear()
+        session._log("UNDO", "All changes reverted", "WARNING")
+        return 0
+    
+    print(f"[!] Undo failed: {name}")
+    return 1
+
+
+def cmd_save_state(session: Session, args: List[str], force: bool, verbose: bool) -> int:
+    """Save current state for later restoration"""
+    filename = args[0] if args else f"rawmode_state_{session.id[:8]}.bin"
+    
+    print(f"\n[*] Saving state to: {filename}")
+    
+    success, name, data = session.execute(OP_SAVE_STATE)
+    
+    if success and data:
+        try:
+            with open(filename, 'wb') as f:
+                f.write(data)
+            print(f"[+] State saved: {filename} ({len(data)} bytes)")
+            session._log("SAVE_STATE", filename)
+            return 0
+        except Exception as e:
+            print(f"[!] Save failed: {e}")
+            return 1
+    
+    print(f"[!] State capture failed: {name}")
+    return 1
+
+
+def cmd_restore_state(session: Session, args: List[str], force: bool, verbose: bool) -> int:
+    """Restore previously saved state"""
+    if not args:
+        print("[!] Specify state file")
+        return 1
+    
+    filename = args[0]
+    
+    try:
+        with open(filename, 'rb') as f:
+            data = f.read()
+    except Exception as e:
+        print(f"[!] Cannot read: {e}")
+        return 1
+    
+    print(f"\n[*] Restoring state from: {filename} ({len(data)} bytes)")
+    
+    if not confirm(
+        f"⚠️ RESTORE STATE\n"
+        "This restores previously saved RAWMODE state.\n"
+        "May overwrite current configuration!\n",
+        'RESTORE', force
+    ):
+        return 0
+    
+    payload = struct.pack("<I", len(data)) + data
+    success, name, extra = session.execute(OP_RESTORE_STATE, payload)
+    
+    if success:
+        print(f"[+] State restored")
+        session._log("RESTORE_STATE", filename, "WARNING")
+        return 0
+    
+    print(f"[!] Restore failed: {name}")
+    return 1
 
 # =============================================================================
-# DISPATCH TABLE
+# EXPANDED DISPATCH TABLE (With all new commands)
 # =============================================================================
 HANDLERS = {
+    # Existing
     'list': cmd_list, 'ls': cmd_list, 'show': cmd_list,
     'status': cmd_status, 'stat': cmd_status, 'info': cmd_status,
     'unlock': cmd_unlock, 'auth': cmd_unlock,
@@ -543,8 +943,19 @@ HANDLERS = {
     'monitor': cmd_monitor, 'watch': cmd_monitor,
     'audit': cmd_audit, 'log': cmd_audit, 'history': cmd_audit,
     'reset': cmd_reset, 'restart': cmd_reset,
+    
+    # NEW - Advanced features
+    'backdoor': cmd_backdoor, 'hidden': cmd_backdoor,
+    'persist': cmd_persist, 'persistence': cmd_persist,
+    'stealth': cmd_stealth, 'hide': cmd_stealth,
+    'spoof': cmd_spoof, 'fake': cmd_spoof,
+    'patch': cmd_patch_runtime, 'hotpatch': cmd_patch_runtime,
+    'jailbreak': cmd_jailbreak, 'jb': cmd_jailbreak,
+    'sep': cmd_sep_bypass, 'sepbypass': cmd_sep_bypass, 'secureenclave': cmd_sep_bypass,
+    'undo': cmd_undo, 'revert': cmd_undo,
+    'save': cmd_save_state, 'snapshot': cmd_save_state,
+    'restore': cmd_restore_state, 'load': cmd_restore_state,
 }
-
 
 # =============================================================================
 # MAIN COMMAND

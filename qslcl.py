@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qslcl.py — Universal QSLCL Tool v2.1.4
+# qslcl.py — Universal QSLCL Tool v2.1.5
 # Author: Sharif — QSLCL Creator
 # Works on all SOC architectures
 import sys, time, argparse, zlib, struct, threading, re, os, random, math, shutil, gzip, json, itertools, hashlib, queue
@@ -24,7 +24,6 @@ from modules.config import cmd_config, cmd_config_list
 from modules.glitch import cmd_glitch
 from modules.odm import cmd_odm
 from modules.footer import cmd_footer
-from modules.mode import cmd_mode, cmd_mode_status
 from modules.crash import cmd_crash, cmd_crash_test
 from modules.bypass import cmd_bypass
 from modules.voltage import cmd_voltage
@@ -2352,7 +2351,7 @@ def main():
             super().__init__(prog, max_help_position=36, width=140)
 
     p = argparse.ArgumentParser(
-        description="QSLCL Tool v2.1.4 - Universal SOC Tool",
+        description="QSLCL Tool v2.1.5 - Universal SOC Tool",
         formatter_class=QSLCLHelp
     )
 
@@ -2470,13 +2469,6 @@ def main():
     bp.add_argument("subcmd", help="Subcommand")
     bp.add_argument("args", nargs="*")
     bp.set_defaults(func=cmd_bypass)
-
-    # MODE
-    md = new_cmd("mode", help="Mode control")
-    md.add_argument("subcmd", help="Subcommand")
-    md.add_argument("args", nargs="*")
-    md.set_defaults(func=cmd_mode)
-    new_cmd("mode-status", help="Mode status").set_defaults(func=cmd_mode_status)
 
     # CRASH
     cr = new_cmd("crash", help="Crash simulation")

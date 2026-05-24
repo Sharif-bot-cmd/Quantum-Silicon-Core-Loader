@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# build.py - QSLCL Binary Builder v0.6.7
+# build.py - QSLCL Binary Builder v0.6.9
 import sys, struct, random, time, hmac, hashlib, os, zlib, uuid, json, platform, math
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
@@ -1604,7 +1604,7 @@ def generate_command_code(
         "VERIFY":2, "OEM":3, "ODM":3, "POWER":3,
         "CONFIG":3, "PATCH":3, "BYPASS":4, "GLITCH":4, "RESET":4,
         "CRASH":4, "VOLTAGE":4, "BRUTEFORCE":4, "RAWMODE":5,
-        "MODE":5, "RAWSTATE":5, "FOOTER":5,
+        "RAWSTATE":5, "FOOTER":5,
     }
 
     FAMILY = {
@@ -1616,11 +1616,10 @@ def generate_command_code(
         "PATCH":"ROM",
         "GLITCH":"TIMING", "BYPASS":"META", "BRUTEFORCE":"META",
         "RESET":"SYS", "CRASH":"SYS",
-        "RAWMODE":"RAW", "MODE":"RAW", "RAWSTATE":"RAW", "FOOTER":"RAW",
+        "RAWMODE":"RAW", "RAWSTATE":"RAW", "FOOTER":"RAW",
     }
 
     RAWMODE_COMMANDS = {"RAWMODE", "RAWSTATE", "FOOTER"}
-    MODE_COMMANDS = {"MODE"}
 
     family = FAMILY.get(C, "GEN")
     tier = TIER.get(C, 1)
@@ -1678,7 +1677,6 @@ def generate_command_code(
             if C == "RAWMODE": return uop("PRIV_UP", 0, 0) + uop("MOV", 0, rawmode_value) + uop("STORE", 0, 0xF000) + uop("IPC_SEND", 0, 0xC0) + uop("RET")
             if C == "RAWSTATE": return uop("PRIV_UP", 0, 0) + uop("LOAD", 0, 0xF000) + uop("IPC_SEND", 0, 0xC3) + uop("RET")
             if C == "FOOTER": return uop("PRIV_UP", 0, 0) + uop("STORE", 0, 0xF00C) + uop("IPC_SEND", 0, 0xC4) + uop("RET")
-            if C == "MODE": return uop("PRIV_UP", 0, 0) + uop("STORE", 0, 0xF008) + uop("IPC_SEND", 0, 0xC2) + uop("RET")
 
         elif family == "OEM":
             return uop("MOV", 0, 0) + uop("SYSCALL", 0, 0xFD) + uop("RET")
@@ -4040,7 +4038,7 @@ def build_qslcl_bin(
     # ============================================================
     command_list = [
        "HELLO","PING","GETINFO","GETVAR","GETSECTOR","RAW",
-       "READ","PEEK","WRITE","POKE","ERASE","DUMP","MODE",
+       "READ","PEEK","WRITE","POKE","ERASE","DUMP",
        "VERIFY","OEM","ODM","AUTHENTICATE","POWER",
        "GETCONFIG","PATCH","BYPASS","GLITCH","RESET","GPT",
        "CRASH","VOLTAGE","BRUTEFORCE","RAWMODE","SETCONFIG",
@@ -4064,7 +4062,7 @@ def build_qslcl_bin(
     command_metadata = {}
 
     if debug:
-        print(f"[*] Building QSLCL v5.4 Command System")
+        print(f"[*] Building QSLCL v5.8 Command System")
         print(f"    Commands: {len(command_list)} enhanced handlers")
         print(f"    Architecture: {arch} -> UNIVERSAL micro-VM")
         print(f"    Command offset: 0x{cmd_offset:X}")
@@ -4433,7 +4431,7 @@ if __name__ == "__main__":
     parser.add_argument("--arch", default="generic", help="Target architecture")
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
     parser.add_argument("--encrypt", action="store_true", help="Enable QSLCLENC encryption layer")
-    parser.add_argument("--size", type=int, default=0x14000, help="Binary size (bytes)")
+    parser.add_argument("--size", type=int, default=0x12000, help="Binary size (bytes)")
     parser.add_argument("--usb4-v2", action="store_true", help="Enable USB4 v2.0 80Gbps support")  
 
     args = parser.parse_args()

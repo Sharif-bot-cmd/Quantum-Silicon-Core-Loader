@@ -47,18 +47,58 @@ MAX_DUMP = 1024 * 1024
 MAX_SCAN = 64 * 1024
 CHUNK = 64
 
-# Named registers
 REGISTERS = {
+    # Common ARM registers
     'CPUID': 0x10000000, 'SYSCFG': 0x10000004, 'RST_CTL': 0x10000008,
     'CLK_SRC': 0x1000000C, 'PWR_CTL': 0x20000000, 'PWR_STAT': 0x20000004,
-    'VOLT_CTL': 0x20000008, 'PMIC_CFG': 0x2000000C,
-    'CLK_CTL': 0x30000000, 'PLL_CTL': 0x30000004, 'DIV_CTL': 0x30000008,
-    'GPIO_DIR': 0x40000000, 'GPIO_DATA': 0x40000004, 'GPIO_SET': 0x40000008,
-    'GPIO_CLR': 0x4000000C, 'UART_TX': 0x50000000, 'UART_RX': 0x50000004,
-    'UART_STAT': 0x50000008, 'UART_BAUD': 0x5000000C,
+    'VOLT_CTL': 0x20000008, 'PMIC_CFG': 0x2000000C, 'CLK_CTL': 0x30000000,
+    'PLL_CTL': 0x30000004, 'DIV_CTL': 0x30000008, 'GPIO_DIR': 0x40000000,
+    'GPIO_DATA': 0x40000004, 'GPIO_SET': 0x40000008, 'GPIO_CLR': 0x4000000C,
+    'UART_TX': 0x50000000, 'UART_RX': 0x50000004, 'UART_STAT': 0x50000008,
+    'UART_BAUD': 0x5000000C, 'WDT_CTL': 0x60000000, 'WDT_LOAD': 0x60000004,
+    'WDT_STAT': 0x60000008, 'TIMER0': 0x70000000, 'TIMER1': 0x70000004,
+    'TIMER_CTL': 0x70000008, 'INT_STATUS': 0x80000000, 'INT_ENABLE': 0x80000004,
+    'INT_CLEAR': 0x80000008, 'DMA_STATUS': 0x90000000, 'DMA_CTL': 0x90000004,
+    'DMA_ADDR': 0x90000008, 'DMA_LEN': 0x9000000C, 'CACHE_CTL': 0xA0000000,
+    'CACHE_FLUSH': 0xA0000004, 'MMU_CTL': 0xA0000008, 'MMU_TTB': 0xA000000C,
+    
+    # Apple A12+ specific
+    'APRR_CTL': 0x20E00000, 'APRR_STAT': 0x20E00004, 'PAC_CTL': 0x20E01000,
+    'PAC_STAT': 0x20E01004, 'SEP_STATE': 0x20E02000, 'DIT_CTL': 0x20E03000,
+    'PPL_CTL': 0x20E04000, 'SCEP_CTL': 0x20E05000,
+    
+    # Qualcomm specific
+    'TZ_CTL': 0xFC400000, 'TZ_STAT': 0xFC400004, 'QFP_CTL': 0xFC400100,
+    'SMMU_CTL': 0xFD000000, 'SMMU_STAT': 0xFD000004, 'HLOS_CTL': 0xFE000000,
+    
+    # MediaTek specific
+    'BROM_CTL': 0x10000000, 'BROM_STAT': 0x10000004, 'DA_CTL': 0x10001000,
+    'DA_STAT': 0x10001004, 'PMIC_WDT': 0x1C000000, 'PMIC_STAT': 0x1C000004,
+    
+    # Samsung Exynos specific
+    'KNOX_CTL': 0x10060000, 'KNOX_STAT': 0x10060004, 'RKP_CTL': 0x10070000,
+    'DEFEX_CTL': 0x10080000, 'TIMA_CTL': 0x10090000,
+    
+    # USB4 v2.0 registers
+    'USB4_CAP': 0x1000, 'USB4_BW': 0x1004, 'USB4_TUNNEL': 0x1100,
+    'PAM4_CTL': 0x3000, 'PAM4_STAT': 0x3004, 'CMA_CTL': 0x4000,
+    'DPP_CTL': 0x4004, 'ATTEST_CTL': 0x4008,
+    
+    # Watchdog registers (all SoCs)
+    'WDT_APPLE': 0x20E00000, 'WDT_QCOM': 0x02000000, 'WDT_MTK': 0x10000000,
+    'WDT_EXYNOS': 0x10060000, 'WDT_ROCKCHIP': 0x20000000, 'WDT_ALLWINNER': 0x01C20000,
 }
 
+# Register names for reverse lookup
 REG_NAMES = {v: k for k, v in REGISTERS.items()}
+
+# Critical registers (write-protected in normal operation)
+CRITICAL = {
+    0x10000000, 0x10000004, 0x10000008, 0x20000000, 0x30000000,
+    0x20E00000, 0x20E01000, 0x20E02000, 0xFC400000, 0xFD000000,
+    0x10060000, 0x10070000, 0x4000, 0x4004, 0x4008,
+}
+
 REG_NAMES.update({
     0x10000000: "CPUID", 0x10000004: "SYSCFG", 0x10000008: "RST_CTL",
     0x20000000: "PWR_CTL", 0x20000004: "PWR_STAT",
@@ -71,10 +111,82 @@ CRITICAL = {0x10000000, 0x10000004, 0x10000008, 0x20000000, 0x30000000}
 BIT_OPS = {'SET':'SET', '1':'SET', 'CLEAR':'CLEAR', '0':'CLEAR',
            'TOGGLE':'TOGGLE', 'FLIP':'TOGGLE', 'TEST':'TEST'}
 
+def detect_soc_from_regs(dev) -> str:
+    """Auto-detect SoC family by reading known registers"""
+    soc_signatures = {
+        'APPLE': [0x20E00000, 0x20E01000, 0x20E02000],
+        'QUALCOMM': [0xFC400000, 0xFD000000, 0x02000000],
+        'MEDIATEK': [0x10000000, 0x1C000000],
+        'SAMSUNG': [0x10060000, 0x10070000],
+        'ROCKCHIP': [0x20000000],
+        'ALLWINNER': [0x01C20000],
+        'GENERIC': [],
+    }
+    
+    for soc, addrs in soc_signatures.items():
+        for addr in addrs:
+            try:
+                data, ok = read_state(dev, addr, 4)
+                if ok and data and data != b'\x00\x00\x00\x00':
+                    return soc
+            except:
+                pass
+    return 'GENERIC'
 
-# =============================================================================
-# UTILITY FUNCTIONS
-# =============================================================================
+
+def get_soc_register_map(soc: str) -> dict:
+    """Get register map for specific SoC"""
+    soc_maps = {
+        'APPLE': {
+            'name': 'Apple A12+',
+            'registers': {
+                'APRR_CTL': 0x20E00000, 'APRR_STAT': 0x20E00004,
+                'PAC_CTL': 0x20E01000, 'PAC_STAT': 0x20E01004,
+                'SEP_STATE': 0x20E02000, 'DIT_CTL': 0x20E03000,
+                'PPL_CTL': 0x20E04000, 'SCEP_CTL': 0x20E05000,
+                'WDT_APPLE': 0x20E00000,
+            },
+            'critical': [0x20E00000, 0x20E01000, 0x20E02000],
+            'description': 'Apple A12-A18+ with PAC, APRR, SEP',
+        },
+        'QUALCOMM': {
+            'name': 'Qualcomm Snapdragon',
+            'registers': {
+                'TZ_CTL': 0xFC400000, 'TZ_STAT': 0xFC400004,
+                'QFP_CTL': 0xFC400100, 'SMMU_CTL': 0xFD000000,
+                'HLOS_CTL': 0xFE000000, 'WDT_QCOM': 0x02000000,
+            },
+            'critical': [0xFC400000, 0xFD000000],
+            'description': 'Qualcomm with TrustZone, SMMU',
+        },
+        'MEDIATEK': {
+            'name': 'MediaTek',
+            'registers': {
+                'BROM_CTL': 0x10000000, 'BROM_STAT': 0x10000004,
+                'DA_CTL': 0x10001000, 'DA_STAT': 0x10001004,
+                'PMIC_WDT': 0x1C000000, 'WDT_MTK': 0x10000000,
+            },
+            'critical': [0x10000000, 0x1C000000],
+            'description': 'MediaTek with BROM, Download Agent',
+        },
+        'SAMSUNG': {
+            'name': 'Samsung Exynos',
+            'registers': {
+                'KNOX_CTL': 0x10060000, 'KNOX_STAT': 0x10060004,
+                'RKP_CTL': 0x10070000, 'DEFEX_CTL': 0x10080000,
+                'TIMA_CTL': 0x10090000, 'WDT_EXYNOS': 0x10060000,
+            },
+            'critical': [0x10060000, 0x10070000],
+            'description': 'Samsung Exynos with Knox, RKP',
+        },
+    }
+    return soc_maps.get(soc, {
+        'name': 'Generic',
+        'registers': {},
+        'critical': [],
+        'description': 'Generic ARM SoC',
+    })
+
 def parse_addr(s: str) -> int:
     s = str(s).strip()
     if s.lower().startswith('0x'): return int(s[2:], 16)
@@ -216,18 +328,22 @@ def display_dump(data: bytes, addr: int):
     if zeros == len(data): print(f"\n    All zeros")
     elif data.count(b'\xff') == len(data): print(f"\n    All 0xFF")
 
-
 # =============================================================================
 # SUBCOMMANDS
 # =============================================================================
 def cmd_list(dev, args, force, verbose):
-    """List register banks"""
+    """List register banks and available commands"""
     banks = [
         ('SYSTEM_CTRL', 0x10000000, 0x1000, ['CPUID','SYSCFG','RST_CTL','CLK_SRC']),
         ('POWER_MGMT',  0x20000000, 0x1000, ['PWR_CTL','PWR_STAT','VOLT_CTL','PMIC_CFG']),
         ('CLOCK_CTRL',  0x30000000, 0x1000, ['CLK_CTL','PLL_CTL','DIV_CTL','FREQ_STAT']),
         ('GPIO_BANK0',  0x40000000, 0x1000, ['GPIO_DIR','GPIO_DATA','GPIO_SET','GPIO_CLR']),
         ('UART0',       0x50000000, 0x1000, ['UART_TX','UART_RX','UART_STAT','UART_BAUD']),
+        ('WATCHDOG',    0x60000000, 0x1000, ['WDT_CTL','WDT_LOAD','WDT_STAT']),
+        ('TIMER',       0x70000000, 0x1000, ['TIMER0','TIMER1','TIMER_CTL']),
+        ('INTERRUPT',   0x80000000, 0x1000, ['INT_STATUS','INT_ENABLE','INT_CLEAR']),
+        ('DMA',         0x90000000, 0x1000, ['DMA_STATUS','DMA_CTL','DMA_ADDR','DMA_LEN']),
+        ('MMU_CACHE',   0xA0000000, 0x1000, ['CACHE_CTL','CACHE_FLUSH','MMU_CTL','MMU_TTB']),
     ]
     
     print(f"\n[*] Register Banks:")
@@ -237,9 +353,35 @@ def cmd_list(dev, args, force, verbose):
             addr = REGISTERS.get(r, 0)
             print(f"      0x{addr:08X} {r}")
     
-    print(f"\n[*] Named Registers: {len(REGISTERS)} available")
+    print(f"\n[*] SoC-Specific Banks (auto-detected):")
+    soc = detect_soc_from_regs(dev)
+    soc_info = get_soc_register_map(soc)
+    if soc_info['registers']:
+        for name, addr in list(soc_info['registers'].items())[:8]:
+            print(f"      0x{addr:08X} {name} [{soc}]")
+    
+    print(f"\n[*] Available Commands:")
+    commands = [
+        ('read', 'Read register/memory'),
+        ('write', 'Write register/memory'),
+        ('dump', 'Dump memory region'),
+        ('compare', 'Compare two addresses'),
+        ('monitor', 'Monitor for changes'),
+        ('bit', 'Bit operations (set/clear/toggle/test)'),
+        ('field', 'Extract bit field'),
+        ('scan', 'Scan for pattern'),
+        ('bank', 'Show register bank'),
+        ('soc', 'Detect SoC information'),
+        ('watchdog', 'Watchdog control'),
+        ('secure', 'Security state analysis'),
+        ('perf', 'Performance metrics'),
+        ('all', 'Dump all registers'),
+    ]
+    for name, desc in commands:
+        print(f"    {name:<12} {desc}")
+    
+    print(f"\n[*] Named Registers: {len(REGISTERS)} total")
     return True
-
 
 def cmd_read(dev, args, force, verbose):
     """Read state"""
@@ -615,11 +757,252 @@ def cmd_bank(dev, args, force, verbose):
     print(f"[*] Available: {', '.join(b[0] for b in banks)}")
     return False
 
+# =============================================================================
+# NEW SUBCOMMANDS
+# =============================================================================
+
+def cmd_soc(dev, args, force, verbose):
+    """Detect and display SoC information"""
+    print("\n[*] SoC Detection:")
+    
+    # Try to detect from registers
+    soc = detect_soc_from_regs(dev)
+    soc_info = get_soc_register_map(soc)
+    
+    print(f"    Detected: {soc_info['name']}")
+    print(f"    Family:   {soc}")
+    print(f"    Desc:     {soc_info['description']}")
+    
+    # Try to read CPUID
+    data, ok = read_state(dev, 0x10000000, 4)
+    if ok and data:
+        cpuid = int.from_bytes(data[:4], 'little')
+        print(f"    CPUID:    0x{cpuid:08X}")
+    
+    # Try to read chip revision
+    for rev_addr in [0x10000004, 0x10000008, 0x1000000C]:
+        data, ok = read_state(dev, rev_addr, 4)
+        if ok and data and data != b'\x00\x00\x00\x00':
+            rev = int.from_bytes(data[:4], 'little')
+            print(f"    Revision: 0x{rev:08X}")
+            break
+    
+    # List SoC-specific registers
+    if soc_info['registers']:
+        print(f"\n[*] {soc}-specific registers:")
+        for name, addr in list(soc_info['registers'].items())[:8]:
+            print(f"    0x{addr:08X} {name}")
+    
+    return True
+
+
+def cmd_watchdog(dev, args, force, verbose):
+    """Watchdog control (read/disable/refresh)"""
+    if not args:
+        print("[!] Usage: rawstate watchdog <read|disable|refresh>")
+        return False
+    
+    action = args[0].lower()
+    
+    # Auto-detect watchdog address
+    soc = detect_soc_from_regs(dev)
+    wdt_addrs = {
+        'APPLE': 0x20E00000,
+        'QUALCOMM': 0x02000000,
+        'MEDIATEK': 0x10000000,
+        'SAMSUNG': 0x10060000,
+        'ROCKCHIP': 0x20000000,
+        'ALLWINNER': 0x01C20000,
+        'GENERIC': 0x40000000,
+    }
+    wdt_addr = wdt_addrs.get(soc, 0x40000000)
+    
+    print(f"\n[*] Watchdog @ 0x{wdt_addr:08X} ({soc})")
+    
+    if action == 'read':
+        data, ok = read_state(dev, wdt_addr, 4)
+        if ok and data:
+            val = int.from_bytes(data[:4], 'little')
+            print(f"    Value: 0x{val:08X}")
+            print(f"    Enabled: {'Yes' if val != 0 else 'No'}")
+        else:
+            print("[!] Read failed")
+    
+    elif action == 'disable':
+        if not confirm(
+            f"⚠️ Disabling watchdog on {soc}\n"
+            "Device may freeze without reset!\n"
+            "Power cycle may be required!",
+            'WDT', force):
+            return False
+        
+        if write_state(dev, wdt_addr, b'\x00\x00\x00\x00'):
+            print("[+] Watchdog disabled")
+            # Verify
+            data, ok = read_state(dev, wdt_addr, 4)
+            if ok and data and int.from_bytes(data[:4], 'little') == 0:
+                print("[+] Verified")
+            return True
+        print("[!] Disable failed")
+    
+    elif action == 'refresh':
+        # Write any non-zero value to refresh
+        if write_state(dev, wdt_addr, b'\x00\x00\x00\x01'):
+            print("[+] Watchdog refreshed")
+            return True
+        print("[!] Refresh failed")
+    
+    else:
+        print(f"[!] Unknown action: {action}")
+    
+    return False
+
+
+def cmd_secure(dev, args, force, verbose):
+    """Check security state (SEP, TrustZone, Secure Boot)"""
+    print("\n[*] Security State Analysis:")
+    
+    soc = detect_soc_from_regs(dev)
+    
+    # Check Apple SEP
+    if soc == 'APPLE':
+        data, ok = read_state(dev, 0x20E02000, 4)
+        if ok and data:
+            val = int.from_bytes(data[:4], 'little')
+            states = {0: 'Unknown', 1: 'Locked', 2: 'Unlocked', 3: 'Compromised'}
+            print(f"    SEP State: {states.get(val, 'Unknown')}")
+        
+        # Check PAC state
+        data, ok = read_state(dev, 0x20E01000, 4)
+        if ok and data:
+            val = int.from_bytes(data[:4], 'little')
+            print(f"    PAC: {'Enabled' if val & 1 else 'Disabled'}")
+    
+    # Check Qualcomm TrustZone
+    elif soc == 'QUALCOMM':
+        data, ok = read_state(dev, 0xFC400000, 4)
+        if ok and data:
+            val = int.from_bytes(data[:4], 'little')
+            print(f"    TrustZone: {'Secure' if val & 1 else 'Non-secure'}")
+    
+    # Check Secure Boot status (common)
+    for sb_addr in [0x10000000, 0x10000004, 0xFC400000]:
+        data, ok = read_state(dev, sb_addr, 4)
+        if ok and data and data != b'\x00\x00\x00\x00':
+            val = int.from_bytes(data[:4], 'little')
+            print(f"    Secure Boot: 0x{val:08X}")
+            break
+    
+    # Check debug status
+    print(f"\n[*] Debug Interfaces:")
+    for jtag_addr in [0x40000000, 0x10000008, 0x20000000]:
+        data, ok = read_state(dev, jtag_addr, 4)
+        if ok and data:
+            val = int.from_bytes(data[:4], 'little')
+            if val & 1:
+                print(f"    JTAG/SWD: Enabled @ 0x{jtag_addr:08X}")
+                break
+    else:
+        print(f"    JTAG/SWD: Disabled or not detected")
+    
+    return True
+
+
+def cmd_perf(dev, args, force, verbose):
+    """Performance monitoring (clock speeds, temps, voltage)"""
+    print("\n[*] Performance Metrics:")
+    
+    # Clock speed detection
+    for clk_addr in [0x30000000, 0x30000004, 0x1000000C]:
+        data, ok = read_state(dev, clk_addr, 4)
+        if ok and data and data != b'\x00\x00\x00\x00':
+            clk_val = int.from_bytes(data[:4], 'little')
+            # Guess frequency (register value often not direct)
+            if clk_val < 10000:
+                print(f"    Clock: {clk_val} MHz (raw 0x{clk_val:08X} @ 0x{clk_addr:08X})")
+            else:
+                print(f"    Clock: Raw 0x{clk_val:08X} @ 0x{clk_addr:08X}")
+            break
+    
+    # Temperature (common registers)
+    for temp_addr in [0x20000008, 0x2000000C, 0x10000010]:
+        data, ok = read_state(dev, temp_addr, 4)
+        if ok and data and data != b'\x00\x00\x00\x00':
+            temp_raw = int.from_bytes(data[:4], 'little')
+            # Rough temperature conversion (often 10-bit ADC)
+            if temp_raw < 1000:
+                temp_c = temp_raw / 10
+                print(f"    Temperature: {temp_c:.1f}°C (raw 0x{temp_raw:04X})")
+            break
+    
+    # Voltage
+    for volt_addr in [0x20000008, 0x20000000, 0x10000000]:
+        data, ok = read_state(dev, volt_addr, 4)
+        if ok and data and data != b'\x00\x00\x00\x00':
+            volt_val = int.from_bytes(data[:4], 'little')
+            if volt_val < 5000 and volt_val > 500:
+                print(f"    Voltage: {volt_val} mV")
+                break
+    
+    # Reset reason
+    for rst_addr in [0x10000008, 0x10000004]:
+        data, ok = read_state(dev, rst_addr, 4)
+        if ok and data:
+            rst_val = int.from_bytes(data[:4], 'little')
+            rst_map = {1: 'Power-on', 2: 'Watchdog', 3: 'Software', 4: 'External'}
+            print(f"    Reset: {rst_map.get(rst_val, 'Unknown')}")
+            break
+    
+    return True
+
+
+def cmd_all(dev, args, force, verbose):
+    """Dump all known registers"""
+    print("\n[*] Dumping all known registers:\n")
+    
+    # Group registers by bank
+    banks = {
+        'System': [0x10000000, 0x10000004, 0x10000008, 0x1000000C],
+        'Power': [0x20000000, 0x20000004, 0x20000008, 0x2000000C],
+        'Clock': [0x30000000, 0x30000004, 0x30000008],
+        'GPIO': [0x40000000, 0x40000004, 0x40000008, 0x4000000C],
+        'UART': [0x50000000, 0x50000004, 0x50000008, 0x5000000C],
+        'Watchdog': [0x60000000, 0x60000004, 0x60000008],
+        'Timer': [0x70000000, 0x70000004, 0x70000008],
+        'Interrupt': [0x80000000, 0x80000004, 0x80000008],
+        'DMA': [0x90000000, 0x90000004, 0x90000008, 0x9000000C],
+        'MMU/Cache': [0xA0000000, 0xA0000004, 0xA0000008, 0xA000000C],
+    }
+    
+    success_count = 0
+    for bank_name, addrs in banks.items():
+        print(f"\n[{bank_name}]")
+        for addr in addrs:
+            data, ok = read_state(dev, addr, 4)
+            if ok and data:
+                val = int.from_bytes(data[:4], 'little')
+                print(f"    0x{addr:08X} {REG_NAMES.get(addr, ''):<15} = 0x{val:08X}")
+                success_count += 1
+            else:
+                print(f"    0x{addr:08X} {REG_NAMES.get(addr, ''):<15} = [READ FAILED]")
+    
+    # Try to detect additional registers
+    print(f"\n[*] Attempting register discovery...")
+    for addr in range(0x10000000, 0x10001000, 0x100):
+        data, ok = read_state(dev, addr, 4)
+        if ok and data and data != b'\x00\x00\x00\x00' and data != b'\xff\xff\xff\xff':
+            val = int.from_bytes(data[:4], 'little')
+            if addr not in [a for bank in banks.values() for a in bank]:
+                print(f"    [DISCOVERED] 0x{addr:08X} = 0x{val:08X}")
+    
+    print(f"\n[+] Dumped {success_count} registers")
+    return True
 
 # =============================================================================
-# DISPATCH TABLE
+# EXPANDED DISPATCH TABLE
 # =============================================================================
 HANDLERS = {
+    # Existing
     'list': cmd_list, 'ls': cmd_list,
     'read': cmd_read, 'get': cmd_read, 'peek': cmd_read,
     'write': cmd_write, 'set': cmd_write, 'poke': cmd_write,
@@ -630,8 +1013,12 @@ HANDLERS = {
     'field': cmd_field, 'fields': cmd_field,
     'scan': cmd_scan, 'search': cmd_scan, 'find': cmd_scan,
     'bank': cmd_bank, 'banks': cmd_bank,
+    'soc': cmd_soc, 'detect': cmd_soc, 'chip': cmd_soc,
+    'watchdog': cmd_watchdog, 'wdt': cmd_watchdog,
+    'secure': cmd_secure, 'security': cmd_secure,
+    'perf': cmd_perf, 'performance': cmd_perf, 'stats': cmd_perf,
+    'all': cmd_all, 'everything': cmd_all, 'full': cmd_all,
 }
-
 
 # =============================================================================
 # MAIN COMMAND
@@ -649,7 +1036,19 @@ def cmd_rawstate(args=None) -> int:
         rawstate monitor CLK_CTL 0.5 30  - Monitor for changes
         rawstate bit GPIO_SET SET 15     - Set bit 15
         rawstate field STATUS 31:24      - Extract bit field
-        rawstate scan 0x40000000 0x40001000 FF 4  - Scan for pattern
+        rawstate scan 0x40000000 0x40001000 FF 4 - Scan for pattern
+        rawstate bank SYSTEM_CTRL        - Show register bank
+        rawstate soc                     - Detect SoC information
+        rawstate watchdog disable        - Disable watchdog
+        rawstate secure                  - Check security state
+        rawstate perf                    - Performance metrics
+        rawstate all                     - Dump all registers
+    
+    SoC Support:
+        Apple A12+: SEP, APRR, PAC, DIT, PPL detection
+        Qualcomm: TrustZone, SMMU, QFP detection
+        MediaTek: BROM, Download Agent detection
+        Samsung Exynos: Knox, RKP detection
     """
     
     if args is None:

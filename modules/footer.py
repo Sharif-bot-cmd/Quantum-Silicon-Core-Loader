@@ -45,41 +45,114 @@ except ImportError:
 # =============================================================================
 TIMEOUT = 15.0
 
-FOOTER_TYPES = ['STANDARD', 'EXTENDED', 'SECURITY', 'BOOT', 'LOADER', 'DEBUG', 'AUDIT', 'ALL']
+# =============================================================================
+# EXPANDED FOOTER TYPES (More comprehensive)
+# =============================================================================
+
+FOOTER_TYPES = [
+    'STANDARD', 'EXTENDED', 'SECURITY', 'BOOT', 'LOADER', 
+    'DEBUG', 'AUDIT', 'ALL', 'QSLCL', 'USB4', 'ENCRYPTION',
+    'SIGNATURE', 'CERTIFICATE', 'MANIFEST', 'METADATA', 'INTEGRITY'
+]
 
 FOOTER_SIZES = {
-    'STANDARD': 64, 'EXTENDED': 128, 'SECURITY': 256,
-    'BOOT': 128, 'LOADER': 256, 'DEBUG': 512, 'AUDIT': 1024, 'ALL': 1024,
+    'STANDARD': 64, 'EXTENDED': 128, 'SECURITY': 256, 'BOOT': 128,
+    'LOADER': 256, 'DEBUG': 512, 'AUDIT': 1024, 'ALL': 1024,
+    'QSLCL': 256, 'USB4': 512, 'ENCRYPTION': 512, 'SIGNATURE': 1024,
+    'CERTIFICATE': 2048, 'MANIFEST': 4096, 'METADATA': 256, 'INTEGRITY': 128,
 }
 
 FOOTER_ADDRS = {
     'STANDARD': 0xFFFF0000, 'EXTENDED': 0xFFFF1000, 'SECURITY': 0xFFFF2000,
     'BOOT': 0xFFFF3000, 'LOADER': 0xFFFF4000, 'DEBUG': 0xFFFF5000,
-    'AUDIT': 0xFFFF6000, 'ALL': 0xFFFF0000,
+    'AUDIT': 0xFFFF6000, 'ALL': 0xFFFF0000, 'QSLCL': 0xFFFF7000,
+    'USB4': 0xFFFF8000, 'ENCRYPTION': 0xFFFF9000, 'SIGNATURE': 0xFFFFA000,
+    'CERTIFICATE': 0xFFFFB000, 'MANIFEST': 0xFFFFC000, 'METADATA': 0xFFFFD000,
+    'INTEGRITY': 0xFFFFE000,
 }
 
-# Flag definitions
 FLAGS = {
-    'footer': {1:'VALIDATED', 2:'SIGNED', 4:'ENCRYPTED', 8:'COMPRESSED',
-               16:'DEBUG', 32:'PRODUCTION', 64:'DEVELOPMENT', 128:'TEST',
-               256:'SECURE_BOOT', 512:'TRUSTZONE', 1024:'ENCRYPTED_STORAGE'},
-    'loader': {1:'RELOCATABLE', 2:'PIC', 4:'COMPRESSED', 8:'ENCRYPTED',
-               16:'SIGNED', 32:'VERIFIED', 64:'TRUSTED', 128:'SECURE',
-               256:'DEBUG_SYMBOLS', 512:'STRIPPED', 1024:'SHARED', 2048:'EXECUTABLE'},
-    'debug': {1:'LOG', 2:'TRACE', 4:'PROFILING', 8:'MEM_DEBUG',
-              16:'ASSERT', 32:'BREAK', 64:'METRICS', 128:'STACK_PROTECT'},
-    'security': {1:'SECURE_BOOT', 2:'TRUSTZONE', 4:'ENCRYPTION',
-                 8:'INTEGRITY', 16:'ANTI_ROLLBACK', 32:'TAMPER_DETECT',
-                 64:'SECURE_DEBUG_OFF', 128:'SECURE_STORAGE', 256:'KEY_PROTECT'},
+    'footer': {
+        1:'VALIDATED', 2:'SIGNED', 4:'ENCRYPTED', 8:'COMPRESSED',
+        16:'DEBUG', 32:'PRODUCTION', 64:'DEVELOPMENT', 128:'TEST',
+        256:'SECURE_BOOT', 512:'TRUSTZONE', 1024:'ENCRYPTED_STORAGE',
+        2048:'ANTI_ROLLBACK', 4096:'SECURE_DEBUG_DISABLED', 8192:'JTAG_LOCKED'
+    },
+    'loader': {
+        1:'RELOCATABLE', 2:'PIC', 4:'COMPRESSED', 8:'ENCRYPTED',
+        16:'SIGNED', 32:'VERIFIED', 64:'TRUSTED', 128:'SECURE',
+        256:'DEBUG_SYMBOLS', 512:'STRIPPED', 1024:'SHARED', 2048:'EXECUTABLE',
+        4096:'PIE', 8192:'NX_COMPAT', 16384:'THUMB_MODE', 32768:'ARM64_MODE'
+    },
+    'debug': {
+        1:'LOG', 2:'TRACE', 4:'PROFILING', 8:'MEM_DEBUG',
+        16:'ASSERT', 32:'BREAK', 64:'METRICS', 128:'STACK_PROTECT',
+        256:'CANARY', 512:'ASAN', 1024:'UBSAN', 2048:'LSAN'
+    },
+    'security': {
+        1:'SECURE_BOOT', 2:'TRUSTZONE', 4:'ENCRYPTION', 8:'INTEGRITY',
+        16:'ANTI_ROLLBACK', 32:'TAMPER_DETECT', 64:'SECURE_DEBUG_OFF',
+        128:'SECURE_STORAGE', 256:'KEY_PROTECT', 512:'ATTESTATION',
+        1024:'CMA_ENABLED', 2048:'DPP_ENABLED', 4096:'PFS_ENABLED'
+    },
+    'qslcl': {
+        1:'BOOTSTRAP_LOADED', 2:'VM_ACTIVE', 4:'USB4_ENABLED',
+        8:'ENCRYPTION_ACTIVE', 16:'WATCHDOG_DISABLED', 32:'RAWMODE_ACTIVE',
+        64:'DFU_DETECTED', 128:'EDL_DETECTED', 256:'BROM_DETECTED'
+    },
+    'usb4': {
+        1:'80GBPS_ENABLED', 2:'PAM4_ENCODING', 4:'4LANE_AGGREGATION',
+        8:'PCIE_TUNNEL', 16:'DP_TUNNEL', 32:'USB3_TUNNEL',
+        64:'CMA_ACTIVE', 128:'DPP_ACTIVE', 256:'ATTESTATION_READY'
+    },
+    'integrity': {
+        1:'CRC32_VALID', 2:'SHA256_VALID', 4:'SHA512_VALID',
+        8:'HMAC_VALID', 16:'MERKLE_VALID', 32:'CERTIFICATE_VALID'
+    },
 }
 
-ARCH_MAP = {0:'ARM32', 1:'ARM64', 2:'x86', 3:'x64', 4:'MIPS', 5:'RISCV32', 6:'RISCV64'}
-SOURCE_MAP = {0:'POWER_ON', 1:'SOFT_RESET', 2:'WATCHDOG', 3:'RECOVERY', 4:'BOOTLOADER', 5:'CRASH', 6:'SLEEP'}
-REASON_MAP = {0:'NORMAL', 1:'UPDATE', 2:'FACTORY', 3:'SECURITY', 4:'HW_FAIL', 5:'SW_FAIL', 6:'WDT'}
-STATUS_MAP = {0:'OK', 1:'FAILED', 2:'CRASHED', 3:'WDT', 4:'SEC_FAIL', 5:'HW_ERROR'}
-STATE_MAP = {0:'SECURE', 1:'WARNING', 2:'COMPROMISED', 3:'TAMPERED', 4:'LOCKED'}
-CRYPTO_MAP = {1:'AES-128', 2:'AES-256', 3:'RSA-2048', 4:'RSA-4096', 5:'ECDSA-P256', 6:'ECDSA-P384', 7:'ECDSA-P521'}
+ARCH_MAP = {
+    0:'ARM32', 1:'ARM64', 2:'x86', 3:'x64', 4:'MIPS', 5:'RISCV32', 6:'RISCV64',
+    7:'PowerPC', 8:'SPARC32', 9:'SPARC64', 10:'ARC', 11:'AVR', 12:'MSP430',
+    13:'Xtensa', 14:'RISC-V128', 15:'ARMv8.3-A', 16:'ARMv9-A'
+}
 
+SOURCE_MAP = {
+    0:'POWER_ON', 1:'SOFT_RESET', 2:'WATCHDOG', 3:'RECOVERY', 
+    4:'BOOTLOADER', 5:'CRASH', 6:'SLEEP', 7:'DFU_MODE',
+    8:'EDL_MODE', 9:'BROM_MODE', 10:'JTAG_ATTACH', 11:'DEBUGGER'
+}
+
+REASON_MAP = {
+    0:'NORMAL', 1:'UPDATE', 2:'FACTORY', 3:'SECURITY', 
+    4:'HW_FAIL', 5:'SW_FAIL', 6:'WDT', 7:'PANIC',
+    8:'OOM', 9:'EXCEPTION', 10:'USER_REQUEST', 11:'POWER_LOSS'
+}
+
+STATUS_MAP = {
+    0:'OK', 1:'FAILED', 2:'CRASHED', 3:'WDT', 
+    4:'SEC_FAIL', 5:'HW_ERROR', 6:'TIMEOUT', 7:'CORRUPTED',
+    8:'INVALID_SIGNATURE', 9:'ROLLBACK_DETECTED', 10:'TAMPERED'
+}
+
+STATE_MAP = {
+    0:'SECURE', 1:'WARNING', 2:'COMPROMISED', 3:'TAMPERED', 
+    4:'LOCKED', 5:'RECOVERY', 6:'DEVELOPMENT', 7:'FACTORY',
+    8:'BRICKED', 9:'JAILBROKEN', 10:'BOOTLOOP'
+}
+
+CRYPTO_MAP = {
+    1:'AES-128', 2:'AES-256', 3:'RSA-2048', 4:'RSA-4096',
+    5:'ECDSA-P256', 6:'ECDSA-P384', 7:'ECDSA-P521', 8:'ChaCha20-Poly1305',
+    9:'AES-256-GCM', 10:'Ed25519', 11:'Ed448', 12:'Kyber-768',
+    13:'Dilithium-2', 14:'SPHINCS+-128f'
+}
+
+HASH_MAP = {
+    1:'SHA-1', 2:'SHA-256', 3:'SHA-384', 4:'SHA-512',
+    5:'MD5', 6:'CRC32', 7:'BLAKE2s', 8:'BLAKE2b',
+    9:'SHA3-256', 10:'SHA3-512', 11:'SHAKE128', 12:'SHAKE256'
+}
 
 # =============================================================================
 # UTILITY FUNCTIONS
@@ -294,10 +367,204 @@ def parse_audit(data: bytes) -> dict:
         r['error'] = str(e)
     return r
 
+def parse_qslcl(data: bytes) -> dict:
+    """Parse QSLCL-specific footer"""
+    r = {'type': 'QSLCL'}
+    if len(data) < 64:
+        return r
+    try:
+        r['magic'] = data[0:8].decode('ascii', 'ignore').rstrip('\x00').strip()
+        r['version_major'] = struct.unpack('<I', data[8:12])[0]
+        r['version_minor'] = struct.unpack('<I', data[12:16])[0]
+        r['version_patch'] = struct.unpack('<I', data[16:20])[0]
+        r['timestamp'] = struct.unpack('<I', data[20:24])[0]
+        r['build_id'] = data[24:40].hex()
+        r['features'] = struct.unpack('<I', data[40:44])[0]
+        r['features_list'] = parse_flags(r['features'], 'qslcl')
+        r['flags'] = struct.unpack('<I', data[44:48])[0]
+        r['flags_list'] = parse_flags(r['flags'], 'footer')
+        r['version_str'] = f"{r['version_major']}.{r['version_minor']}.{r['version_patch']}"
+        r['timestamp_str'] = format_ts(r['timestamp'])
+        
+        if len(data) >= 64:
+            r['git_hash'] = data[48:64].hex()[:16]
+    except Exception as e:
+        r['error'] = str(e)
+    return r
+
+
+def parse_usb4(data: bytes) -> dict:
+    """Parse USB4 v2.0 footer"""
+    r = {'type': 'USB4'}
+    if len(data) < 48:
+        return r
+    try:
+        r['magic'] = data[0:8].decode('ascii', 'ignore').rstrip('\x00').strip()
+        r['version'] = struct.unpack('<I', data[8:12])[0]
+        r['max_bandwidth'] = struct.unpack('<I', data[12:16])[0]
+        r['encoding'] = struct.unpack('<I', data[16:20])[0]
+        r['encoding_name'] = {1:'NRZ', 2:'PAM3', 3:'PAM4'}.get(r['encoding'], 'Unknown')
+        r['lanes'] = struct.unpack('<I', data[20:24])[0]
+        r['tunnels'] = struct.unpack('<I', data[24:28])[0]
+        r['tunnels_list'] = []
+        if r['tunnels'] & 0x01: r['tunnels_list'].append('PCIe')
+        if r['tunnels'] & 0x02: r['tunnels_list'].append('DisplayPort')
+        if r['tunnels'] & 0x04: r['tunnels_list'].append('USB3')
+        r['security'] = struct.unpack('<I', data[28:32])[0]
+        r['security_list'] = parse_flags(r['security'], 'usb4')
+        r['timestamp'] = struct.unpack('<I', data[32:36])[0]
+        r['timestamp_str'] = format_ts(r['timestamp'])
+        r['bandwidth_gbps'] = r['max_bandwidth'] // 1000
+    except Exception as e:
+        r['error'] = str(e)
+    return r
+
+
+def parse_encryption(data: bytes) -> dict:
+    """Parse encryption footer"""
+    r = {'type': 'ENCRYPTION'}
+    if len(data) < 64:
+        return r
+    try:
+        r['magic'] = data[0:8].decode('ascii', 'ignore').rstrip('\x00').strip()
+        r['version'] = struct.unpack('<I', data[8:12])[0]
+        r['cipher'] = struct.unpack('<I', data[12:16])[0]
+        r['cipher_name'] = CRYPTO_MAP.get(r['cipher'], f'0x{r["cipher"]:X}')
+        r['hash_algo'] = struct.unpack('<I', data[16:20])[0]
+        r['hash_name'] = HASH_MAP.get(r['hash_algo'], f'0x{r["hash_algo"]:X}')
+        r['key_size'] = struct.unpack('<I', data[20:24])[0]
+        r['session_id'] = data[24:32].hex()
+        r['flags'] = struct.unpack('<I', data[32:36])[0]
+        r['flags_list'] = parse_flags(r['flags'], 'security')
+        r['timestamp'] = struct.unpack('<I', data[36:40])[0]
+        r['timestamp_str'] = format_ts(r['timestamp'])
+        
+        if len(data) >= 64:
+            r['key_fingerprint'] = data[40:64].hex()[:32]
+    except Exception as e:
+        r['error'] = str(e)
+    return r
+
+
+def parse_signature(data: bytes) -> dict:
+    """Parse signature footer"""
+    r = {'type': 'SIGNATURE'}
+    if len(data) < 128:
+        return r
+    try:
+        r['magic'] = data[0:8].decode('ascii', 'ignore').rstrip('\x00').strip()
+        r['version'] = struct.unpack('<I', data[8:12])[0]
+        r['sig_type'] = struct.unpack('<I', data[12:16])[0]
+        r['sig_type_name'] = CRYPTO_MAP.get(r['sig_type'], f'0x{r["sig_type"]:X}')
+        r['hash_algo'] = struct.unpack('<I', data[16:20])[0]
+        r['hash_name'] = HASH_MAP.get(r['hash_algo'], f'0x{r["hash_algo"]:X}')
+        r['key_id'] = data[20:32].hex()
+        r['signer'] = data[32:64].decode('ascii', 'ignore').rstrip('\x00').strip()
+        r['signature'] = data[64:96].hex()[:32] + '...' if len(data) >= 96 else ''
+        r['timestamp'] = struct.unpack('<I', data[96:100])[0]
+        r['timestamp_str'] = format_ts(r['timestamp'])
+        r['validity_days'] = struct.unpack('<I', data[100:104])[0]
+    except Exception as e:
+        r['error'] = str(e)
+    return r
+
+
+def parse_certificate(data: bytes) -> dict:
+    """Parse certificate footer"""
+    r = {'type': 'CERTIFICATE'}
+    if len(data) < 128:
+        return r
+    try:
+        r['magic'] = data[0:8].decode('ascii', 'ignore').rstrip('\x00').strip()
+        r['version'] = struct.unpack('<I', data[8:12])[0]
+        r['serial'] = data[12:20].hex()
+        r['issuer'] = data[20:52].decode('ascii', 'ignore').rstrip('\x00').strip()
+        r['subject'] = data[52:84].decode('ascii', 'ignore').rstrip('\x00').strip()
+        r['not_before'] = struct.unpack('<I', data[84:88])[0]
+        r['not_after'] = struct.unpack('<I', data[88:92])[0]
+        r['not_before_str'] = format_ts(r['not_before'])
+        r['not_after_str'] = format_ts(r['not_after'])
+        r['pubkey_type'] = struct.unpack('<I', data[92:96])[0]
+        r['pubkey_name'] = CRYPTO_MAP.get(r['pubkey_type'], f'0x{r["pubkey_type"]:X}')
+    except Exception as e:
+        r['error'] = str(e)
+    return r
+
+
+def parse_manifest(data: bytes) -> dict:
+    """Parse manifest footer (file list)"""
+    r = {'type': 'MANIFEST', 'files': []}
+    if len(data) < 32:
+        return r
+    try:
+        r['magic'] = data[0:8].decode('ascii', 'ignore').rstrip('\x00').strip()
+        r['version'] = struct.unpack('<I', data[8:12])[0]
+        r['file_count'] = struct.unpack('<I', data[12:16])[0]
+        r['timestamp'] = struct.unpack('<I', data[16:20])[0]
+        r['timestamp_str'] = format_ts(r['timestamp'])
+        
+        pos = 20
+        for i in range(min(r['file_count'], 10)):  # Limit to 10 files
+            if pos + 60 > len(data):
+                break
+            filename = data[pos:pos+32].decode('ascii', 'ignore').rstrip('\x00').strip()
+            file_hash = data[pos+32:pos+60].hex()
+            r['files'].append({'name': filename, 'hash': file_hash})
+            pos += 60
+    except Exception as e:
+        r['error'] = str(e)
+    return r
+
+
+def parse_integrity(data: bytes) -> dict:
+    """Parse integrity footer (CRC32 + SHA + HMAC)"""
+    r = {'type': 'INTEGRITY'}
+    if len(data) < 88:
+        return r
+    try:
+        r['magic'] = data[0:8].decode('ascii', 'ignore').rstrip('\x00').strip()
+        r['version'] = struct.unpack('<I', data[8:12])[0]
+        r['crc32'] = struct.unpack('<I', data[12:16])[0]
+        r['sha256'] = data[16:48].hex()
+        r['sha512'] = data[48:80].hex()[:32] + '...' if len(data) >= 80 else ''
+        r['flags'] = struct.unpack('<I', data[80:84])[0]
+        r['flags_list'] = parse_flags(r['flags'], 'integrity')
+        r['hmac_present'] = len(data) >= 116
+        r['timestamp'] = struct.unpack('<I', data[84:88])[0]
+        r['timestamp_str'] = format_ts(r['timestamp'])
+    except Exception as e:
+        r['error'] = str(e)
+    return r
 
 def parse_all(data: bytes) -> dict:
-    """Auto-detect footer type"""
-    parsers = [parse_standard, parse_extended, parse_security, parse_boot, parse_loader, parse_debug, parse_audit]
+    """Auto-detect footer type from magic bytes"""
+    parsers = [
+        parse_standard, parse_extended, parse_security, parse_boot, 
+        parse_loader, parse_debug, parse_audit, parse_qslcl,
+        parse_usb4, parse_encryption, parse_signature, parse_certificate,
+        parse_manifest, parse_integrity
+    ]
+    
+    # First check magic bytes for fast detection
+    if len(data) >= 8:
+        magic = data[0:8].decode('ascii', 'ignore').rstrip('\x00').strip()
+        magic_map = {
+            'QSLCL': parse_qslcl, 'USB4': parse_usb4, 'ENCRYPT': parse_encryption,
+            'SIG': parse_signature, 'CERT': parse_certificate, 'MANIFEST': parse_manifest,
+            'INTEG': parse_integrity, 'SECURE': parse_security, 'BOOT': parse_boot,
+            'LOADER': parse_loader, 'DEBUG': parse_debug, 'AUDIT': parse_audit,
+        }
+        if magic in magic_map:
+            try:
+                result = magic_map[magic](data)
+                result['detected_type'] = result.get('type', magic)
+                result['confidence'] = 95
+                result['detection_method'] = 'magic'
+                return result
+            except:
+                pass
+    
+    # Fallback to scoring
     best, best_score = None, -1
     
     for parser in parsers:
@@ -308,16 +575,21 @@ def parse_all(data: bytes) -> dict:
             ts = result.get('timestamp', 0)
             if 946684800 < ts < 2000000000: score += 20
             if 0 < result.get('version', 0) < 0xFFFF: score += 15
+            if result.get('crc32'): score += 10
+            if result.get('signature'): score += 25
             if result.get('error'): score -= 40
+            
             if score > best_score:
                 best_score, best = score, result
-        except: pass
+        except:
+            pass
     
     if best:
         best['detected_type'] = best.get('type', 'UNKNOWN')
         best['confidence'] = best_score
-    return best or {'type': 'UNKNOWN', 'error': 'Could not detect'}
-
+        best['detection_method'] = 'scoring'
+    
+    return best or {'type': 'UNKNOWN', 'error': 'Could not detect footer type'}
 
 def validate_footer(data: bytes, info: dict) -> dict:
     """Validate footer integrity"""
@@ -382,6 +654,40 @@ def security_assess(info: dict) -> List[str]:
         flags = info.get('flags_list', [])
         if 'SIGNED' not in flags and 'VERIFIED' not in flags:
             a.append("🔴 Loader not signed/verified")
+
+    elif ftype == 'USB4':
+        if info.get('bandwidth_gbps', 0) >= 80:
+            a.append(f"🟢 USB4 v2.0 {info['bandwidth_gbps']}Gbps mode")
+        if info.get('security_list'):
+            if 'CMA_ACTIVE' in info['security_list']:
+                a.append("🟢 CMA attestation enabled")
+            if 'DPP_ACTIVE' in info['security_list']:
+                a.append("🟢 DPP encryption active")
+    
+    elif ftype == 'ENCRYPTION':
+        cipher = info.get('cipher_name', '')
+        if 'ChaCha20' in cipher or 'AES-256' in cipher:
+            a.append(f"🟢 Strong encryption: {cipher}")
+        elif 'AES-128' in cipher:
+            a.append(f"🟡 Moderate encryption: {cipher}")
+        else:
+            a.append(f"🔴 Unknown/weak encryption: {cipher}")
+    
+    elif ftype == 'SIGNATURE':
+        if info.get('sig_type_name'):
+            if any(strong in info['sig_type_name'] for strong in ['ECDSA-P521', 'Ed25519', 'Kyber']):
+                a.append(f"🟢 Strong signature: {info['sig_type_name']}")
+            else:
+                a.append(f"🟡 Signature: {info['sig_type_name']}")
+    
+    elif ftype == 'INTEGRITY':
+        if info.get('flags_list'):
+            if 'CRC32_VALID' in info['flags_list']:
+                a.append("✅ CRC32 integrity check passed")
+            if 'SHA256_VALID' in info['flags_list']:
+                a.append("✅ SHA256 integrity check passed")
+            if 'HMAC_VALID' in info['flags_list']:
+                a.append("✅ HMAC authentication valid")
     
     if info.get('error'):
         a.append("🔴 Parse errors - possible corruption")
@@ -430,6 +736,66 @@ def display_info(info: dict):
         if 'tamper_events' in info: print(f"    Tamper:   {info['tamper_events']}")
     elif ftype == 'ALL' and 'detected_type' in info:
         print(f"    Detected: {info['detected_type']} ({info.get('confidence', 0)}%)")
+    elif ftype == 'QSLCL':
+        if 'version_str' in info:
+            print(f"    Version:  {info['version_str']}")
+        if 'build_id' in info:
+            print(f"    Build ID: {info['build_id'][:16]}...")
+        if info.get('features_list'):
+            print(f"    Features: {', '.join(info['features_list'][:5])}")
+    
+    elif ftype == 'USB4':
+        if 'bandwidth_gbps' in info:
+            print(f"    Speed:    {info['bandwidth_gbps']} Gbps")
+        if 'encoding_name' in info:
+            print(f"    Encoding: {info['encoding_name']}")
+        if info.get('tunnels_list'):
+            print(f"    Tunnels:  {', '.join(info['tunnels_list'])}")
+        if info.get('security_list'):
+            print(f"    Security: {', '.join(info['security_list'][:3])}")
+    
+    elif ftype == 'ENCRYPTION':
+        if info.get('cipher_name'):
+            print(f"    Cipher:   {info['cipher_name']}")
+        if info.get('hash_name'):
+            print(f"    Hash:     {info['hash_name']}")
+        if 'key_size' in info:
+            print(f"    Key Size: {info['key_size']} bits")
+        if 'session_id' in info:
+            print(f"    Session:  {info['session_id'][:16]}...")
+    
+    elif ftype == 'SIGNATURE':
+        if info.get('sig_type_name'):
+            print(f"    Type:     {info['sig_type_name']}")
+        if info.get('signer'):
+            print(f"    Signer:   {info['signer'][:32]}")
+        if info.get('validity_days'):
+            print(f"    Valid:    {info['validity_days']} days")
+    
+    elif ftype == 'CERTIFICATE':
+        if info.get('issuer'):
+            print(f"    Issuer:   {info['issuer'][:32]}")
+        if info.get('subject'):
+            print(f"    Subject:  {info['subject'][:32]}")
+        if info.get('not_before_str') and info.get('not_after_str'):
+            print(f"    Validity: {info['not_before_str']} → {info['not_after_str']}")
+    
+    elif ftype == 'MANIFEST':
+        if 'file_count' in info:
+            print(f"    Files:    {info['file_count']}")
+        if info.get('files'):
+            for f in info['files'][:3]:
+                print(f"      📄 {f['name']}: {f['hash'][:16]}...")
+            if len(info['files']) > 3:
+                print(f"      ... and {len(info['files']) - 3} more")
+    
+    elif ftype == 'INTEGRITY':
+        if 'crc32' in info:
+            print(f"    CRC32:    0x{info['crc32']:08X}")
+        if 'sha256' in info:
+            print(f"    SHA256:   {info['sha256'][:16]}...")
+        if info.get('flags_list'):
+            print(f"    Verified: {', '.join(info['flags_list'])}")
     
     # Flags
     for k in ['flags_list']:
@@ -438,7 +804,6 @@ def display_info(info: dict):
     
     if info.get('error'):
         print(f"    [!] Error: {info['error']}")
-
 
 def display_validation(v: dict):
     """Display validation"""
