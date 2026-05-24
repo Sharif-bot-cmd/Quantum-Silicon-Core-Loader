@@ -2365,31 +2365,38 @@ def main():
     new_cmd("ping", help="Latency test").set_defaults(func=cmd_ping)
     new_cmd("getinfo", help="Device info").set_defaults(func=cmd_getinfo)
 
-    # READ
-    r = new_cmd("read", help="Read from device")
-    r.add_argument("target", help="Target (partition/address)")
-    r.add_argument("arg2", nargs="?", help="Output file or size")
-    r.add_argument("-o", "--output", help="Output file")
-    r.add_argument("--size", type=lambda x: int(x, 0), help="Bytes to read")
-    r.add_argument("--chunk-size", type=lambda x: int(x, 0), default=131072)
-    r.add_argument("--resume", action="store_true", help="Resume interrupted read")
+    r = new_cmd("read", help="Read partition from device")
+    r.add_argument("partition", help="Partition name (use '--list' to see available)")
+    r.add_argument("output", nargs="?", help="Output file (default: <partition>.bin)")
+    r.add_argument("--output", "-o", dest="output_file", help="Output file")
+    r.add_argument("--chunk-size", type=lambda x: int(x, 0), default=65536, 
+                   help="Chunk size (default: 64KB)")
+    r.add_argument("--verify", action="store_true", help="Verify after read")
+    r.add_argument("--list", action="store_true", help="List available partitions")
     r.set_defaults(func=cmd_read)
 
-    # WRITE
-    w = new_cmd("write", help="Write to device")
-    w.add_argument("target", help="Target (partition/address)")
-    w.add_argument("data", help="Data source (file/hex)")
-    w.add_argument("--chunk-size", type=lambda x: int(x, 0), default=65536)
-    w.add_argument("--no-verify", action="store_true", help="Skip verification")
-    w.add_argument("--force", action="store_true", help="Skip safety checks")
+    w = new_cmd("write", help="Write to partition (NO raw addresses)")
+    w.add_argument("partition", help="Partition name")
+    w.add_argument("data", nargs="?", help="Data source (file.bin)")
+    w.add_argument("--fill", dest="fill_pattern", help="Fill pattern (FF, 00, random)")
+    w.add_argument("--output", "-o", dest="output_file", help="Output file")
+    w.add_argument("--chunk-size", type=lambda x: int(x, 0), default=65536,
+                   help="Chunk size (default: 64KB)")
+    w.add_argument("--verify", action="store_true", help="Verify after write")
+    w.add_argument("--force", action="store_true", help="Force write to HIGH risk partitions")
+    w.add_argument("--list", action="store_true", help="List available partitions with risks")
     w.set_defaults(func=cmd_write)
 
-    # ERASE
-    e = new_cmd("erase", help="Erase region")
-    e.add_argument("target", help="Target (partition/address)")
-    e.add_argument("arg2", nargs="?", help="Size in bytes")
-    e.add_argument("--size", type=lambda x: int(x, 0), help="Bytes to erase")
-    e.add_argument("--force", action="store_true", help="Skip safety checks")
+    e = new_cmd("erase", help="Erase partition (NO raw addresses)")
+    e.add_argument("partition", help="Partition name (or partition+offset)")
+    e.add_argument("--size", type=lambda x: int(x, 0), help="Bytes to erase (default: entire partition)")
+    e.add_argument("--pattern", default="zero", 
+                   help="Erase pattern: zero, ff, aa, 55, random (default: zero)")
+    e.add_argument("--chunk-size", type=lambda x: int(x, 0), default=1048576,
+                   help="Chunk size (default: 1MB)")
+    e.add_argument("--verify", action="store_true", help="Verify after erase")
+    e.add_argument("--force", action="store_true", help="Force erase of HIGH risk partitions")
+    e.add_argument("--list", action="store_true", help="List available partitions with risks")
     e.set_defaults(func=cmd_erase)
 
     # PEEK / POKE
@@ -2406,13 +2413,15 @@ def main():
     po.set_defaults(func=cmd_poke)
 
     # DUMP
-    d = new_cmd("dump", help="Memory dump")
-    d.add_argument("address", help="Address/partition")
-    d.add_argument("size", nargs="?", help="Size to dump")
+    d = new_cmd("dump", help="Dump raw memory (address ranges only)")
+    d.add_argument("start", help="Start address (e.g., 0x00000000)")
+    d.add_argument("end_or_size", nargs="?", help="End address or --size value")
     d.add_argument("output", nargs="?", help="Output file")
-    d.add_argument("--verify", action="store_true", help="SHA256 verification")
-    d.add_argument("--compress", action="store_true", help="Gzip compress")
-    d.add_argument("--resume", action="store_true", help="Resume interrupted dump")
+    d.add_argument("--size", type=lambda x: int(x, 0), help="Size in bytes (use with start)")
+    d.add_argument("--output", "-o", dest="output_file", help="Output file")
+    d.add_argument("--chunk-size", type=lambda x: int(x, 0), default=4096,
+                   help="Chunk size (default: 4KB, DFU friendly)")
+    d.add_argument("--verify", action="store_true", help="Verify after dump")
     d.set_defaults(func=cmd_dump)
 
     # RAWMODE
