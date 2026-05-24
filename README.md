@@ -2,9 +2,9 @@
 
 Primary Core: **qslcl.elf**
 
-Assistant Module: **qslcl.bin (v0.6.9)**
+Assistant Module: **qslcl.bin (v0.7.0)**
 
-Universal Controller: **qslcl.py (v2.1.5)**
+Universal Controller: **qslcl.py (v2.1.6)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION_MATRIX.md)
 
@@ -28,14 +28,13 @@ QSLCL runs in:
 
 ---
 
-## What's New in **v2.1.5**
+## What's New in **v2.1.6**
 
-### 🗑️ Command Removal & Cleanup
+- fix the command in read, write, erase, dump for better operation.
 
-- **Removed `mode` command** - Streamlined command set, functionality merged into `config` and `rawmode`
-- **Cleaner command structure** - 26 total commands (down from 27)
-- **Improved error messages** - Better feedback for removed/deprecated commands
-- **Backward compatible** - Legacy scripts still work with warning messages
+## Whats New in **0.7.0**
+
+- remove the irrelevant dump command (since in dump cpmmand in qslcl.py theres already READ).
 
 
 ```
@@ -78,7 +77,7 @@ python qslcl.py hello --loader=qslcl.bin
 
 ---
 
-# Complete Command List (v2.1.5)
+# Complete Command List (v2.1.6)
 
 **Core Memory Operations:**
 | Command | Description |
@@ -97,10 +96,6 @@ python qslcl.py hello --loader=qslcl.bin
 | `hello` | Device handshake and capability detection |
 | `ping` | Round-trip latency testing |
 | `getinfo` | Comprehensive device information retrieval |
-| `partitions` | Partition table detection (MBR/GPT parsing) |
-| `usb-identify` | Check QSLCL USB exposure status |
-| `usb4` | USB4 v2.0 80Gbps status and control |
-| `dfu-boot` | Boot iOS device into DFU mode (like palera1n) |
 
 **System Control:**
 | Command | Description |
@@ -164,12 +159,6 @@ python qslcl.py dfu-boot
 python qslcl.py hello --loader=qslcl.bin --usb4
 python qslcl.py getinfo --loader=qslcl.bin
 python qslcl.py ping --loader=qslcl.bin
-
-# Check USB exposure status
-python qslcl.py usb-identify
-
-# Check USB4 v2.0 80Gbps status
-python qslcl.py usb4
 ```
 
 ## Automatic Watchdog Disabler (v2.1.4)
@@ -203,7 +192,7 @@ python qslcl.py hello --loader=qslcl.bin
 
 ```bash
 # Method 1: Standalone DFU boot (like palera1n)
-python qslcl.py dfu-boot
+python qslcl.py --dfu-boot
 
 # Expected output:
 # ============================================================
@@ -447,16 +436,6 @@ The watchdog disabler modifies hardware registers on **your own device** to prev
 python qslcl.py hello --loader=qslcl.bin --debug
 ```
 
-**Auto-DFU Not Detecting Device:**
-```bash
-python qslcl.py dfu-boot --debug
-```
-
-**Device Won't Enter DFU Mode:**
-```bash
-python qslcl.py dfu-boot --dfu-timeout 45
-```
-
 **Parser Detection Problems:**
 ```bash
 python qslcl.py hello --loader=qslcl.bin --debug
@@ -469,7 +448,7 @@ python build.py qslcl.bin --encrypt --debug
 
 **USB4 v2.0 Not Detected:**
 ```bash
-python qslcl.py usb4 --debug
+python qslcl.py --usb4 --debug
 python build.py qslcl.bin --usb4-v2 --debug
 ```
 

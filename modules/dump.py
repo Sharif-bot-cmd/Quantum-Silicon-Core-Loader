@@ -1,27 +1,26 @@
 #!/usr/bin/env python3
 """
-dump.py - QSLCL DUMP Command Module v2.1 (CLEANED)
-Binary memory dumping with resume, verification, compression, and metadata
+dump.py - QSLCL DUMP Command Module v2.2 (RAW ADDRESS ONLY)
+Simple raw memory dumper for low-level modes (DFU/EDL/BROM)
+
+NO partitions, NO parsing, NO auto-detection.
+Just dump from address A to address B.
 """
 
 import os
 import sys
-import re
 import struct
 import time
-import json
-import gzip
 import hashlib
-from typing import Optional, List, Tuple
+from typing import Optional
 
 # =============================================================================
-# IMPORTS - With proper fallbacks
+# IMPORTS
 # =============================================================================
 try:
     from qslcl import (
         scan_all,
         auto_loader_if_needed,
-        load_partitions,
         qslcl_dispatch,
         decode_runtime_result,
         encode_qslcl_structure,
@@ -33,7 +32,6 @@ except ImportError:
         from .qslcl import (
             scan_all,
             auto_loader_if_needed,
-            load_partitions,
             qslcl_dispatch,
             decode_runtime_result,
             encode_qslcl_structure,
@@ -47,126 +45,155 @@ except ImportError:
 # =============================================================================
 # CONSTANTS
 # =============================================================================
-MAX_DUMP_SIZE = 4 * 1024**3       # 4GB max
-DEFAULT_CHUNK = 65536             # 64KB
+DEFAULT_CHUNK = 4096          # 4KB chunks (DFU friendly)
+MAX_CHUNK = 1024 * 1024       # 1MB max
+MAX_DUMP_SIZE = 1024 * 1024 * 1024  # 1GB max
 MAX_RETRIES = 3
-MAX_ERRORS = 50                   # Abort threshold
 
 
 # =============================================================================
 # UTILITY FUNCTIONS
 # =============================================================================
 def parse_address(s: str) -> int:
-    """Parse address: 0x1000, $1000, 4096, 1000h"""
-    if isinstance(s, int): return s
+    """Parse address: 0x1000, 0xFFFFFFFF, 4096, 0x80000000"""
+    if isinstance(s, int):
+        return s
+    
     s = str(s).strip().lower()
-    if s.startswith('0x'): return int(s[2:], 16)
-    if s.startswith('$'): return int(s[1:], 16)
-    if s.endswith('h'): return int(s[:-1], 16)
-    try: return int(s, 16)
-    except ValueError: return int(s, 10)
+    
+    # Hex with 0x prefix
+    if s.startswith('0x'):
+        return int(s[2:], 16)
+    
+    # Hex without prefix (assume hex if contains a-f)
+    if any(c in 'abcdef' for c in s):
+        return int(s, 16)
+    
+    # Decimal
+    try:
+        return int(s, 10)
+    except ValueError:
+        raise ValueError(f"Cannot parse address: {s}")
 
 
 def parse_size(s: str) -> int:
-    """Parse size: 1M, 512K, 2G, 0x1000"""
-    if not s: return 0
+    """Parse size: 1M, 512K, 2G, 0x1000, or just number"""
+    if not s:
+        return 0
+    
     s = str(s).strip().upper()
-    if s.startswith('0X'): return int(s, 16)
-    for sfx, mul in [('GB',1024**3),('G',1024**3),('MB',1024**2),
-                      ('M',1024**2),('KB',1024),('K',1024),('B',1)]:
-        if s.endswith(sfx):
-            return int(float(s[:-len(sfx)]) * mul)
-    try: return int(s)
-    except: return 0
+    
+    # Hex
+    if s.startswith('0X'):
+        return int(s, 16)
+    
+    # With suffix
+    suffixes = {
+        'K': 1024,
+        'KB': 1024,
+        'M': 1024 * 1024,
+        'MB': 1024 * 1024,
+        'G': 1024 * 1024 * 1024,
+        'GB': 1024 * 1024 * 1024,
+    }
+    
+    for suffix, multiplier in suffixes.items():
+        if s.endswith(suffix):
+            try:
+                return int(float(s[:-len(suffix)]) * multiplier)
+            except:
+                pass
+    
+    # Plain number
+    try:
+        return int(s, 16) if s.startswith('0x') else int(s, 10)
+    except:
+        raise ValueError(f"Cannot parse size: {s}")
 
 
 def format_size(n: int) -> str:
-    """Human-readable size"""
-    if n < 1024: return f"{n} B"
-    elif n < 1024**2: return f"{n/1024:.1f} KB"
-    elif n < 1024**3: return f"{n/(1024**2):.1f} MB"
-    return f"{n/(1024**3):.2f} GB"
+    """Human readable size"""
+    if n < 1024:
+        return f"{n} B"
+    elif n < 1024 * 1024:
+        return f"{n/1024:.1f} KB"
+    elif n < 1024 * 1024 * 1024:
+        return f"{n/(1024*1024):.1f} MB"
+    else:
+        return f"{n/(1024*1024*1024):.2f} GB"
 
 
 def format_time(sec: float) -> str:
-    """Human-readable time"""
-    if sec < 1: return f"{sec*1000:.0f}ms"
-    if sec < 60: return f"{sec:.1f}s"
-    if sec < 3600: return f"{sec//60:.0f}m {sec%60:.0f}s"
+    """Human readable time"""
+    if sec < 1:
+        return f"{sec*1000:.0f} ms"
+    if sec < 60:
+        return f"{sec:.1f} s"
+    if sec < 3600:
+        return f"{sec//60:.0f}m {sec%60:.0f}s"
     return f"{sec//3600:.0f}h {(sec%3600)//60:.0f}m"
 
 
-def resolve_target(target: str, partitions: list, dev) -> Optional[dict]:
-    """Resolve dump target"""
-    if '+' in target:
-        name, off_str = target.split('+', 1)
-        offset = parse_address(off_str.strip())
-        for p in partitions:
-            if p.get('name','').lower() == name.strip().lower():
-                return {'address': p['offset']+offset, 'size': p['size']-offset,
-                        'info': f"Partition: {p['name']}", 'offset': offset}
-    
-    for p in partitions:
-        if p.get('name','').lower() == target.lower():
-            return {'address': p['offset'], 'size': p['size'],
-                    'info': f"Partition: {p['name']}"}
-    
-    try:
-        return {'address': parse_address(target), 'size': 0, 'info': 'Raw address'}
-    except ValueError:
-        return None
-
-
 class ProgressBar:
-    def __init__(self, total, prefix='', suffix='', length=50):
+    """Simple progress bar"""
+    def __init__(self, total: int, prefix: str = '', length: int = 40):
         self.total = max(total, 1)
         self.prefix = prefix
-        self.suffix = suffix
         self.length = length
         self.current = 0
         self.start = time.time()
     
-    def __enter__(self):
-        self.update(0)
-        return self
-    
-    def __exit__(self, *a):
-        print()
-    
-    def update(self, n):
+    def update(self, n: int):
         self.current += n
         pct = 100 * self.current / self.total
         filled = int(self.length * self.current // self.total)
-        bar = '█' * filled + '─' * (self.length - filled)
-        elapsed = max(time.time()-self.start, 0.001)
+        bar = '█' * filled + '░' * (self.length - filled)
+        
+        elapsed = max(time.time() - self.start, 0.001)
         rate = self.current / elapsed
-        eta = (self.total-self.current) / max(rate, 1)
+        eta = (self.total - self.current) / max(rate, 1)
+        
         print(f'\r{self.prefix} |{bar}| {pct:5.1f}% {format_size(rate)}/s ETA:{eta:.0f}s',
               end='', flush=True)
+    
+    def close(self):
+        print()
 
 
 # =============================================================================
 # MAIN DUMP COMMAND
 # =============================================================================
+
 def cmd_dump(args=None) -> int:
     """
-    QSLCL DUMP - Binary memory dumper
+    QSLCL DUMP - Raw memory dumper for low-level modes
     
-    Examples:
-        dump boot                          - Dump entire boot partition
-        dump boot boot.img                 - Dump to specific file
-        dump 0x10000000 --size 1M          - Dump 1MB from address
-        dump system --size 100M --compress - Dump and compress
-        dump boot --resume                 - Resume interrupted dump
-        dump boot --verify                 - Verify after dumping
+    USAGE:
+        dump <start> <end>                    - Dump from start to end address
+        dump <start> --size <bytes>           - Dump N bytes from start
+        dump <start> <end> --output file.bin  - Save to specific file
+    
+    EXAMPLES:
+        dump 0x00000000 0x00010000            - Dump 64KB from 0x0
+        dump 0x80000000 --size 1M             - Dump 1MB from 0x80000000
+        dump 0x10000000 0x20000000 --output dump.bin
+        dump 0xFFFFFFFF --size 4096           - Dump 4KB from top of memory
+    
+    NOTES:
+        - Works in DFU, EDL, BROM, and low-level modes
+        - No partition parsing - just raw addresses
+        - Use --verify to compare with device after dump
     """
     
+    # =====================================================================
+    # Parse arguments
+    # =====================================================================
     if args is None:
         print("[!] No arguments")
-        print("[*] Usage: dump <address> [--size SIZE] [options]")
+        print("[*] Usage: dump <start> [end or --size SIZE] [--output FILE]")
         return 1
     
-    # Device discovery
+    # Get device
     devs = scan_all()
     if not devs:
         print("[!] No device detected")
@@ -175,338 +202,287 @@ def cmd_dump(args=None) -> int:
     dev = devs[0]
     print(f"[*] Device: {dev.product}")
     
-    # Loader injection
+    # Loader if specified
     if getattr(args, 'loader', None):
         auto_loader_if_needed(args, dev)
     
     # Extract arguments
-    addr_str = getattr(args, 'address', '')
+    start_str = getattr(args, 'address', '') or getattr(args, 'start', '')
+    end_str = getattr(args, 'end', '')
     size_str = getattr(args, 'size', '')
-    output = getattr(args, 'output', '')
-    chunk_size = max(512, min(getattr(args, 'chunk_size', DEFAULT_CHUNK), 16*1024*1024))
+    output_file = getattr(args, 'output', '')
+    chunk_size = getattr(args, 'chunk_size', DEFAULT_CHUNK)
     verify = getattr(args, 'verify', False)
-    compress = getattr(args, 'compress', False)
-    resume = getattr(args, 'resume', False)
-    retries = max(1, min(getattr(args, 'retries', MAX_RETRIES), 10))
-    verbose = getattr(args, 'verbose', False)
+    retries = getattr(args, 'retries', MAX_RETRIES)
     
-    # Check positional arg2 (could be size or output)
-    if hasattr(args, 'arg2') and args.arg2:
-        if not output and not size_str:
-            # Determine if arg2 is size or filename
-            a2 = args.arg2
-            if a2 and (a2[0].isdigit() or a2.lower().startswith('0x') or 
-                       a2.upper().endswith(('K','M','G','B'))):
-                size_str = a2
-            else:
-                output = a2
+    # Handle positional arg2 (could be end address)
+    if hasattr(args, 'arg2') and args.arg2 and not end_str:
+        end_str = args.arg2
     
-    if not addr_str:
-        print("[!] No address specified")
-        print("[*] Examples: dump boot, dump 0x10000000 --size 1M")
+    # Validate start address
+    if not start_str:
+        print("[!] No start address specified")
+        print("[*] Examples:")
+        print("    dump 0x00000000 0x00010000")
+        print("    dump 0x80000000 --size 1M")
         return 1
     
-    # Resolve partitions
-    partitions = []
     try:
-        partitions = load_partitions(dev)
-    except:
-        pass
-    
-    # Resolve target
-    target_info = resolve_target(addr_str, partitions, dev)
-    if not target_info:
-        print(f"[!] Cannot resolve: '{addr_str}'")
-        if partitions:
-            print(f"\n[*] Available partitions:")
-            for p in sorted(partitions, key=lambda x: x['offset']):
-                print(f"    {p['name']:<16} 0x{p['offset']:08X}  {format_size(p['size'])}")
+        start_addr = parse_address(start_str)
+    except ValueError as e:
+        print(f"[!] Invalid start address: {start_str}")
+        print(f"    {e}")
         return 1
     
-    address = target_info['address']
-    max_size = target_info.get('size', 0)
-    region = target_info.get('info', 'Raw address')
+    # Determine dump size
+    dump_size = 0
     
-    print(f"\n[+] Target: 0x{address:08X} ({region})")
+    if end_str:
+        # Range mode: start to end
+        try:
+            end_addr = parse_address(end_str)
+            if end_addr <= start_addr:
+                print(f"[!] End address (0x{end_addr:08X}) must be greater than start (0x{start_addr:08X})")
+                return 1
+            dump_size = end_addr - start_addr
+            print(f"[*] Mode: Range (0x{start_addr:08X} → 0x{end_addr:08X})")
+        except ValueError as e:
+            print(f"[!] Invalid end address: {end_str}")
+            return 1
     
-    # Determine size
-    if size_str:
-        dump_size = parse_size(size_str)
-        if dump_size <= 0:
+    elif size_str:
+        # Size mode
+        try:
+            dump_size = parse_size(size_str)
+            if dump_size <= 0:
+                print(f"[!] Invalid size: {size_str}")
+                return 1
+            print(f"[*] Mode: Size ({format_size(dump_size)} from 0x{start_addr:08X})")
+        except ValueError as e:
             print(f"[!] Invalid size: {size_str}")
             return 1
-    elif max_size > 0:
-        dump_size = max_size
-        print(f"[+] Auto size: {format_size(dump_size)}")
+    
     else:
-        print("[!] Size required for raw address. Use --size <bytes>")
+        print("[!] Specify either end address or --size")
+        print("[*] Examples:")
+        print("    dump 0x00000000 0x00010000")
+        print("    dump 0x00000000 --size 64K")
+        return 1
+    
+    # Validate size
+    if dump_size <= 0:
+        print(f"[!] Invalid dump size: {dump_size} bytes")
         return 1
     
     if dump_size > MAX_DUMP_SIZE:
-        print(f"[!] Size {format_size(dump_size)} exceeds max {format_size(MAX_DUMP_SIZE)}")
+        print(f"[!] Size {format_size(dump_size)} exceeds maximum {format_size(MAX_DUMP_SIZE)}")
         return 1
     
-    print(f"[+] Size: {format_size(dump_size)} (0x{dump_size:X})")
+    # Validate chunk size
+    chunk_size = max(64, min(chunk_size, MAX_CHUNK))
     
     # Output file
-    if not output:
-        ts = time.strftime("%Y%m%d_%H%M%S")
-        safe_name = re.sub(r'[^a-z0-9_-]', '_', region.lower())[:30]
-        output = f"dump_{safe_name}_0x{address:08X}_{ts}.bin"
-        print(f"[+] Output: {output}")
+    if not output_file:
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        output_file = f"dump_0x{start_addr:08X}_{format_size(dump_size).replace(' ', '')}_{timestamp}.bin"
     
-    # Resume support
-    existing = 0
-    start_addr = address
-    remaining = dump_size
-    
-    if resume and os.path.exists(output):
-        existing = os.path.getsize(output)
-        if existing >= dump_size:
-            print(f"[*] Already complete: {format_size(existing)}")
-            return 0
-        if existing > 0:
-            start_addr = address + existing
-            remaining = dump_size - existing
-            print(f"[+] Resume from: {format_size(existing)}")
-    
-    # Disk space check
-    try:
-        d = os.path.dirname(os.path.abspath(output)) or '.'
-        import shutil
-        free = shutil.disk_usage(d).free
-        if free < remaining * 1.1:
-            print(f"[!] Low disk space: {format_size(free)} free, need {format_size(remaining)}")
-            if input("    Continue? (y/N): ").lower() != 'y':
-                return 0
-    except:
-        pass
-    
-    # Overwrite check
-    if not resume and os.path.exists(output):
-        if input(f"\n[!] File exists: {output}\n    Overwrite? (y/N): ").lower() not in ('y','yes'):
+    # Check if file exists
+    if os.path.exists(output_file):
+        overwrite = input(f"\n[!] File exists: {output_file}\n    Overwrite? (y/N): ").lower()
+        if overwrite not in ('y', 'yes'):
             print("[*] Cancelled")
             return 0
     
+    # =====================================================================
     # Summary
+    # =====================================================================
     print(f"\n[+] Dump Configuration:")
-    print(f"    Source:  0x{start_addr:08X}")
-    print(f"    Size:    {format_size(remaining)}")
-    print(f"    Chunk:   {format_size(chunk_size)}")
-    print(f"    Retries: {retries}")
-    print(f"    Verify:  {'Yes' if verify else 'No'}")
-    print(f"    GZIP:    {'Yes' if compress else 'No'}")
+    print(f"    Start:    0x{start_addr:08X}")
+    print(f"    End:      0x{start_addr + dump_size:08X}")
+    print(f"    Size:     {format_size(dump_size)}")
+    print(f"    Chunk:    {format_size(chunk_size)}")
+    print(f"    Retries:  {retries}")
+    print(f"    Verify:   {'Yes' if verify else 'No'}")
+    print(f"    Output:   {output_file}")
     
-    # =========================================================================
-    # EXECUTE DUMP
-    # =========================================================================
+    # =====================================================================
+    # Execute dump
+    # =====================================================================
     print(f"\n[*] Dumping...")
     
-    bytes_done = 0
+    bytes_read = 0
     errors = 0
-    failed = []
+    failed_chunks = []
     start_time = time.time()
     
     try:
-        mode = 'ab' if existing > 0 else 'wb'
-        with open(output, mode) as f:
-            with ProgressBar(remaining, prefix='Dumping', suffix='Complete') as pb:
+        with open(output_file, 'wb') as f:
+            progress = ProgressBar(dump_size, prefix='Dumping')
+            
+            while bytes_read < dump_size:
+                addr = start_addr + bytes_read
+                chunk = min(chunk_size, dump_size - bytes_read)
                 
-                while bytes_done < remaining:
-                    addr = start_addr + bytes_done
-                    chunk = min(chunk_size, remaining - bytes_done)
-                    
-                    if chunk <= 0:
-                        break
-                    
-                    # Read from device
-                    data = None
-                    read_payload = struct.pack("<II", addr, chunk)
-                    
-                    for attempt in range(retries + 1):
-                        try:
-                            if "READ" in QSLCLCMD_DB:
-                                resp = qslcl_dispatch(dev, "READ", read_payload, timeout=20)
-                            else:
-                                pkt = encode_qslcl_structure(b"QSLCLCMD", read_payload)
-                                dev.write(pkt)
-                                _, resp = dev.read(timeout=20)
-                            
-                            if resp:
-                                status = decode_runtime_result(resp)
-                                if status.get("severity") == "SUCCESS":
-                                    data = status.get("extra", b"")
-                                    if data:
-                                        break
-                            
-                            if attempt < retries:
-                                time.sleep(0.1 * (2 ** attempt))
+                # Read from device
+                data = None
+                read_payload = struct.pack("<II", addr, chunk)
+                
+                for attempt in range(retries + 1):
+                    try:
+                        if "READ" in QSLCLCMD_DB:
+                            resp = qslcl_dispatch(dev, "READ", read_payload, timeout=10)
+                        else:
+                            pkt = encode_qslcl_structure(b"QSLCLCMD", read_payload)
+                            dev.write(pkt)
+                            _, resp = dev.read(timeout=10)
                         
-                        except KeyboardInterrupt:
-                            raise
-                        except Exception as e:
-                            if _DEBUG and attempt >= retries:
-                                print(f"\n[!] Read error at 0x{addr:08X}: {e}")
-                            if attempt < retries:
-                                time.sleep(0.2)
+                        if resp:
+                            status = decode_runtime_result(resp)
+                            if status.get("severity") == "SUCCESS":
+                                data = status.get("extra", b"")
+                                if data:
+                                    break
+                        
+                        if attempt < retries:
+                            time.sleep(0.1 * (2 ** attempt))
                     
-                    # Write data
-                    if data:
-                        f.write(data[:chunk])
-                        if len(data) < chunk:
-                            f.write(b'\x00' * (chunk - len(data)))
-                    else:
-                        f.write(b'\x00' * chunk)
-                        errors += 1
-                        failed.append((addr, chunk))
-                        if verbose:
-                            print(f"\n[!] Failed at 0x{addr:08X} ({format_size(chunk)})")
-                    
-                    bytes_done += chunk
-                    pb.update(chunk)
-                    
-                    if errors > MAX_ERRORS:
-                        print(f"\n[!] Too many errors ({errors}), aborting")
-                        break
+                    except KeyboardInterrupt:
+                        raise
+                    except Exception as e:
+                        if attempt >= retries and _DEBUG:
+                            print(f"\n[!] Read error at 0x{addr:08X}: {e}")
+                        if attempt < retries:
+                            time.sleep(0.2)
+                
+                # Write data (or zeros on failure)
+                if data:
+                    f.write(data[:chunk])
+                    if len(data) < chunk:
+                        f.write(b'\x00' * (chunk - len(data)))
+                else:
+                    f.write(b'\x00' * chunk)
+                    errors += 1
+                    failed_chunks.append((addr, chunk))
+                    if _DEBUG:
+                        print(f"\n[!] Failed at 0x{addr:08X}")
+                
+                bytes_read += chunk
+                progress.update(chunk)
+            
+            progress.close()
     
     except KeyboardInterrupt:
-        print(f"\n[!] Interrupted - partial data saved")
-        print(f"[*] Resume with: dump {addr_str} --resume --output {output}")
+        print(f"\n[!] Interrupted at {format_size(bytes_read)}/{format_size(dump_size)}")
+        print(f"    Partial data saved to {output_file}")
         return 1
     
     except Exception as e:
-        print(f"\n[!] Dump error: {e}")
+        print(f"\n[!] Dump failed: {e}")
         if _DEBUG:
             import traceback
             traceback.print_exc()
         return 1
     
+    # =====================================================================
+    # Results
+    # =====================================================================
     elapsed = time.time() - start_time
-    speed = bytes_done / max(elapsed, 0.001)
-    total_bytes = existing + bytes_done
+    speed = bytes_read / max(elapsed, 0.001)
     
     print(f"\n[+] Dump Complete:")
-    print(f"    Written:  {format_size(bytes_done)} in {format_time(elapsed)}")
+    print(f"    Size:     {format_size(bytes_read)}")
+    print(f"    Time:     {format_time(elapsed)}")
     print(f"    Speed:    {format_size(speed)}/s")
-    print(f"    Total:    {format_size(total_bytes)}/{format_size(dump_size)}")
-    if errors:
-        print(f"    Errors:   {errors} chunks ({format_size(sum(s for _,s in failed))})")
     
-    # =========================================================================
-    # VERIFICATION
-    # =========================================================================
-    if verify and total_bytes > 0:
+    if errors > 0:
+        print(f"    Errors:   {errors} chunks ({format_size(errors * chunk_size)} zeros written)")
+    
+    # =====================================================================
+    # Verification (optional)
+    # =====================================================================
+    if verify and bytes_read > 0:
         print(f"\n[*] Verifying...")
-        ver_ok = 0
-        ver_err = 0
-        ver_mismatch = 0
+        
+        verify_ok = 0
+        verify_errors = 0
         
         try:
-            with open(output, 'rb') as f:
-                with ProgressBar(total_bytes, prefix='Verifying', suffix='Complete') as vb:
-                    for vaddr in range(address, address+total_bytes, chunk_size):
-                        vchunk = min(chunk_size, address+total_bytes - vaddr)
-                        
-                        file_data = f.read(vchunk)
-                        if not file_data:
-                            break
-                        
-                        # Skip all-zero (known failed)
-                        if file_data == b'\x00' * len(file_data):
-                            ver_ok += len(file_data)
-                            vb.update(len(file_data))
-                            continue
-                        
-                        read_payload = struct.pack("<II", vaddr, vchunk)
-                        
+            with open(output_file, 'rb') as f:
+                progress = ProgressBar(bytes_read, prefix='Verifying')
+                offset = 0
+                
+                while offset < bytes_read:
+                    addr = start_addr + offset
+                    chunk = min(chunk_size, bytes_read - offset)
+                    
+                    file_data = f.read(chunk)
+                    if not file_data:
+                        break
+                    
+                    # Skip zeros (likely failed reads)
+                    if file_data == b'\x00' * len(file_data):
+                        verify_ok += len(file_data)
+                        offset += len(file_data)
+                        progress.update(len(file_data))
+                        continue
+                    
+                    # Read from device
+                    read_payload = struct.pack("<II", addr, chunk)
+                    
+                    try:
                         if "READ" in QSLCLCMD_DB:
-                            resp = qslcl_dispatch(dev, "READ", read_payload, timeout=15)
+                            resp = qslcl_dispatch(dev, "READ", read_payload, timeout=10)
                         else:
                             pkt = encode_qslcl_structure(b"QSLCLCMD", read_payload)
                             dev.write(pkt)
-                            _, resp = dev.read(timeout=15)
+                            _, resp = dev.read(timeout=10)
                         
                         if resp:
                             status = decode_runtime_result(resp)
                             dev_data = status.get("extra", b"")
                             
                             if dev_data == file_data:
-                                ver_ok += len(file_data)
+                                verify_ok += len(file_data)
                             else:
-                                mm = sum(1 for i in range(min(len(file_data),len(dev_data)))
-                                       if file_data[i] != dev_data[i])
-                                ver_mismatch += mm
-                                ver_err += 1
-                                if verbose:
-                                    print(f"\n[!] Mismatch at 0x{vaddr:08X}: {mm} bytes")
+                                mismatches = sum(1 for i in range(min(len(file_data), len(dev_data)))
+                                               if file_data[i] != dev_data[i])
+                                verify_errors += mismatches
+                                if _DEBUG:
+                                    print(f"\n[!] Mismatch at 0x{addr:08X}: {mismatches} bytes")
                         else:
-                            ver_err += 1
-                        
-                        ver_ok += len(file_data)
-                        vb.update(len(file_data))
+                            verify_errors += chunk
+                    
+                    except Exception as e:
+                        verify_errors += chunk
+                        if _DEBUG:
+                            print(f"\n[!] Verify error at 0x{addr:08X}: {e}")
+                    
+                    offset += chunk
+                    progress.update(chunk)
+                
+                progress.close()
             
-            pct = ver_ok*100/max(total_bytes,1)
-            print(f"\n    Verified: {format_size(ver_ok)} ({pct:.1f}%)")
-            if ver_err:
-                print(f"    Errors:   {ver_err} chunks, {ver_mismatch} mismatched bytes")
+            if verify_errors == 0:
+                print(f"\n[+] Verification PASSED - {format_size(verify_ok)} matched")
+            else:
+                print(f"\n[!] Verification FAILED - {format_size(verify_errors)} mismatched bytes")
         
         except Exception as e:
             print(f"\n[!] Verification error: {e}")
     
-    # =========================================================================
-    # COMPRESSION
-    # =========================================================================
-    final_output = output
+    # =====================================================================
+    # SHA256 hash
+    # =====================================================================
+    try:
+        sha = hashlib.sha256()
+        with open(output_file, 'rb') as f:
+            while chunk_data := f.read(65536):
+                sha.update(chunk_data)
+        print(f"\n[*] SHA256: {sha.hexdigest()}")
+    except:
+        pass
     
-    if compress and total_bytes > 0:
-        gz_path = output + '.gz'
-        try:
-            print(f"\n[*] Compressing...")
-            with open(output, 'rb') as fi, gzip.open(gz_path, 'wb') as fo:
-                import shutil
-                shutil.copyfileobj(fi, fo, 65536)
-            
-            orig_sz = os.path.getsize(output)
-            comp_sz = os.path.getsize(gz_path)
-            ratio = (1 - comp_sz/orig_sz) * 100
-            print(f"[+] {format_size(orig_sz)} → {format_size(comp_sz)} ({ratio:.1f}% saved)")
-            final_output = gz_path
-            
-            if input("    Remove original? (y/N): ").lower() in ('y','yes'):
-                os.remove(output)
-        except Exception as e:
-            print(f"[!] Compression failed: {e}")
-    
-    # =========================================================================
-    # METADATA & HASH
-    # =========================================================================
-    if os.path.exists(final_output):
-        try:
-            sha = hashlib.sha256()
-            with open(final_output, 'rb') as f:
-                while True:
-                    chunk = f.read(65536)
-                    if not chunk: break
-                    sha.update(chunk)
-            fhash = sha.hexdigest()
-            print(f"[+] SHA256: {fhash[:40]}...")
-            
-            # Save metadata
-            meta = {
-                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-                'address': f"0x{address:08X}",
-                'expected_size': dump_size,
-                'actual_size': total_bytes,
-                'sha256': fhash,
-                'region': region,
-                'failed_chunks': len(failed),
-            }
-            with open(final_output + '.meta', 'w') as f:
-                json.dump(meta, f, indent=2)
-        except Exception as e:
-            print(f"[!] Metadata error: {e}")
-    
-    print(f"\n[✓] Done: {final_output}")
+    print(f"\n[✓] Saved to: {output_file}")
     return 0
 
 
@@ -514,6 +490,6 @@ def cmd_dump(args=None) -> int:
 # MODULE ENTRY
 # =============================================================================
 if __name__ == "__main__":
-    print("[*] dump.py - QSLCL DUMP Command Module")
-    print("[*] This module is imported by qslcl.py")
-    print("[*] Usage: python qslcl.py dump <address> [options]")
+    print("[*] dump.py - QSLCL RAW Memory Dumper v2.2")
+    print("[*] For low-level modes (DFU/EDL/BROM)")
+    print("[*] Imported by qslcl.py")

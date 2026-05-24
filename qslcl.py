@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qslcl.py — Universal QSLCL Tool v2.1.5
+# qslcl.py — Universal QSLCL Tool v2.1.6
 # Author: Sharif — QSLCL Creator
 # Works on all SOC architectures
 import sys, time, argparse, zlib, struct, threading, re, os, random, math, shutil, gzip, json, itertools, hashlib, queue
@@ -2331,17 +2331,6 @@ def cmd_getinfo(args=None):
     else:
         print("[!] No response.")
 
-def cmd_partitions(args=None):
-    devs = scan_all()
-    if not devs:
-        return print("[!] No device.")
-    dev = devs[0]
-    auto_loader_if_needed(args, dev)
-    
-    parts = load_partitions(dev)
-    for p in parts:
-        print(f"  {p['name']:<12}  off=0x{p['offset']:08X}  size=0x{p['size']:08X}")
-
 # =============================================================================
 # MAIN
 # =============================================================================
@@ -2351,7 +2340,7 @@ def main():
             super().__init__(prog, max_help_position=36, width=140)
 
     p = argparse.ArgumentParser(
-        description="QSLCL Tool v2.1.5 - Universal SOC Tool",
+        description="QSLCL Tool v2.1.6 - Universal SOC Tool",
         formatter_class=QSLCLHelp
     )
 
@@ -2375,7 +2364,6 @@ def main():
     new_cmd("hello", help="Device handshake").set_defaults(func=cmd_hello)
     new_cmd("ping", help="Latency test").set_defaults(func=cmd_ping)
     new_cmd("getinfo", help="Device info").set_defaults(func=cmd_getinfo)
-    new_cmd("partitions", help="List partitions").set_defaults(func=cmd_partitions)
 
     # READ
     r = new_cmd("read", help="Read from device")

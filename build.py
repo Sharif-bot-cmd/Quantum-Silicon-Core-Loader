@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# build.py - QSLCL Binary Builder v0.6.9
+# build.py - QSLCL Binary Builder v0.7.0
 import sys, struct, random, time, hmac, hashlib, os, zlib, uuid, json, platform, math
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
@@ -1600,7 +1600,7 @@ def generate_command_code(
     # Only commands actually used in qslcl.py modules
     TIER = {
         "HELLO":1, "PING":1, "GETINFO":1, "GETSECTOR":1,
-        "READ":1, "PEEK":1, "WRITE":2, "POKE":2, "ERASE":2, "DUMP":2,
+        "READ":1, "PEEK":1, "WRITE":2, "POKE":2, "ERASE":2,
         "VERIFY":2, "OEM":3, "ODM":3, "POWER":3,
         "CONFIG":3, "PATCH":3, "BYPASS":4, "GLITCH":4, "RESET":4,
         "CRASH":4, "VOLTAGE":4, "BRUTEFORCE":4, "RAWMODE":5,
@@ -1662,7 +1662,6 @@ def generate_command_code(
             if C == "WRITE": return uop("IPC_RECV", 1, 0xE1) + uop("STORE", 1, 0x2000) + uop("RET")
             if C == "PEEK": return uop("LOAD", 2, 0x2100) + uop("IPC_SEND", 2, 0xE2) + uop("RET")
             if C == "POKE": return uop("IPC_RECV", 3, 0xE3) + uop("STORE", 3, 0x2100) + uop("RET")
-            if C == "DUMP": return uop("MEMCPY", 0, 0x100) + uop("IPC_SEND", 0, 0xE4) + uop("RET")
             if C == "GETSECTOR": return uop("LOAD", 0, 0x2200) + uop("IPC_SEND", 0, 0xE5) + uop("RET")
             if C == "ERASE": return uop("MEMSET", 0, 0x2000) + uop("IPC_SEND", 0, 0xE6) + uop("RET")
 
@@ -4038,7 +4037,7 @@ def build_qslcl_bin(
     # ============================================================
     command_list = [
        "HELLO","PING","GETINFO","GETVAR","GETSECTOR","RAW",
-       "READ","PEEK","WRITE","POKE","ERASE","DUMP",
+       "READ","PEEK","WRITE","POKE","ERASE",
        "VERIFY","OEM","ODM","AUTHENTICATE","POWER",
        "GETCONFIG","PATCH","BYPASS","GLITCH","RESET","GPT",
        "CRASH","VOLTAGE","BRUTEFORCE","RAWMODE","SETCONFIG",
