@@ -24,7 +24,7 @@ from modules.config import cmd_config, cmd_config_list
 from modules.glitch import cmd_glitch
 from modules.odm import cmd_odm
 from modules.footer import cmd_footer
-from modules.crash import cmd_crash, cmd_crash_test
+from modules.crash import cmd_crash
 from modules.bypass import cmd_bypass
 from modules.voltage import cmd_voltage
 from modules.power import cmd_power
