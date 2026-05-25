@@ -58,6 +58,7 @@ OP_INFO = 0x60
 OP_CONFIG = 0x70
 OP_KEYS = 0x80
 OP_DEBUG = 0x90
+OP_PANIC = 0x95   
 
 QUERY_FLAG = 0xFF
 
@@ -567,6 +568,103 @@ def cmd_debug(dev, args, force, verbose):
     else:
         print(f"[!] Failed: {name}")
 
+def cmd_panic(dev, args, force, verbose):
+    """
+    Force system panic/crash (low-level hardware reset)
+    
+    This triggers a hardware-level panic/crash, similar to:
+    - Fastboot: fastboot oem panic
+    - Linux: echo c > /proc/sysrq-trigger
+    - Hardware: watchdog timeout
+    
+    Panic modes:
+        normal   - Standard kernel panic (if available)
+        watchdog - Force watchdog timeout
+        hard     - Hardware reset (write to reset register)
+        soft     - Software crash (division by zero)
+        hang     - Infinite loop (requires power cycle)
+    """
+    
+    # Parse panic mode
+    mode = args[0].lower() if args else "normal"
+    
+    # Validate mode
+    valid_modes = ['normal', 'watchdog', 'hard', 'soft', 'hang', 'debug']
+    if mode not in valid_modes:
+        print(f"[!] Invalid mode: {mode}")
+        print(f"[*] Valid modes: {', '.join(valid_modes)}")
+        return
+    
+    print(f"\n{'='*50}")
+    print(f"  PANIC: {mode.upper()} MODE")
+    print(f"{'='*50}")
+    
+    # Warning for data loss
+    msg = (
+        f"⚠️  PANIC ({mode.upper()}):\n\n"
+        f"  🔴 Device will CRASH/RESET immediately!\n"
+        f"  🔴 UNSAVED DATA WILL BE LOST!\n"
+        f"  🔴 May require power cycle to recover\n"
+        f"  🔴 Debug registers may be cleared\n\n"
+        f"  ✅ Only use for crash testing/debugging"
+    )
+    
+    if not confirm(msg, 'PANIC', force):
+        print("[*] Cancelled")
+        return
+    
+    print(f"\n[*] Triggering {mode} panic...")
+    
+    # Build payload: mode (1 byte) + flags (1 byte)
+    mode_codes = {
+        'normal': 0x00,
+        'watchdog': 0x01,
+        'hard': 0x02,
+        'soft': 0x03,
+        'hang': 0x04,
+        'debug': 0xFF
+    }
+    
+    flags = 0x00
+    if force:
+        flags |= 0x01  # Force flag
+    
+    payload = struct.pack("<BB", mode_codes.get(mode, 0x00), flags)
+    
+    # Optional: Add custom panic message
+    if len(args) > 1 and mode != 'debug':
+        msg_bytes = ' '.join(args[1:]).encode()[:64]
+        payload += msg_bytes
+    
+    # Send panic command
+    ok, name, extra = oem_cmd(dev, OP_PANIC, payload)  # We'll define OP_PANIC
+    
+    # Note: If panic works, we won't get here
+    if ok:
+        print("[+] Panic command sent - device should crash...")
+        print("[*] If you see this, panic may have failed")
+    else:
+        print(f"[!] Panic failed: {name}")
+        
+        # Fallback attempts for when OEM command isn't supported
+        if verbose:
+            print("[*] Attempting fallback panic methods...")
+            
+            # Fallback 1: Write to known reset registers
+            reset_regs = [0x20E00000, 0x10000000, 0x60005000, 0x40000000]
+            for reg in reset_regs:
+                try:
+                    # Try to write to reset register
+                    from qslcl import qslcl_dispatch
+                    payload = struct.pack("<III", reg, 4, 0xDEADBEEF)
+                    qslcl_dispatch(dev, "WRITE", payload, timeout=0.5)
+                    print(f"[*] Attempted reset via 0x{reg:08X}")
+                except:
+                    pass
+            
+            # Fallback 2: Division by zero (if code execution possible)
+            # This would need device-side support
+            print("[*] No fallback panic method succeeded")
 
 # =============================================================================
 # DISPATCH TABLE
@@ -582,6 +680,7 @@ HANDLERS = {
     'config': cmd_config, 'configuration': cmd_config,
     'keys': cmd_keys, 'key': cmd_keys, 'signing-keys': cmd_keys,
     'debug': cmd_debug, 'debugging': cmd_debug,
+    'panic': cmd_panic, 'crash': cmd_panic,  
 }
 
 

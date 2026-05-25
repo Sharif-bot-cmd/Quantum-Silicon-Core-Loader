@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qslcl.py — Universal QSLCL Tool v2.1.6
+# qslcl.py — Universal QSLCL Tool v2.1.7
 # Author: Sharif — QSLCL Creator
 # Works on all SOC architectures
 import sys, time, argparse, zlib, struct, threading, re, os, random, math, shutil, gzip, json, itertools, hashlib, queue
@@ -2340,7 +2340,7 @@ def main():
             super().__init__(prog, max_help_position=36, width=140)
 
     p = argparse.ArgumentParser(
-        description="QSLCL Tool v2.1.6 - Universal SOC Tool",
+        description="QSLCL Tool v2.1.7 - Universal SOC Tool",
         formatter_class=QSLCLHelp
     )
 

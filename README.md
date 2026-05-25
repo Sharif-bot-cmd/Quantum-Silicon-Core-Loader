@@ -4,7 +4,7 @@ Primary Core: **qslcl.elf**
 
 Assistant Module: **qslcl.bin (v0.7.0)**
 
-Universal Controller: **qslcl.py (v2.1.6)**
+Universal Controller: **qslcl.py (v2.1.7)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION_MATRIX.md)
 
@@ -28,13 +28,9 @@ QSLCL runs in:
 
 ---
 
-## What's New in **v2.1.6**
+## What's New in **v2.1.7**
 
-- fix the command in read, write, erase, dump for better operation.
-
-## Whats New in **0.7.0**
-
-- remove the irrelevant dump command (since in dump cpmmand in qslcl.py theres already READ).
+- add subcommand panic in oem command.
 
 
 ```
@@ -57,7 +53,7 @@ QSLCL Binary Layout (v0.6.9):
 │ 0x010000+ USB4V2MC (USB4 v2.0 80Gbps)      │
 └─────────────────────────────────────────────┘
 
-Total Size: ~80KB (37.5% reduction from 128KB)
+Total Size: ~72KB 
 ```
 
 **How it works (automatic):**
