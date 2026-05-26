@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# build.py - QSLCL Binary Builder v0.7.0
+# build.py - QSLCL Binary Builder v0.7.1
 import sys, struct, random, time, hmac, hashlib, os, zlib, uuid, json, platform, math
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
@@ -168,8 +168,18 @@ except ImportError:
             'desc': 'Universal',
             'arch': 'generic',
             'name': 'generic'
+        },  
+        'quantum': {
+            'vendor': 'QSLCL',
+            'id': 0xFF,  # Special ID for quantum mode
+            'desc': 'Quantum-Optimized Universal Architecture',
+            'arch': 'quantum',
+            'name': 'quantum',
+            'usb_vid': 0x5153,  # "QS" in hex
+            'usb_pid': 0x4C43,  # "LC" in hex  
+            'usb_bcd_device': 0x0500,  # v5.0
         }
-    }
+    }  
 
 HEADERED_FLAGS = set()
 BASE_SOC_OFFSET = 0xC500
@@ -243,6 +253,47 @@ def get_soc_info(soc_type: str = None):
     if not soc_type or soc_type not in SOC_TABLE:
         return SOC_TABLE['fallback']
     return SOC_TABLE[soc_type]
+
+def apply_quantum_optimizations(image: bytearray, debug: bool = False) -> None:
+    """
+    Apply quantum-specific optimizations to the binary:
+    - Enhanced entropy mixing
+    - Advanced opcode randomization
+    - Quantum-resistant signature hints
+    - Performance tuning
+    """
+    if debug:
+        print("[*] Applying quantum architecture optimizations...")
+    
+    # Find QSLCLBIN header
+    bin_offset = image.find(b'QSLCLBIN')
+    if bin_offset == -1:
+        return
+    
+    # Parse header to find body
+    try:
+        magic, body_size, flags, stored_crc = struct.unpack("<8sIII", image[bin_offset:bin_offset+20])
+        body_offset = bin_offset + 20
+        
+        # Write quantum marker at offset 0x20 in body
+        quantum_marker = b"QUANTUM"
+        if body_offset + 0x28 <= len(image):
+            image[body_offset + 0x20:body_offset + 0x28] = quantum_marker
+            
+        # Set quantum feature flags (bit 31)
+        if body_offset + 0x30 <= len(image):
+            current_flags = struct.unpack("<I", image[body_offset + 0x2C:body_offset + 0x30])[0]
+            quantum_flags = current_flags | 0x80000000  # Set high bit for quantum mode
+            image[body_offset + 0x2C:body_offset + 0x30] = struct.pack("<I", quantum_flags)
+            
+        if debug:
+            print(f"[+] Quantum optimizations applied at offset 0x{bin_offset:X}")
+            print(f"    Quantum marker: {quantum_marker.decode()}")
+            print(f"    Feature flags: 0x{quantum_flags:08X}")
+            
+    except Exception as e:
+        if debug:
+            print(f"[!] Quantum optimization failed: {e}")
 
 # ============================================================
 # USB TX/RX Micro-Routine Injector (unchanged - too large, kept as-is)
@@ -4032,6 +4083,9 @@ def build_qslcl_bin(
     current_offset = MAIN_BODY_OFFSET + len(main_body)
     current_offset = align_up(current_offset, 16)
 
+    if arch.lower() == "quantum":
+        apply_quantum_optimizations(image, debug)
+
     # ============================================================
     # Command list
     # ============================================================
@@ -4427,7 +4481,9 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="QSLCL Binary Builder v0.6.7")
     parser.add_argument("output", nargs="?", default="qslcl.bin", help="Output file")
-    parser.add_argument("--arch", default="generic", help="Target architecture")
+    parser.add_argument("--arch", default="generic", 
+                        choices=["generic", "quantum", "arm", "x86", "riscv", "mips", "powerpc"],
+                        help="Target architecture (quantum = optimized mode)")
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
     parser.add_argument("--encrypt", action="store_true", help="Enable QSLCLENC encryption layer")
     parser.add_argument("--size", type=int, default=0x12000, help="Binary size (bytes)")

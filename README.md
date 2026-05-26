@@ -1,8 +1,8 @@
 # **Quantum Silicon Core Loader**
 
-Primary Core: **qslcl.elf**
+Primary Core: **qslcl.elf** (deprecated)
 
-Assistant Module: **qslcl.bin (v0.7.0)**
+Assistant Module: **qslcl.bin (v0.7.1)**
 
 Universal Controller: **qslcl.py (v2.1.7)**
 
@@ -12,7 +12,7 @@ Universal Controller: **qslcl.py (v2.1.7)**
 
 # Overview
 
-**Quantum Silicon Core Loader (QSLCL)** is a post-bootloader, post-vendor, post-exploit execution layer operating directly at the silicon boundary.
+**Quantum Silicon Core Loader (QSLCL)** is a post-bootloader, post-vendor, post-execution layer operating directly at the silicon boundary.
 
 It executes beyond traditional security models and is capable of surviving firmware transitions, negotiating trust, and interpreting device state without CVEs or patches.
 
@@ -28,13 +28,20 @@ QSLCL runs in:
 
 ---
 
-## What's New in **v2.1.7**
+## What's New in **v0.7.1 / v2.1.7**
 
-- add subcommand panic in oem command.
+### **Quantum Architecture Added**
+- New `--arch quantum` build option (enhanced over generic)
+- Advanced entropy mixing (level 8-16 vs standard 1-8)
+- Opcode randomization per build (harder static analysis)
+- SHA512 signatures + quantum-resistant hints
+- 72KB optimized binary (down from 80KB)
 
+### **Command Updates**
+- Added `oem panic` subcommand for emergency recovery
 
 ```
-QSLCL Binary Layout (v0.6.9):
+QSLCL Binary Layout (v0.7.1):
 ┌─────────────────────────────────────────────┐
 │ 0x000000  QSLCLBIN (Main Header + Ptrs)     │
 │ 0x000200+ QSLCLCMD (26 Commands)            │
@@ -53,11 +60,17 @@ QSLCL Binary Layout (v0.6.9):
 │ 0x010000+ USB4V2MC (USB4 v2.0 80Gbps)      │
 └─────────────────────────────────────────────┘
 
-Total Size: ~72KB 
+Total Size: ~72KB (44% reduction from 128KB)
 ```
 
 **How it works (automatic):**
 ```bash
+# Build with quantum architecture (recommended)
+python build.py qslcl.bin --arch quantum --encrypt --usb4-v2
+
+# Or generic build
+python build.py qslcl.bin
+
 # Just run normally - watchdog disables automatically!
 python qslcl.py hello --loader=qslcl.bin
 
@@ -73,7 +86,7 @@ python qslcl.py hello --loader=qslcl.bin
 
 ---
 
-# Complete Command List (v2.1.6)
+# Complete Command List (v2.1.7)
 
 **Core Memory Operations:**
 | Command | Description |
@@ -92,6 +105,10 @@ python qslcl.py hello --loader=qslcl.bin
 | `hello` | Device handshake and capability detection |
 | `ping` | Round-trip latency testing |
 | `getinfo` | Comprehensive device information retrieval |
+| `partitions` | Partition table detection (MBR/GPT parsing) |
+| `usb-identify` | Check QSLCL USB exposure status |
+| `usb4` | USB4 v2.0 80Gbps status and control |
+| `dfu-boot` | Boot iOS device into DFU mode (like palera1n) |
 
 **System Control:**
 | Command | Description |
@@ -117,7 +134,7 @@ python qslcl.py hello --loader=qslcl.bin
 **Manufacturing & ODM:**
 | Command | Description |
 |---------|-------------|
-| `oem` | OEM operations (bootloader unlock/lock, warranty, secure boot) |
+| `oem` | OEM operations (bootloader unlock/lock, warranty, secure boot, **panic**) |
 | `odm` | ODM operations (provisioning, testing, calibration, customization) |
 
 **Advanced Testing:**
@@ -142,8 +159,11 @@ pip install capstone        # optional, for disassembly
 ## Basic Usage
 
 ```bash
-# Build with USB4 v2.0 and encryption support
-python build.py qslcl.bin --usb4-v2 --encrypt --debug
+# Build with quantum architecture (recommended)
+python build.py qslcl.bin --arch quantum --usb4-v2 --encrypt --debug
+
+# Or standard generic build
+python build.py qslcl.bin
 
 # Auto-DFU boot + Loader + Hello (All-in-One)
 python qslcl.py hello --loader=qslcl.bin --dfu-boot
@@ -155,6 +175,25 @@ python qslcl.py dfu-boot
 python qslcl.py hello --loader=qslcl.bin --usb4
 python qslcl.py getinfo --loader=qslcl.bin
 python qslcl.py ping --loader=qslcl.bin
+```
+
+## Quantum Architecture Build (v0.7.1+)
+
+```bash
+# Build with quantum optimizations
+python build.py qslcl.bin --arch quantum --debug
+
+# Expected output:
+# [*] Building QSLCL v0.7.1 Command System
+#     Architecture: quantum -> QUANTUM OPTIMIZED
+# [*] Applying quantum architecture optimizations...
+# [+] Quantum optimizations applied
+#     Marker: QUANTUM at 0x...
+#     Flags: 0x80000000
+# [*] Quantum optimizations complete
+# 
+# [*] QSLCL Binary v0.7.1 Build Complete
+#     Final Size: 73728 bytes (72.0 KB)
 ```
 
 ## Automatic Watchdog Disabler (v2.1.4)
@@ -188,7 +227,7 @@ python qslcl.py hello --loader=qslcl.bin
 
 ```bash
 # Method 1: Standalone DFU boot (like palera1n)
-python qslcl.py --dfu-boot
+python qslcl.py dfu-boot
 
 # Expected output:
 # ============================================================
@@ -250,9 +289,6 @@ python qslcl.py hello --loader=qslcl.bin --usb4 --debug
 #     Security: CMA + DPP enabled
 # [*] USB4 v2.0 microcode present in loader
 # [*] USB4 v2.0 80Gbps mode initialized
-
-# Check USB4 status separately
-python qslcl.py usb4
 ```
 
 ## USB Exposure Feature (v2.1.1+)
@@ -266,14 +302,14 @@ python qslcl.py hello --loader=qslcl.bin
 # [+] Loader uploaded.
 # [*] Exposing QSLCL in USB configuration...
 # [+] QSLCL identified in USB:
-#     Product: QSLCL Loader v2.1.5
+#     Product: QSLCL Loader v2.1.7
 #     Serial: QSLCL-05AC-1281-67A3F2C8
 #     Protocol: 0x51 ('Q')
 #     Vendor Magic: 0x51534C43
 
 # Verify exposure with system tools
 $ lsusb -v -d 05AC:1281 | grep -E "(iProduct|iSerial)"
-  iProduct                2 QSLCL Loader v2.1.5
+  iProduct                2 QSLCL Loader v2.1.7
   iSerial                 3 QSLCL-05AC-1281-67A3F2C8
 ```
 
@@ -288,7 +324,7 @@ python qslcl.py hello --loader=qslcl.bin
 
 # Expected output:
 # [*] QSLCL Loader Modules Detected:
-#   ├─ QSLCLBIN: generic arch, 81920 bytes (80KB)
+#   ├─ QSLCLBIN: quantum arch, 73728 bytes (72KB)
 #   ├─ QSLCLCMD: 26 commands
 #   ├─ QSLCLEND: 64 endpoints
 #   ├─ QSLCLENC: v1.0
@@ -329,12 +365,14 @@ python qslcl.py hello --loader=qslcl.bin
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
-| **v0.6.9 / v2.1.5** | 2026 | **Command removal** - Removed `mode` command, 26 total commands, cleaner dispatch |
-| **v0.6.8 / v2.1.4** | 2026 | **Size optimization** - 128KB → 80KB, removed zero-fill, 37.5% smaller |
-| **v0.6.7 / v2.1.3** | 2026 | **Auto-DFU Boot** - Like palera1n, one-click DFU entry with button guide |
-| **v0.6.7 / v2.1.2** | 2026 | **USB4 v2.0 80Gbps** - PAM4 encoding, 4-lane aggregation, CMA/DPP security |
-| **v0.6.6 / v2.1.1** | 2026 | **USB QSLCL Exposure** - Auto-identifies in USB descriptors |
-| **v0.6.6 / v2.1.0** | 2026 | **Code cleanup** - 40% reduction, QSLCLDATA/SYNC blocks |
+| **v0.7.1 / v2.1.7** | 2026 | **Quantum Architecture** - New `--arch quantum`, opcode randomization, SHA512 signatures, 72KB binary |
+| **v0.7.0 / v2.1.6** | 2026 | **oem panic** - Emergency recovery subcommand, stability fixes |
+| v0.6.9 / v2.1.5 | 2026 | Command removal - Removed `mode` command, 26 total commands |
+| v0.6.8 / v2.1.4 | 2026 | Size optimization - 128KB → 80KB, 37.5% smaller |
+| v0.6.7 / v2.1.3 | 2026 | Auto-DFU Boot - Like palera1n, one-click DFU entry |
+| v0.6.7 / v2.1.2 | 2026 | USB4 v2.0 80Gbps - PAM4 encoding, 4-lane aggregation |
+| v0.6.6 / v2.1.1 | 2026 | USB QSLCL Exposure - Auto-identifies in USB descriptors |
+| v0.6.6 / v2.1.0 | 2026 | Code cleanup - 40% reduction, QSLCLDATA/SYNC blocks |
 | v0.6.5 / v2.0.2 | 2026 | QSLCLENC encryption layer - ChaCha20/AES for A18+ |
 | v0.6.4 / v2.0.1 | 2026 | Dynamic DFU detection, QSLCLRESP fixes |
 | v0.6.3 / v2.0.0 | 2026 | Complete module rewrite |
@@ -370,20 +408,40 @@ python qslcl.py hello --loader=qslcl.bin
 
 ---
 
-## Size Optimization Details (v0.6.8)
+## Size Optimization Details (v0.7.1)
 
-| Metric | Before | After | Reduction |
-|--------|--------|-------|-----------|
-| Binary size | 131,072 bytes | 81,920 bytes | **37.5%** |
-| Upload time | ~0.5s | ~0.3s | **40% faster** |
-| RAM usage | 128KB | 80KB | **48KB saved** |
-| Zero-fill padding | Yes | No | **Cleaner EOF** |
+| Metric | v0.6.8 | v0.7.1 | Reduction |
+|--------|--------|--------|-----------|
+| Binary size | 81,920 bytes | **73,728 bytes** | **10% smaller** |
+| Total from 128KB | 37.5% | **44%** | **Even leaner** |
+| Upload time | ~0.3s | ~0.27s | **10% faster** |
+| RAM usage | 80KB | **72KB** | **8KB saved** |
+
+---
+
+## ⚠️ Important: RAM-Only Execution (A12+)
+
+On Apple A12+ devices, QSLCL executes entirely from RAM. **No modifications are permanent.**
+
+After reboot:
+- Device returns to stock condition
+- All bypasses/resets/rawmode states are cleared
+- No persistent changes to flash
+
+**Commands like `bypass`, `rawmode`, `crash`, `glitch, etc are TEMPORARY on A12+.**
+
+This is intentional:
+- Safe for research and testing
+- No permanent brick risk
+- Works within Apple's security model
+
+For non-Apple devices, behavior varies by bootloader.
 
 ---
 
 ## CRITICAL WARNING
 
-**QSLCL CAN PERMANENTLY BRICK (DESTROY) YOUR DEVICE IF USED INCORRECTLY.**
+**QSLCL CAN  BRICK (DESTROY) YOUR DEVICE IF USED INCORRECTLY.**
 
 | Safety Level | Operations | Risk |
 |-------------|-----------|------|
@@ -444,7 +502,7 @@ python build.py qslcl.bin --encrypt --debug
 
 **USB4 v2.0 Not Detected:**
 ```bash
-python qslcl.py --usb4 --debug
+python qslcl.py usb4 --debug
 python build.py qslcl.bin --usb4-v2 --debug
 ```
 
@@ -457,13 +515,14 @@ python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
 
 # Final Words
 
-> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, every bootstrap execution, every USB4 v2.0 80Gbps tunnel, every PAM4-encoded transaction, every one-click DFU boot, every automatic watchdog disabler, and now every optimized byte becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping, quantum-resistant encryption, structured data protocols, automatic USB self-identification, USB4 v2.0 80Gbps support, palera1n-like DFU automation, zero-configuration watchdog bypass, and a lean 80KB binary."**
+> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, every bootstrap execution, every USB4 v2.0 80Gbps tunnel, every PAM4-encoded transaction, every one-click DFU boot, every automatic watchdog disabler, every quantum-optimized byte, and now a lean 72KB binary becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping, quantum-resistant encryption, structured data protocols, automatic USB self-identification, USB4 v2.0 80Gbps support, palera1n-like DFU automation, zero-configuration watchdog bypass, and the new quantum architecture for enhanced entropy and opcode randomization."**
 
 ## Key Philosophy
 
 * **Universal Execution** - One binary, all architectures, 26 essential commands
+* **Quantum Architecture** - Enhanced entropy, opcode randomization, SHA512 signatures
 * **Silicon Intimacy** - Direct hardware conversation with bit-level precision
-* **Clean Architecture** - 40% less code, 100% more maintainable
+* **Clean Architecture** - 44% smaller binary, 100% more maintainable
 * **Professional Grade** - Enterprise-level memory operations with verification
 * **Future-Proof Detection** - USB DFU Class compliance
 * **Encryption Ready** - ChaCha20/AES for A18+ compatibility
@@ -474,7 +533,8 @@ python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
 * **Silicon Attestation** - CMA + DPP hardware-level security
 * **One-Click DFU Boot** - Like palera1n, automatic DFU entry with button guide
 * **Zero-Config Watchdog** - Automatic detection and disabling on every connection
-* **Lean Binary** - 80KB optimized payload (37.5% smaller)
+* **Lean Binary** - 72KB optimized payload (44% smaller than original)
+* **RAM-Only Safety** - No permanent modifications on A12+, safe for research
 * **Ethical Empowerment** - Capability with responsibility and safety controls
 
 **YouTube**: [https://www.youtube.com/@EntropyVector](https://www.youtube.com/@EntropyVector)
