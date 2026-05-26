@@ -1430,7 +1430,7 @@ def expose_qslcl_usb_string(dev: QSLCLDevice, force_refresh: bool = False):
         # ============================================================
         # METHOD 1: Set iProduct string descriptor to "QSLCL Loader"
         # ============================================================
-        qslcl_product = "QSLCL Loader v2.1.1"
+        qslcl_product = "QSLCL Loader"
         qslcl_serial = f"QSLCL-{dev.vid:04X}-{dev.pid:04X}-{int(time.time()):08X}"
         
         # Try standard SET_DESCRIPTOR request (not all devices support)
