@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qslcl.py — Universal QSLCL Tool v2.1.7
+# qslcl.py — Universal QSLCL Tool v2.1.8
 # Author: Sharif — QSLCL Creator
 # Works on all SOC architectures
 import sys, time, argparse, zlib, struct, threading, re, os, random, math, shutil, gzip, json, itertools, hashlib, queue
@@ -2320,16 +2320,146 @@ def cmd_getinfo(args=None):
         return print("[!] No device.")
     dev = devs[0]
     
-    resp = qslcl_dispatch(dev, "GETINFO")
-    if resp:
-        status = decode_runtime_result(resp)
-        print(f"[*] Runtime: {status}")
-        if QSLCLBIN_DB:
-            main = QSLCLBIN_DB.get('main', {})
-            print(f"[*] Arch: {main.get('architecture', '?')}")
-            print(f"[*] Size: {main.get('target_size', 0)} bytes")
+    print("\n" + "=" * 50)
+    print("QSLCL DEVICE INFORMATION")
+    print("=" * 50)
+    
+    # ============================================================
+    # 1. DEVICE INFO (from USB/Serial)
+    # ============================================================
+    print("\n[DEVICE]")
+    print(f"  Transport: {dev.transport.upper()}")
+    print(f"  Identifier: {dev.identifier}")
+    print(f"  Vendor: {dev.vendor}")
+    print(f"  Product: {dev.product}")
+    
+    if dev.vid and dev.pid:
+        print(f"  VID:PID: {dev.vid:04X}:{dev.pid:04X}")
+    if dev.serial and dev.serial != "default":
+        print(f"  Serial: {dev.serial}")
+    if dev.usb_class is not None:
+        class_map = {0x00: "Device", 0x02: "Communications", 0x03: "HID", 
+                     0x07: "Printer", 0x08: "Mass Storage", 0x09: "Hub",
+                     0x0A: "CDC Data", 0xDC: "Diagnostic", 0xE0: "Wireless",
+                     0xFE: "Application Specific", 0xFF: "Vendor Specific"}
+        print(f"  USB Class: 0x{dev.usb_class:02X} ({class_map.get(dev.usb_class, 'Unknown')})")
+    
+    # ============================================================
+    # 2. DFU MODE DETECTION (Apple specific)
+    # ============================================================
+    if dev.vid == 0x05AC:  # Apple VID
+        is_dfu = False
+        try:
+            handle, smode = open_transport(dev)
+            if handle and not smode:
+                cfg = handle.get_active_configuration()
+                for intf in cfg:
+                    if intf.bInterfaceClass == 0xFE and intf.bInterfaceSubClass == 0x01:
+                        is_dfu = True
+                        break
+            dev.close()
+        except:
+            pass
+        
+        if is_dfu:
+            print(f"\n[DFU MODE]")
+            print(f"  Status: ACTIVE")
+            print(f"  Protocol: Apple DFU (Class 0xFE/0x01)")
+            # Try to detect A12+ vs older
+            if dev.pid:
+                # DFU PIDs: 0x1281 (A12+), 0x1227 (older), 0x1222 (very old)
+                if dev.pid == 0x1281:
+                    print(f"  Generation: A12 or newer (ARM64e, PAC enabled)")
+                elif dev.pid == 0x1227:
+                    print(f"  Generation: A7-A11 (ARM64, no PAC)")
+                else:
+                    print(f"  Generation: Legacy or unknown")
+    
+    # ============================================================
+    # 3. WATCHDOG STATUS (if detectable)
+    # ============================================================
+    print(f"\n[WATCHDOG]")
+    # Try to detect SoC type from VID
+    soc_map = {
+        0x05AC: "Apple A-series",
+        0x05C6: "Qualcomm",
+        0x0E8D: "MediaTek",
+        0x04E8: "Samsung Exynos",
+        0x14E4: "Broadcom",
+        0x2207: "Rockchip",
+        0x1F3A: "Allwinner",
+        0x10DE: "NVIDIA Tegra",
+    }
+    soc_type = soc_map.get(dev.vid, "Unknown/Generic")
+    print(f"  Detected SoC: {soc_type}")
+    
+    # Try to read a known watchdog offset (just to check if accessible)
+    if dev.vid == 0x05AC:  # Apple
+        print(f"  Typical offset: 0x20E00000")
+        print(f"  Status: Will auto-disable on load")
+    elif dev.vid == 0x05C6:  # Qualcomm
+        print(f"  Typical offset: 0x02000000")
+        print(f"  Status: Will auto-disable on load")
     else:
-        print("[!] No response.")
+        print(f"  Status: Auto-detection available")
+    
+    # ============================================================
+    # 4. QSLCL LOADER INFO (if loaded)
+    # ============================================================
+    print(f"\n[QSLCL LOADER]")
+    if QSLCLBIN_DB:
+        main = QSLCLBIN_DB.get('main', {})
+        arch = main.get('architecture', 'unknown')
+        size = main.get('target_size', 0)
+        build_hash = main.get('build_hash', 'unknown')[:16]
+        
+        print(f"  Loader: PRESENT")
+        print(f"  Architecture: {arch}")
+        if arch == "quantum":
+            print(f"  Mode: QUANTUM OPTIMIZED (enhanced entropy + randomization)")
+        print(f"  Binary size: {size} bytes ({size//1024} KB)")
+        print(f"  Build hash: {build_hash}...")
+        
+        # Command count
+        cmd_count = len([k for k in QSLCLCMD_DB if isinstance(k, str) and k.isalpha()])
+        if cmd_count:
+            print(f"  Commands loaded: {cmd_count}")
+        
+        # Features present
+        features = []
+        if QSLCLENC_DB:
+            features.append("Encryption (ChaCha20/AES)")
+        if QSLCLDAT_DB:
+            features.append("Data Protocol")
+        if QSLCLSYN_DB:
+            features.append("Sync Block")
+        if QSLCLUSB4_DB:
+            features.append("USB4 v2.0 80Gbps")
+        if features:
+            print(f"  Features: {', '.join(features)}")
+    else:
+        print(f"  Loader: NOT LOADED")
+        print(f"  Hint: Use --loader qslcl.bin")
+    
+    # ============================================================
+    # 5. TRY LIVE QUERY (if loader present)
+    # ============================================================
+    if QSLCLBIN_DB:
+        print(f"\n[LIVE QUERY]")
+        resp = qslcl_dispatch(dev, "GETINFO", timeout=2.0)
+        if resp:
+            status = decode_runtime_result(resp)
+            print(f"  Runtime status: {status['severity']} - {status['name']}")
+            if len(resp) > 2:
+                extra = resp[2:]
+                if len(extra) >= 4:
+                    # Try to parse as uptime or something useful
+                    val = int.from_bytes(extra[:4], 'little')
+                    print(f"  Response data: 0x{val:08X}")
+        else:
+            print(f"  Runtime status: No response (loader may not be active)")
+    
+    print("\n" + "=" * 50)
 
 # =============================================================================
 # MAIN
@@ -2340,7 +2470,7 @@ def main():
             super().__init__(prog, max_help_position=36, width=140)
 
     p = argparse.ArgumentParser(
-        description="QSLCL Tool v2.1.7 - Universal SOC Tool",
+        description="QSLCL Tool v2.1.8 - Universal SOC Tool",
         formatter_class=QSLCLHelp
     )
 

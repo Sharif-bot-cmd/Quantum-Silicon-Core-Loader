@@ -4,7 +4,7 @@ Primary Core: **qslcl.elf** (deprecated)
 
 Assistant Module: **qslcl.bin (v0.7.1)**
 
-Universal Controller: **qslcl.py (v2.1.7)**
+Universal Controller: **qslcl.py (v2.1.8)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION_MATRIX.md)
 
@@ -28,17 +28,10 @@ QSLCL runs in:
 
 ---
 
-## What's New in **v0.7.1 / v2.1.7**
+## What's New in **v2.1.8**
 
-### **Quantum Architecture Added**
-- New `--arch quantum` build option (enhanced over generic)
-- Advanced entropy mixing (level 8-16 vs standard 1-8)
-- Opcode randomization per build (harder static analysis)
-- SHA512 signatures + quantum-resistant hints
-- 72KB optimized binary (down from 80KB)
+- Add more Accurate information of the device in cmd_getinfo
 
-### **Command Updates**
-- Added `oem panic` subcommand for emergency recovery
 
 ```
 QSLCL Binary Layout (v0.7.1):
@@ -365,7 +358,7 @@ python qslcl.py hello --loader=qslcl.bin
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
-| **v0.7.1 / v2.1.7** | 2026 | **Quantum Architecture** - New `--arch quantum`, opcode randomization, SHA512 signatures, 72KB binary |
+| **v0.7.1 / v2.1.7 / v2.1.8** | 2026 | **Quantum Architecture** - New `--arch quantum`, opcode randomization, SHA512 signatures, 72KB binary, cmd_getinfo improvement |
 | **v0.7.0 / v2.1.6** | 2026 | **oem panic** - Emergency recovery subcommand, stability fixes |
 | v0.6.9 / v2.1.5 | 2026 | Command removal - Removed `mode` command, 26 total commands |
 | v0.6.8 / v2.1.4 | 2026 | Size optimization - 128KB → 80KB, 37.5% smaller |
@@ -419,7 +412,7 @@ python qslcl.py hello --loader=qslcl.bin
 
 ---
 
-## ⚠️ Important: RAM-Only Execution (A12+)
+##  Important: RAM-Only Execution (A12+)
 
 On Apple A12+ devices, QSLCL executes entirely from RAM. **No modifications are permanent.**
 
@@ -516,26 +509,6 @@ python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
 # Final Words
 
 > **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, every bootstrap execution, every USB4 v2.0 80Gbps tunnel, every PAM4-encoded transaction, every one-click DFU boot, every automatic watchdog disabler, every quantum-optimized byte, and now a lean 72KB binary becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping, quantum-resistant encryption, structured data protocols, automatic USB self-identification, USB4 v2.0 80Gbps support, palera1n-like DFU automation, zero-configuration watchdog bypass, and the new quantum architecture for enhanced entropy and opcode randomization."**
-
-## Key Philosophy
-
-* **Universal Execution** - One binary, all architectures, 26 essential commands
-* **Quantum Architecture** - Enhanced entropy, opcode randomization, SHA512 signatures
-* **Silicon Intimacy** - Direct hardware conversation with bit-level precision
-* **Clean Architecture** - 44% smaller binary, 100% more maintainable
-* **Professional Grade** - Enterprise-level memory operations with verification
-* **Future-Proof Detection** - USB DFU Class compliance
-* **Encryption Ready** - ChaCha20/AES for A18+ compatibility
-* **Data Protocol** - Structured bulk transfers with integrity
-* **USB Self-Identification** - QSLCL visible in device descriptors
-* **80Gbps Throughput** - USB4 v2.0 PAM4 encoding with 4-lane aggregation
-* **Hardware Tunneling** - PCIe/DP/USB3 over USB4 fabric
-* **Silicon Attestation** - CMA + DPP hardware-level security
-* **One-Click DFU Boot** - Like palera1n, automatic DFU entry with button guide
-* **Zero-Config Watchdog** - Automatic detection and disabling on every connection
-* **Lean Binary** - 72KB optimized payload (44% smaller than original)
-* **RAM-Only Safety** - No permanent modifications on A12+, safe for research
-* **Ethical Empowerment** - Capability with responsibility and safety controls
 
 **YouTube**: [https://www.youtube.com/@EntropyVector](https://www.youtube.com/@EntropyVector)
 
