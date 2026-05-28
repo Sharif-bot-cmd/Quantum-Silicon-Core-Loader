@@ -136,7 +136,7 @@ BUILTIN_DICTS = {
     'common':    ['admin','password','1234','test','default','root','user','guest','abc123','letmein'],
     'passwords': ['password','123456','admin','letmein','qwerty','monkey','abc123','dragon','master','hello'],
     'hex':       [f"0x{i:04X}" for i in range(0, 0x100, 0x10)],
-    'commands':  ['READ','WRITE','ERASE','HELLO','PING','GETINFO','AUTH','UNLOCK','CONFIG','MODE'],
+    'commands':  ['READ','WRITE','ERASE','HELLO','PING','GETINFO','AUTH','UNLOCK','CONFIG','BRUTEFORCE'],
 }
 
 
