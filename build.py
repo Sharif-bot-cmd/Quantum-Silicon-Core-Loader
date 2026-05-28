@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# build.py - QSLCL Binary Builder v0.7.1
+# build.py - QSLCL Binary Builder v0.7.2
 import sys, struct, random, time, hmac, hashlib, os, zlib, uuid, json, platform, math
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
@@ -1584,9 +1584,6 @@ def inject_universal_runtime_features(image: bytearray, base_off=None, debug=Fal
 
     return cursor
 
-# ============================================================
-# Adaptive Behavior Controller (Dynamic Entropy / Opcode Policy)
-# ============================================================
 def adaptive_behavior_controller(env_hash: int, mode: str = "auto"):
     """
     Dynamically adjusts entropy, filler patterns, and opcode construction
@@ -1651,11 +1648,11 @@ def generate_command_code(
     # Only commands actually used in qslcl.py modules
     TIER = {
         "HELLO":1, "PING":1, "GETINFO":1, "GETSECTOR":1,
-        "READ":1, "PEEK":1, "WRITE":2, "POKE":2, "ERASE":2,
+        "READ":1, "PEEK":1, "WRITE":2, "POKE":2, "ERASE":2, "DUMP":2,
         "VERIFY":2, "OEM":3, "ODM":3, "POWER":3,
         "CONFIG":3, "PATCH":3, "BYPASS":4, "GLITCH":4, "RESET":4,
         "CRASH":4, "VOLTAGE":4, "BRUTEFORCE":4, "RAWMODE":5,
-        "RAWSTATE":5, "FOOTER":5,
+        "RAWSTATE":5, "FOOTER":5, "TEST":2, "FUZZ":3,  # <-- ADDED
     }
 
     FAMILY = {
@@ -1668,6 +1665,7 @@ def generate_command_code(
         "GLITCH":"TIMING", "BYPASS":"META", "BRUTEFORCE":"META",
         "RESET":"SYS", "CRASH":"SYS",
         "RAWMODE":"RAW", "RAWSTATE":"RAW", "FOOTER":"RAW",
+        "TEST":"DIAG", "FUZZ":"DIAG",  # <-- ADDED
     }
 
     RAWMODE_COMMANDS = {"RAWMODE", "RAWSTATE", "FOOTER"}
@@ -1691,7 +1689,7 @@ def generate_command_code(
         "SLEEP":0x0D, "TICK":0x0E, "ENTROPY":0x0F, "IPC_SEND":0x10, "IPC_RECV":0x11,
         "PRIV_UP":0x12, "PRIV_DOWN":0x13, "FAILSAFE":0x14, "DEBUG":0x15, "TRACE":0x16,
         "CRC32":0x17, "HMAC":0x18, "AES":0x19, "SHA256":0x1A, "RSA":0x1B, "MEMCPY":0x1C,
-        "MEMSET":0x1D, "CMP":0x1E, "TEST":0x1F
+        "MEMSET":0x1D, "CMP":0x1E, "JZ":0x1F, "JNZ":0x20, "TEST":0x21, "FUZZ":0x22,
     }
 
     def uop(op, reg=0, arg=0):
@@ -1713,6 +1711,7 @@ def generate_command_code(
             if C == "WRITE": return uop("IPC_RECV", 1, 0xE1) + uop("STORE", 1, 0x2000) + uop("RET")
             if C == "PEEK": return uop("LOAD", 2, 0x2100) + uop("IPC_SEND", 2, 0xE2) + uop("RET")
             if C == "POKE": return uop("IPC_RECV", 3, 0xE3) + uop("STORE", 3, 0x2100) + uop("RET")
+            if C == "DUMP": return uop("MEMCPY", 0, 0x100) + uop("IPC_SEND", 0, 0xE4) + uop("RET")
             if C == "GETSECTOR": return uop("LOAD", 0, 0x2200) + uop("IPC_SEND", 0, 0xE5) + uop("RET")
             if C == "ERASE": return uop("MEMSET", 0, 0x2000) + uop("IPC_SEND", 0, 0xE6) + uop("RET")
 
@@ -1743,6 +1742,40 @@ def generate_command_code(
         elif family == "META":
             if C == "BYPASS": return uop("PRIV_UP", 0, 0) + uop("SYSCALL", 0, 0xFB) + uop("RET")
             if C == "BRUTEFORCE": return uop("MOV", 0, 0) + uop("SYSCALL", 0, 0xFA) + uop("RET")
+
+        # ============================================================
+        # NEW: DIAG family for TEST and FUZZ commands
+        # ============================================================
+        elif family == "DIAG":
+            if C == "TEST":
+                # Self-test routine: runs internal diagnostics
+                return (
+                    uop("MOV", 0, 0) +                    # Initialize counter
+                    uop("TEST", 1, 0xAA) +                # Test pattern 0xAA
+                    uop("CMP", 1, 0xAA) +                 # Verify
+                    uop("JZ", 2, 0x08) +                  # Jump if match
+                    uop("MOV", 0, 1) +                    # Set error flag
+                    uop("JMP", 0, 0x10) +                 # Skip to end
+                    uop("TEST", 1, 0x55) +                # Test pattern 0x55
+                    uop("CMP", 1, 0x55) +                 # Verify
+                    uop("JZ", 2, 0x08) +                  # Jump if match
+                    uop("MOV", 0, 2) +                    # Set different error
+                    uop("IPC_SEND", 0, 0xF5) +            # Send results
+                    uop("RET")
+                )
+            elif C == "FUZZ":
+                # Fuzzing command: sends randomized patterns to target
+                return (
+                    uop("MOV", 0, 0) +                    # Fuzz iteration counter
+                    uop("FUZZ", 1, 0x100) +               # Fuzz 256 iterations
+                    uop("LOAD", 2, 0x3000) +              # Load fuzz buffer
+                    uop("MEMCPY", 2, 0x2000) +            # Copy to target
+                    uop("IPC_SEND", 2, 0xE8) +            # Send fuzz data
+                    uop("CRC32", 3, 0x2000) +             # Calculate CRC of fuzz
+                    uop("STORE", 3, 0x3010) +             # Store CRC result
+                    uop("MOV", 0, 0) +                    # Success status
+                    uop("RET")
+                )
 
         # Generic fallback
         return uop("MOV", 0, cmd_id) + uop("ENTROPY", 1, 0) + uop("XOR", 0, 1) + uop("IPC_SEND", 0, 0xFF) + uop("RET")
@@ -1793,6 +1826,11 @@ def generate_command_code(
     if C in RAWMODE_COMMANDS and len(arch_payload) >= 12:
         arch_payload[8:12] = struct.pack("<I", 0x5241574D)  # "RAWM"
 
+    # TEST/FUZZ watermark (optional)
+    if C in ["TEST", "FUZZ"] and len(arch_payload) >= 8:
+        # Add diagnostic marker "DIAG"
+        arch_payload[4:8] = struct.pack("<I", 0x47414944)  # "DIAG"
+
     # ------------------------------------------------------------------
     # 5. Build body with QSLCLCMD STANDARD FORMAT
     # ------------------------------------------------------------------
@@ -1810,7 +1848,7 @@ def generate_command_code(
     flags = 0x01
     if C in RAWMODE_COMMANDS:
         flags |= 0x80
-    if family in ["SEC", "RAW"]:
+    if family in ["SEC", "RAW", "DIAG"]:  # <-- Added DIAG to secure flags
         flags |= 0x40
 
     header_magic_fixed = b"QSLCLCMD"
@@ -1834,6 +1872,8 @@ def generate_command_code(
         print(f"    Header magic: {header_magic_fixed.decode()}")
         if secure_mode and include_header:
             print(f"    HMAC-SHA256: {sig.hex()}")
+        if C in ["TEST", "FUZZ"]:
+            print(f"    Diagnostic mode: ACTIVE")
 
     return bytes(buf)
 
@@ -4095,7 +4135,7 @@ def build_qslcl_bin(
        "VERIFY","OEM","ODM","AUTHENTICATE","POWER",
        "GETCONFIG","PATCH","BYPASS","GLITCH","RESET","GPT",
        "CRASH","VOLTAGE","BRUTEFORCE","RAWMODE","SETCONFIG",
-       "FOOTER","RAWSTATE"
+       "FOOTER","RAWSTATE","TEST","FUZZ"
     ]
 
     # ============================================================

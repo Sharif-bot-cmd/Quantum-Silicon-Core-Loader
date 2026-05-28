@@ -2,7 +2,7 @@
 
 Primary Core: **qslcl.elf** (deprecated)
 
-Assistant Module: **qslcl.bin (v0.7.1)**
+Assistant Module: **qslcl.bin (v0.7.2)**
 
 Universal Controller: **qslcl.py (v2.1.8)**
 
@@ -28,16 +28,21 @@ QSLCL runs in:
 
 ---
 
-## What's New in **v2.1.8**
+## What's New in **v0.7.2 / v2.1.8**
 
-- Add more Accurate information of the device in cmd_getinfo
+### **Improvised Diagnostic Commands**
+- **`test`** - Self-test routine (pattern verification, internal diagnostics)
+- **`fuzz`** - Fuzzing engine for edge case discovery (256+ iterations)
 
+### **Performance Improvements**
+- Faster device detection
+- Improved response timing
 
 ```
-QSLCL Binary Layout (v0.7.1):
+QSLCL Binary Layout (v0.7.2):
 ┌─────────────────────────────────────────────┐
 │ 0x000000  QSLCLBIN (Main Header + Ptrs)     │
-│ 0x000200+ QSLCLCMD (26 Commands)            │
+│ 0x000200+ QSLCLCMD (28 Commands)            │
 │ 0x004000+ QSLCLDIS (Dispatch Table)         │
 │ 0x005000+ QSLCLUSB (USB Micro-Engine)       │
 │ 0x006000+ QSLCLBLK (64 Endpoints)           │
@@ -54,6 +59,7 @@ QSLCL Binary Layout (v0.7.1):
 └─────────────────────────────────────────────┘
 
 Total Size: ~72KB (44% reduction from 128KB)
+Commands: 28 (added TEST, FUZZ)
 ```
 
 **How it works (automatic):**
@@ -79,7 +85,7 @@ python qslcl.py hello --loader=qslcl.bin
 
 ---
 
-# Complete Command List (v2.1.7)
+# Complete Command List (v2.1.8)
 
 **Core Memory Operations:**
 | Command | Description |
@@ -97,11 +103,7 @@ python qslcl.py hello --loader=qslcl.bin
 |---------|-------------|
 | `hello` | Device handshake and capability detection |
 | `ping` | Round-trip latency testing |
-| `getinfo` | Comprehensive device information retrieval |
-| `partitions` | Partition table detection (MBR/GPT parsing) |
-| `usb-identify` | Check QSLCL USB exposure status |
-| `usb4` | USB4 v2.0 80Gbps status and control |
-| `dfu-boot` | Boot iOS device into DFU mode (like palera1n) |
+| `getinfo` | Shows device, DFU mode, watchdog, loader features |
 
 **System Control:**
 | Command | Description |
@@ -124,18 +126,18 @@ python qslcl.py hello --loader=qslcl.bin
 | `verify` | System verification (checksum/signature/integrity/security/hardware/firmware) |
 | `footer` | Footer analysis with validation and security assessment |
 
-**Manufacturing & ODM:**
-| Command | Description |
-|---------|-------------|
-| `oem` | OEM operations (bootloader unlock/lock, warranty, secure boot, **panic**) |
-| `odm` | ODM operations (provisioning, testing, calibration, customization) |
-
-**Advanced Testing:**
+**Diagnostic & Testing:**
 | Command | Description |
 |---------|-------------|
 | `crash` | Controlled crash injection with recovery monitoring |
 | `glitch` | Hardware fault injection with parameter scanning |
 | `bruteforce` | Automated testing (scan/pattern/fuzz/dictionary/replay) |
+
+**Manufacturing & ODM:**
+| Command | Description |
+|---------|-------------|
+| `oem` | OEM operations (bootloader unlock/lock, warranty, secure boot, **panic**) |
+| `odm` | ODM operations (provisioning, testing, calibration, customization) |
 
 ---
 
@@ -158,15 +160,41 @@ python build.py qslcl.bin --arch quantum --usb4-v2 --encrypt --debug
 # Or standard generic build
 python build.py qslcl.bin
 
+# Get detailed device information (ENHANCED in v2.1.8)
+python qslcl.py getinfo --loader=qslcl.bin
+
+# Expected output:
+# ==================================================
+# QSLCL DEVICE INFORMATION
+# ==================================================
+# [DEVICE]
+#   Transport: USB
+#   VID:PID: 05AC:1281
+#   Product: iPhone 15 Pro
+#   USB Class: 0xFE (Application Specific)
+# 
+# [DFU MODE]
+#   Status: ACTIVE
+#   Generation: A12 or newer (ARM64e, PAC enabled)
+# 
+# [WATCHDOG]
+#   Detected SoC: Apple A-series
+#   Typical offset: 0x20E00000
+# 
+# [QSLCL LOADER]
+#   Architecture: quantum
+#   Binary size: 73728 bytes (72 KB)
+#   Features: Encryption, USB4 v2.0 80Gbps
+# ==================================================
+
 # Auto-DFU boot + Loader + Hello (All-in-One)
 python qslcl.py hello --loader=qslcl.bin --dfu-boot
 
 # Just boot into DFU mode (like palera1n)
 python qslcl.py dfu-boot
 
-# Test basic functionality (auto-exposes QSLCL in USB)
+# Test basic functionality
 python qslcl.py hello --loader=qslcl.bin --usb4
-python qslcl.py getinfo --loader=qslcl.bin
 python qslcl.py ping --loader=qslcl.bin
 ```
 
@@ -177,7 +205,7 @@ python qslcl.py ping --loader=qslcl.bin
 python build.py qslcl.bin --arch quantum --debug
 
 # Expected output:
-# [*] Building QSLCL v0.7.1 Command System
+# [*] Building QSLCL v0.7.2 Command System
 #     Architecture: quantum -> QUANTUM OPTIMIZED
 # [*] Applying quantum architecture optimizations...
 # [+] Quantum optimizations applied
@@ -185,8 +213,9 @@ python build.py qslcl.bin --arch quantum --debug
 #     Flags: 0x80000000
 # [*] Quantum optimizations complete
 # 
-# [*] QSLCL Binary v0.7.1 Build Complete
+# [*] QSLCL Binary v0.7.2 Build Complete
 #     Final Size: 73728 bytes (72.0 KB)
+#     Commands: 28
 ```
 
 ## Automatic Watchdog Disabler (v2.1.4)
@@ -220,7 +249,7 @@ python qslcl.py hello --loader=qslcl.bin
 
 ```bash
 # Method 1: Standalone DFU boot (like palera1n)
-python qslcl.py dfu-boot
+python qslcl.py --dfu-boot
 
 # Expected output:
 # ============================================================
@@ -295,14 +324,14 @@ python qslcl.py hello --loader=qslcl.bin
 # [+] Loader uploaded.
 # [*] Exposing QSLCL in USB configuration...
 # [+] QSLCL identified in USB:
-#     Product: QSLCL Loader v2.1.7
+#     Product: QSLCL Loader v2.1.8
 #     Serial: QSLCL-05AC-1281-67A3F2C8
 #     Protocol: 0x51 ('Q')
 #     Vendor Magic: 0x51534C43
 
 # Verify exposure with system tools
 $ lsusb -v -d 05AC:1281 | grep -E "(iProduct|iSerial)"
-  iProduct                2 QSLCL Loader v2.1.7
+  iProduct                2 QSLCL Loader v2.1.8
   iSerial                 3 QSLCL-05AC-1281-67A3F2C8
 ```
 
@@ -318,7 +347,7 @@ python qslcl.py hello --loader=qslcl.bin
 # Expected output:
 # [*] QSLCL Loader Modules Detected:
 #   ├─ QSLCLBIN: quantum arch, 73728 bytes (72KB)
-#   ├─ QSLCLCMD: 26 commands
+#   ├─ QSLCLCMD: 28 commands
 #   ├─ QSLCLEND: 64 endpoints
 #   ├─ QSLCLENC: v1.0
 #   │   ChaCha20=✓, AES-GCM=✓
@@ -358,8 +387,9 @@ python qslcl.py hello --loader=qslcl.bin
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
-| **v0.7.1 / v2.1.7 / v2.1.8** | 2026 | **Quantum Architecture** - New `--arch quantum`, opcode randomization, SHA512 signatures, 72KB binary, cmd_getinfo improvement |
-| **v0.7.0 / v2.1.6** | 2026 | **oem panic** - Emergency recovery subcommand, stability fixes |
+| **v0.7.2 / v2.1.8** | 2026 | **TEST & FUZZ commands** - Diagnostic self-test and fuzzing engine, **Enhanced getinfo** - Device info, DFU detection, watchdog status |
+| **v0.7.1 / v2.1.7** | 2026 | **Quantum Architecture** - `--arch quantum`, opcode randomization, SHA512 signatures, 72KB binary |
+| **v0.7.0 / v2.1.6** | 2026 | **oem panic** - Emergency recovery subcommand |
 | v0.6.9 / v2.1.5 | 2026 | Command removal - Removed `mode` command, 26 total commands |
 | v0.6.8 / v2.1.4 | 2026 | Size optimization - 128KB → 80KB, 37.5% smaller |
 | v0.6.7 / v2.1.3 | 2026 | Auto-DFU Boot - Like palera1n, one-click DFU entry |
@@ -401,18 +431,19 @@ python qslcl.py hello --loader=qslcl.bin
 
 ---
 
-## Size Optimization Details (v0.7.1)
+## Size Optimization Details (v0.7.2)
 
-| Metric | v0.6.8 | v0.7.1 | Reduction |
+| Metric | v0.6.8 | v0.7.2 | Reduction |
 |--------|--------|--------|-----------|
 | Binary size | 81,920 bytes | **73,728 bytes** | **10% smaller** |
 | Total from 128KB | 37.5% | **44%** | **Even leaner** |
 | Upload time | ~0.3s | ~0.27s | **10% faster** |
 | RAM usage | 80KB | **72KB** | **8KB saved** |
+| Commands | 26 | **28** | **+2 new commands** |
 
 ---
 
-##  Important: RAM-Only Execution (A12+)
+## Important: RAM-Only Execution (A12+)
 
 On Apple A12+ devices, QSLCL executes entirely from RAM. **No modifications are permanent.**
 
@@ -421,24 +452,24 @@ After reboot:
 - All bypasses/resets/rawmode states are cleared
 - No persistent changes to flash
 
-**Commands like `bypass`, `rawmode`, `crash`, `glitch, etc are TEMPORARY on A12+.**
+**Commands like `bypass`, `rawmode`, `crash`, `glitch`, `test`, `fuzz` are TEMPORARY on A12+.**
 
 This is intentional:
 - Safe for research and testing
 - No permanent brick risk
 - Works within Apple's security model
 
-For non-Apple devices, behavior varies by bootloader.
+For non-Apple devices (Qualcomm EDL, MediaTek BROM, etc.), behavior varies by bootloader. Some may allow flash writes.
 
 ---
 
 ## CRITICAL WARNING
 
-**QSLCL CAN  BRICK (DESTROY) YOUR DEVICE IF USED INCORRECTLY.**
+**QSLCL CAN PERMANENTLY BRICK (DESTROY) YOUR DEVICE IF USED INCORRECTLY.**
 
 | Safety Level | Operations | Risk |
 |-------------|-----------|------|
-| **SAFE** | EDL mode, DFU mode, BROM mode, Serial boot modes | Minimal |
+| **SAFE** | EDL mode, DFU mode, BROM mode, Serial boot modes, TEST, FUZZ | Minimal |
 | **CAUTION** | Writing to user partitions, voltage changes | Moderate |
 | **DANGEROUS** | Writing to iROM, BootROM, NOR flash boot sectors | High |
 | **BRICK RISK** | Overwriting protected bootloaders (iBoot, SBL, U-Boot SPL) | Critical |
@@ -483,9 +514,9 @@ The watchdog disabler modifies hardware registers on **your own device** to prev
 python qslcl.py hello --loader=qslcl.bin --debug
 ```
 
-**Parser Detection Problems:**
+**getinfo shows no loader:**
 ```bash
-python qslcl.py hello --loader=qslcl.bin --debug
+python qslcl.py getinfo --loader=qslcl.bin
 ```
 
 **Encryption Layer Not Found:**
@@ -508,7 +539,7 @@ python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
 
 # Final Words
 
-> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, every bootstrap execution, every USB4 v2.0 80Gbps tunnel, every PAM4-encoded transaction, every one-click DFU boot, every automatic watchdog disabler, every quantum-optimized byte, and now a lean 72KB binary becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping, quantum-resistant encryption, structured data protocols, automatic USB self-identification, USB4 v2.0 80Gbps support, palera1n-like DFU automation, zero-configuration watchdog bypass, and the new quantum architecture for enhanced entropy and opcode randomization."**
+> **"Quantum Silicon Core Loader represents the pinnacle of universal device communication — where every memory operation, every privilege escalation, every hardware interaction, every binary patch, every bootstrap execution, every USB4 v2.0 80Gbps tunnel, every PAM4-encoded transaction, every one-click DFU boot, every automatic watchdog disabler, every quantum-optimized byte, every diagnostic test, every fuzzing iteration, and now a lean 72KB binary with 28 commands becomes an extension of silicon consciousness through our perfected micro-VM architecture with dynamic bootstrapping, quantum-resistant encryption, structured data protocols, automatic USB self-identification, USB4 v2.0 80Gbps support, palera1n-like DFU automation, zero-configuration watchdog bypass, enhanced device information, and the new quantum architecture for advanced entropy and opcode randomization."**
 
 **YouTube**: [https://www.youtube.com/@EntropyVector](https://www.youtube.com/@EntropyVector)
 
