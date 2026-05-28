@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# build.py - QSLCL Binary Builder v0.7.2
+# build.py - QSLCL Binary Builder v0.7.3
 import sys, struct, random, time, hmac, hashlib, os, zlib, uuid, json, platform, math
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
@@ -1651,7 +1651,7 @@ def generate_command_code(
         "READ":1, "PEEK":1, "WRITE":2, "POKE":2, "ERASE":2, "DUMP":2,
         "VERIFY":2, "OEM":3, "ODM":3, "POWER":3,
         "CONFIG":3, "PATCH":3, "BYPASS":4, "GLITCH":4, "RESET":4,
-        "CRASH":4, "VOLTAGE":4, "BRUTEFORCE":4, "RAWMODE":5,
+        "CRASH":4, "VOLTAGE":4, "RAWMODE":5,
         "RAWSTATE":5, "FOOTER":5, "TEST":2, "FUZZ":3,  # <-- ADDED
     }
 
@@ -1662,10 +1662,10 @@ def generate_command_code(
         "OEM":"OEM", "ODM":"OEM",
         "CONFIG":"CFG", "POWER":"PWR", "VOLTAGE":"PWR",
         "PATCH":"ROM",
-        "GLITCH":"TIMING", "BYPASS":"META", "BRUTEFORCE":"META",
+        "GLITCH":"TIMING", "BYPASS":"META", 
         "RESET":"SYS", "CRASH":"SYS",
         "RAWMODE":"RAW", "RAWSTATE":"RAW", "FOOTER":"RAW",
-        "TEST":"DIAG", "FUZZ":"DIAG",  # <-- ADDED
+        "TEST":"DIAG", "FUZZ":"DIAG",  
     }
 
     RAWMODE_COMMANDS = {"RAWMODE", "RAWSTATE", "FOOTER"}
@@ -1741,7 +1741,6 @@ def generate_command_code(
 
         elif family == "META":
             if C == "BYPASS": return uop("PRIV_UP", 0, 0) + uop("SYSCALL", 0, 0xFB) + uop("RET")
-            if C == "BRUTEFORCE": return uop("MOV", 0, 0) + uop("SYSCALL", 0, 0xFA) + uop("RET")
 
         # ============================================================
         # NEW: DIAG family for TEST and FUZZ commands
@@ -4134,7 +4133,7 @@ def build_qslcl_bin(
        "READ","PEEK","WRITE","POKE","ERASE",
        "VERIFY","OEM","ODM","AUTHENTICATE","POWER",
        "GETCONFIG","PATCH","BYPASS","GLITCH","RESET","GPT",
-       "CRASH","VOLTAGE","BRUTEFORCE","RAWMODE","SETCONFIG",
+       "CRASH","VOLTAGE","RAWMODE","SETCONFIG",
        "FOOTER","RAWSTATE","TEST","FUZZ"
     ]
 

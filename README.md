@@ -2,9 +2,9 @@
 
 Primary Core: **qslcl.elf** (deprecated)
 
-Assistant Module: **qslcl.bin (v0.7.2)**
+Assistant Module: **qslcl.bin (v0.7.3)**
 
-Universal Controller: **qslcl.py (v2.1.8)**
+Universal Controller: **qslcl.py (v2.1.9)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION_MATRIX.md)
 
@@ -28,15 +28,11 @@ QSLCL runs in:
 
 ---
 
-## What's New in **v0.7.2 / v2.1.8**
+## What's New in **v0.7.3 / v2.1.9**
 
-### **Improvised Diagnostic Commands**
-- **`test`** - Self-test routine (pattern verification, internal diagnostics)
-- **`fuzz`** - Fuzzing engine for edge case discovery (256+ iterations)
+- Remove unnecessary BRUTEFORCE command in qslcl.bin (because some others handles it).
+- revising bruteforce and bypass command in qslcl.py for accuracy (because its overkill).
 
-### **Performance Improvements**
-- Faster device detection
-- Improved response timing
 
 ```
 QSLCL Binary Layout (v0.7.2):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qslcl.py — Universal QSLCL Tool v2.1.8
+# qslcl.py — Universal QSLCL Tool v2.1.9
 # Author: Sharif — QSLCL Creator
 # Works on all SOC architectures
 import sys, time, argparse, zlib, struct, threading, re, os, random, math, shutil, gzip, json, itertools, hashlib, queue
@@ -2470,7 +2470,7 @@ def main():
             super().__init__(prog, max_help_position=36, width=140)
 
     p = argparse.ArgumentParser(
-        description="QSLCL Tool v2.1.8 - Universal SOC Tool",
+        description="QSLCL Tool v2.1.9 - Universal SOC Tool",
         formatter_class=QSLCLHelp
     )
 
@@ -2567,13 +2567,14 @@ def main():
     rst.add_argument("--force-reset", action="store_true")
     rst.set_defaults(func=cmd_reset)
 
-    # BRUTEFORCE
-    bf = new_cmd("bruteforce", help="Brute-force attack")
-    bf.add_argument("subcmd", nargs="?", help="Subcommand")
-    bf.add_argument("pattern", nargs="?", help="Pattern")
-    bf.add_argument("--threads", type=int, default=8)
-    bf.add_argument("--output", help="Output file")
-    bf.add_argument("args", nargs="*")
+    # BRUTEFORCE 
+    bf = new_cmd("bruteforce", help="Brute-force attack (scan/pattern/fuzz/dictionary/analyze)")
+    bf.add_argument("subcmd", nargs="?", help="Subcommand: list, scan, pattern, fuzz, dictionary, analyze, rawmode")
+    bf.add_argument("args", nargs="*", help="Arguments for subcommand")
+    bf.add_argument("--threads", type=int, default=4, help="Threads for parallel operations (default: 4)")
+    bf.add_argument("--output", help="Output file for results")
+    bf.add_argument("--strategy", choices=["basic", "smart", "aggressive"], default="basic", help="Bruteforce strategy")
+    bf.add_argument("--rawmode", action="store_true", help="Enable RAWMODE before bruteforce")
     bf.set_defaults(func=cmd_bruteforce)
 
     # CONFIG
