@@ -86,7 +86,7 @@ Project: Quantum Silicon Core Loader (QSLCL)
 Official Email for Legal: Ciphermesh45@protonmail.com
 Country: Philippines
 
-**Statement under penalty of perjury:**
+Statement under penalty of perjury:
 
 > *"I have a good faith belief that the material was removed or disabled as a result of mistake or misidentification of the material to be removed or disabled. I consent to the jurisdiction of the Federal District Court for the judicial district in which my address is located (or if my address is outside the United States, the judicial district of GitHub's primary place of business), and I will accept service of process from the person who provided the original notification or an agent of such person."*
 
@@ -106,7 +106,7 @@ Country: Philippines
 
 ## FINAL STATEMENT
 
-Quantum Silicon Core Loader is a **legitimate security research and right-to-repair tool**. It has been developed responsibly with:
+Quantum Silicon Core Loader is a legitimate security research and right-to-repair tool. It has been developed responsibly with:
 
 - Clear safety warnings
 - User confirmation requirements
@@ -119,9 +119,9 @@ Should a wrongful DMCA claim be filed, I am prepared to **vigorously defend** th
 
 ---
 
-**Document prepared by:** Sharif Muhaymin  
-**Date:** May 11, 2026
-**Verification:** This document reflects my good-faith understanding of DMCA procedures and my project's legal standing. I am not a lawyer, and this does not constitute legal advice.
+Document prepared by: Sharif Muhaymin  
+Date: May 11, 2026
+Verification: This document reflects my good-faith understanding of DMCA procedures and my project's legal standing. I am not a lawyer, and this does not constitute legal advice.
 
 Signature:
 Sharif Muhaymin
