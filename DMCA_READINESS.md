@@ -6,7 +6,7 @@
 
 ---
 
-## 📋 PREAMBLE
+## PREAMBLE
 
 This document serves as a **proactive legal defense package** for the Quantum Silicon Core Loader (QSLCL) project. It is not a DMCA counter-notice (as no takedown has been filed), but rather a prepared response should a wrongful DMCA takedown occur.
 
@@ -14,7 +14,7 @@ This document serves as a **proactive legal defense package** for the Quantum Si
 
 ---
 
-## ⚖️ LEGAL BASIS FOR THE PROJECT
+## LEGAL BASIS FOR THE PROJECT
 
 QSLCL operates under established legal protections:
 
@@ -33,7 +33,7 @@ QSLCL operates under established legal protections:
 
 ---
 
-## 🛡️ PROJECT SAFEGUARDS (Evidence of Good Faith)
+## PROJECT SAFEGUARDS (Evidence of Good Faith)
 
 QSLCL includes numerous built-in protections demonstrating responsible disclosure:
 
@@ -47,7 +47,7 @@ QSLCL includes numerous built-in protections demonstrating responsible disclosur
 
 ---
 
-## 📝 ALLEGED WORKAROUND ANALYSIS
+## ALLEGED WORKAROUND ANALYSIS
 
 ***To be completed if a DMCA claim is filed*** - This section analyzes specific claims.
 
@@ -75,7 +75,7 @@ QSLCL includes numerous built-in protections demonstrating responsible disclosur
 
 ---
 
-## 👤 RESPONDING PARTY INFORMATION
+## RESPONDING PARTY INFORMATION
 
 **For any DMCA counter-notice, the following information would be provided:**
 
@@ -92,7 +92,7 @@ Country: Philippines
 
 ---
 
-## 📂 SUPPORTING EVIDENCE (To be attached if needed)
+## SUPPORTING EVIDENCE (To be attached if needed)
 
 | Document | Status | Location |
 |----------|--------|----------|
@@ -104,7 +104,7 @@ Country: Philippines
 
 ---
 
-## 🎯 FINAL STATEMENT
+## FINAL STATEMENT
 
 Quantum Silicon Core Loader is a **legitimate security research and right-to-repair tool**. It has been developed responsibly with:
 
