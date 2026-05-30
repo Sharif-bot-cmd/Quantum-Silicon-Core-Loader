@@ -548,3 +548,8 @@ python qslcl.py read boot boot.img --chunk-size 32768 --loader=qslcl.bin
 ## Legal & Transparency
 
 This project maintains transparent legal documentation and has established official communication with GitHub Support (Ticket: 4368109).
+
+## Mirrors
+
+- GitHub: https://github.com/Sharif-bot-cmd/Quantum-Silicon-Core-Loader
+- Codeberg: https://codeberg.org/YOURNAME/Quantum-Silicon-Core-Loader
