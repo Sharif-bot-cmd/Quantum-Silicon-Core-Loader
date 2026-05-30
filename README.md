@@ -552,4 +552,4 @@ This project maintains transparent legal documentation and has established offic
 ## Mirrors
 
 - GitHub: https://github.com/Sharif-bot-cmd/Quantum-Silicon-Core-Loader
-- Codeberg: https://codeberg.org/YOURNAME/Quantum-Silicon-Core-Loader
+- Codeberg: https://codeberg.org/Sharif_Muhaymin/Quantum-Silicon-Core-Loader
