@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qslcl.py — Universal QSLCL Tool v2.1.9
+# qslcl.py — Universal QSLCL Tool v2.2.0
 # Author: Sharif — QSLCL Creator
 # Works on all SOC architectures
 import sys, time, argparse, zlib, struct, threading, re, os, random, math, shutil, gzip, json, itertools, hashlib, queue
@@ -48,6 +48,13 @@ try:
     USB_SUPPORT = True
 except ImportError:
     USB_SUPPORT = False
+
+try:
+    from slowm8 import register_slowm8, cmd_slowm8
+    SLOWM8_AVAILABLE = True
+except ImportError:
+    SLOWM8_AVAILABLE = False
+    print("[*] slowm8 module not available (install slowm8.py)")
 
 # =============================================================================
 # GLOBAL DATABASES
@@ -1195,7 +1202,13 @@ def wait_for_device(timeout=None, interval=0.5):
             return devs[0]
         if timeout and (time.time() - start) >= timeout:
             return None
-        time.sleep(interval)
+
+        if jitter:
+            import random
+            sleep_time = random.uniform(interval * 0.5, interval * 1.5)
+            time.sleep(sleep_time)
+        else:
+            time.sleep(interval)
 
 # =============================================================================
 # TRANSPORT FUNCTIONS
@@ -2027,6 +2040,55 @@ def auto_disable_watchdog_on_connect(dev: QSLCLDevice, debug: bool = False) -> b
     
     return result["watchdog_disabled"]
 
+def apply_jitter(current_offset, total_size, jitter_mode):
+    """Apply jitter during USB upload based on mode"""
+    import random
+    import time
+    
+    if jitter_mode == "simple":
+        # Simple random jitter between 5ms and 25ms
+        delay = random.uniform(0.005, 0.025)
+        
+    elif jitter_mode == "progressive":
+        # Slower as upload progresses
+        progress = current_offset / total_size if total_size > 0 else 0
+        base = 0.005 + (progress * 0.02)  # 5ms at start, 25ms at end
+        delay = random.uniform(base * 0.7, base * 1.3)
+        
+    elif jitter_mode == "burst":
+        # Burst pattern: send 3-8 chunks fast, then pause
+        if not hasattr(apply_jitter, "counter"):
+            apply_jitter.counter = 0
+            apply_jitter.burst_size = random.randint(3, 8)
+        
+        apply_jitter.counter += 1
+        
+        if apply_jitter.counter >= apply_jitter.burst_size:
+            delay = random.uniform(0.03, 0.08)  # Longer pause after burst
+            apply_jitter.counter = 0
+            apply_jitter.burst_size = random.randint(3, 8)
+        else:
+            delay = random.uniform(0.001, 0.005)  # Very fast between chunks
+            
+    elif "-" in jitter_mode:
+        # Custom range like "0.001-0.05"
+        try:
+            min_d, max_d = jitter_mode.split("-")
+            min_delay = float(min_d)
+            max_delay = float(max_d)
+            delay = random.uniform(min_delay, max_delay)
+        except:
+            print(f"[!] Invalid jitter range: {jitter_mode}, using default")
+            delay = 0.01
+    else:
+        # Unknown mode, use simple jitter
+        print(f"[!] Unknown jitter mode: {jitter_mode}, using simple")
+        delay = random.uniform(0.005, 0.025)
+    
+    # Ensure delay is reasonable (1ms to 100ms)
+    delay = max(0.001, min(0.1, delay))
+    time.sleep(delay)
+
 # =============================================================================
 # AUTO LOADER
 # =============================================================================
@@ -2036,6 +2098,7 @@ def auto_loader_if_needed(args, dev: QSLCLDevice):
         return
     
     loader_path = args.loader
+    jitter_mode = getattr(args, "jitter", None)  
     print(f"[*] Loading: {loader_path}")
     
     try:
@@ -2070,8 +2133,14 @@ def auto_loader_if_needed(args, dev: QSLCLDevice):
                 if usb.util.endpoint_direction(ep.bEndpointAddress) == usb.util.ENDPOINT_OUT:
                     handle.write(ep.bEndpointAddress, pkt, timeout=2000)
                     break
+
         print(f"\r[*] Progress: {min(off+chunk,total)*100//total}%", end='')
-        time.sleep(0.01)
+
+        if jitter_mode:
+            apply_jitter(off, total, jitter_mode)
+        else:
+            time.sleep(0.01)  # Default delay
+    
     print("\n[+] Loader uploaded.")
 
     if not smode:  # Only for USB devices
@@ -2470,7 +2539,7 @@ def main():
             super().__init__(prog, max_help_position=36, width=140)
 
     p = argparse.ArgumentParser(
-        description="QSLCL Tool v2.1.9 - Universal SOC Tool",
+        description="QSLCL Tool v2.2.0 - Universal SOC Tool",
         formatter_class=QSLCLHelp
     )
 
@@ -2480,6 +2549,8 @@ def main():
     p.add_argument("--debug", action="store_true", help="Debug output")
     p.add_argument("--usb4", action="store_true", help="Enable USB4 v2.0 80Gbps mode") 
     p.add_argument("--dfu-boot", action="store_true", help="Auto-boot iOS device into DFU mode (like palera1n)")
+    p.add_argument("--jitter", type=str, default=None, 
+                   help="Jitter mode: simple, progressive, burst, or 'min-max' (e.g., '0.005-0.025')")
 
     sub = p.add_subparsers(dest="cmd", metavar="")
 
@@ -2488,6 +2559,8 @@ def main():
         sp.add_argument("--loader", help="Inject qslcl.bin")
         sp.add_argument("--auth", action="store_true")
         sp.add_argument("--wait", type=int, default=0)
+        sp.add_argument("--jitter", type=str, default=None, 
+                        help="Jitter mode: simple, progressive, burst, or 'min-max' (e.g., '0.005-0.025')")
         return sp
 
     # Core commands
@@ -2649,6 +2722,9 @@ def main():
     pt.add_argument("args", nargs="+", help="Target and patch data")
     pt.add_argument("--no-verify", action="store_true")
     pt.set_defaults(func=cmd_patch)
+
+    if SLOWM8_AVAILABLE:
+        register_slowm8(sub)
 
     args = p.parse_args()
 
