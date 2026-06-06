@@ -36,7 +36,7 @@ QSLCL runs in:
 |---------|-------------|
 | **`slowm8` command** | USB stress tester inspired by checkm8 but focused on timing attacks and fuzzing. Experimental - tests how devices handle slow/malformed packets |
 | **`--jitter` flag** | Adds random timing variation during USB upload (simple, progressive, burst, or custom ranges) |
-| **QSLCLSPT integration** | `slowm8` now uses your existing setup packet database for targeted stress testing |
+| **QSLCLSPT integration** | `slowm8` now uses the existing setup packet database for targeted stress testing |
 | **Enhanced error recovery** | Better handling of USB timeouts and malformed responses |
 
 ### Improvements
