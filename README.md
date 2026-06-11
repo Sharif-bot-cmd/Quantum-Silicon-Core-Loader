@@ -687,7 +687,7 @@ python qslcl.py hello --loader=qslcl.bin --jitter simple --debug
 
 ## Legal & Transparency
 
-This project maintains transparent legal documentation and has established official communication with GitHub Support (Ticket: 4368109).
+This project maintains transparent legal documentation and has established official communication with GitHub Support (Ticket: 4468461).
 
 ## Mirrors
 
