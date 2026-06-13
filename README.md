@@ -100,7 +100,7 @@ python qslcl.py hello --loader=qslcl.bin
 |---------|-------------|
 | `read` | Partitions reading |
 | `write` | Partitions writing |
-| `erase` | Secure erasure with multiple patterns (zero, FF, checker, random) |
+| `erase` | Partitions erasure |
 | `peek` | Memory inspection with type interpretation and pointer analysis |
 | `poke` | Precision memory writes with bit operations (AND/OR/XOR) |
 | `patch` | Binary patching with backup, verification, and dry-run support |
@@ -580,7 +580,7 @@ For non-Apple devices (Qualcomm EDL, MediaTek BROM, etc.), behavior varies by bo
 
 ## CRITICAL WARNING
 
-**QSLCL CAN PERMANENTLY BRICK (DESTROY) YOUR DEVICE IF USED INCORRECTLY.**
+**QSLCL CAN BRICK YOUR DEVICE IF USED INCORRECTLY.**
 
 | Safety Level | Operations | Risk |
 |-------------|-----------|------|
