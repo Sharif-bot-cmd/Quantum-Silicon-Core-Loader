@@ -98,8 +98,8 @@ python qslcl.py hello --loader=qslcl.bin
 **Core Memory Operations:**
 | Command | Description |
 |---------|-------------|
-| `read` | Memory reading with resume support, verification, hex/json/disasm output |
-| `write` | Memory writing with protection checks, pattern fill, verification |
+| `read` | Partitions reading |
+| `write` | Partitions writing |
 | `erase` | Secure erasure with multiple patterns (zero, FF, checker, random) |
 | `peek` | Memory inspection with type interpretation and pointer analysis |
 | `poke` | Precision memory writes with bit operations (AND/OR/XOR) |
