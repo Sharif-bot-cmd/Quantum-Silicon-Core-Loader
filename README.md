@@ -98,9 +98,9 @@ python qslcl.py hello --loader=qslcl.bin
 **Core Memory Operations:**
 | Command | Description |
 |---------|-------------|
-| `read` | Memory reading with resume support, verification, hex/json/disasm output |
-| `write` | Memory writing with protection checks, pattern fill, verification |
-| `erase` | Secure erasure with multiple patterns (zero, FF, checker, random) |
+| `read` | Partitions reading |
+| `write` | Partitions writing |
+| `erase` | Partitions erasure |
 | `peek` | Memory inspection with type interpretation and pointer analysis |
 | `poke` | Precision memory writes with bit operations (AND/OR/XOR) |
 | `patch` | Binary patching with backup, verification, and dry-run support |
@@ -580,7 +580,7 @@ For non-Apple devices (Qualcomm EDL, MediaTek BROM, etc.), behavior varies by bo
 
 ## CRITICAL WARNING
 
-**QSLCL CAN PERMANENTLY BRICK (DESTROY) YOUR DEVICE IF USED INCORRECTLY.**
+**QSLCL CAN BRICK YOUR DEVICE IF USED INCORRECTLY.**
 
 | Safety Level | Operations | Risk |
 |-------------|-----------|------|
