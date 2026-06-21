@@ -2,7 +2,7 @@
 
 Primary Core: **qslcl.elf** (deprecated)
 
-Assistant Module: **qslcl.bin (v0.7.4)**
+Assistant Module: **qslcl.bin (v0.7.3)**
 
 Universal Controller: **qslcl.py (v2.2.0)**
 
@@ -28,9 +28,7 @@ QSLCL runs in:
 
 ---
 
-## What's New in **v0.7.4**
-
-- Improving QSLCLRESP to use Micro-VM instruction.
+## What's New in **v0.7.3 / v2.2.0**
 
 ### New Features
 
@@ -103,6 +101,8 @@ python qslcl.py hello --loader=qslcl.bin
 | `read` | Partitions reading |
 | `write` | Partitions writing |
 | `erase` | Partitions erasure |
+=======
+| `erase` | Secure erasure with multiple patterns (zero, FF, checker, random) |
 | `peek` | Memory inspection with type interpretation and pointer analysis |
 | `poke` | Precision memory writes with bit operations (AND/OR/XOR) |
 | `patch` | Binary patching with backup, verification, and dry-run support |
