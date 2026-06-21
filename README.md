@@ -2,7 +2,7 @@
 
 Primary Core: **qslcl.elf** (deprecated)
 
-Assistant Module: **qslcl.bin (v0.7.3)**
+Assistant Module: **qslcl.bin (v0.7.4)**
 
 Universal Controller: **qslcl.py (v2.2.0)**
 
@@ -28,7 +28,9 @@ QSLCL runs in:
 
 ---
 
-## What's New in **v0.7.3 / v2.2.0**
+## What's New in **v0.7.4**
+
+- Improving QSLCLRESP to use Micro-VM instruction.
 
 ### New Features
 
