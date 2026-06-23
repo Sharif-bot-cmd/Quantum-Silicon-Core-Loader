@@ -114,9 +114,9 @@ python qslcl.py hello --loader=qslcl.bin
 **System Control:**
 | Command | Description |
 |---------|-------------|
-| `reset` | System reset (soft/hard/recovery/bootloader/EDL/factory) |
-| `power` | Power management (status/on/off/cycle/sleep/wake) |
-| `config` | Configuration management (get/set/list/backup/restore/reset) |
+| `reset` | System reset |
+| `power` | Power management |
+| `config` | Configuration management |
 
 **Voltage & Hardware:**
 | Command | Description |
@@ -129,7 +129,7 @@ python qslcl.py hello --loader=qslcl.bin
 |---------|-------------|
 | `rawmode` | Privilege escalation with session audit logging |
 | `bypass` | Security bypass with auto-detection and enforcement analysis |
-| `verify` | System verification (checksum/signature/integrity/security/hardware/firmware) |
+| `verify` | System verification |
 | `footer` | Footer analysis with validation and security assessment |
 
 **Diagnostic & Testing:**
@@ -137,14 +137,14 @@ python qslcl.py hello --loader=qslcl.bin
 |---------|-------------|
 | `crash` | Controlled crash injection with recovery monitoring |
 | `glitch` | Hardware fault injection with parameter scanning |
-| `bruteforce` | Automated testing (scan/pattern/fuzz/dictionary/replay) |
-| `slowm8` | **NEW** - USB stress tester with auto-detection and bug injection |
+| `bruteforce` | Automated testing |
+| `slowm8` | USB stress tester with auto-detection and bug injection |
 
 **Manufacturing & ODM:**
 | Command | Description |
 |---------|-------------|
-| `oem` | OEM operations (bootloader unlock/lock, warranty, secure boot, panic) |
-| `odm` | ODM operations (provisioning, testing, calibration, customization) |
+| `oem` | OEM operations |
+| `odm` | ODM operations |
 
 ---
 
