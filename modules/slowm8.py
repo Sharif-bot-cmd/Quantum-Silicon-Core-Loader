@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# slowm8.py - QSLCL USB Stress Tester v2.2.0
+# slowm8.py - QSLCL USB Stress Tester v2.2.1 (FIXED)
 # Auto-detects devices, adapts timing, finds bugs, and injects test code
 
 import os
@@ -10,6 +10,7 @@ import json
 import random
 import threading
 import hashlib
+import zlib  # FIXED: Added missing import
 from typing import Optional, List, Tuple, Dict, Any
 from dataclasses import dataclass, field
 from collections import defaultdict
@@ -17,6 +18,14 @@ from collections import defaultdict
 # =============================================================================
 # IMPORTS - With proper fallbacks
 # =============================================================================
+try:
+    import usb.core
+    import usb.util
+    USB_AVAILABLE = True
+except ImportError:
+    USB_AVAILABLE = False
+    print("[!] Warning: PyUSB not available. SlowM8 will be limited.")
+
 try:
     from qslcl import (
         scan_all,
@@ -26,11 +35,13 @@ try:
         encode_qslcl_structure,
         QSLCLCMD_DB,
         QSLCLSPT_DB,
-        _DEBUG,
         parse_standard_header,
         open_transport,
-        QSLCLDevice
+        QSLCLDevice,
+        set_debug,
+        _DEBUG
     )
+    QSLCL_AVAILABLE = True
 except ImportError:
     try:
         from .qslcl import (
@@ -41,14 +52,37 @@ except ImportError:
             encode_qslcl_structure,
             QSLCLCMD_DB,
             QSLCLSPT_DB,
-            _DEBUG,
             parse_standard_header,
             open_transport,
-            QSLCLDevice
+            QSLCLDevice,
+            set_debug,
+            _DEBUG
         )
+        QSLCL_AVAILABLE = True
     except ImportError:
-        print("[!] CRITICAL: Cannot import qslcl core module")
-        sys.exit(1)
+        print("[!] WARNING: Cannot import qslcl core module")
+        QSLCL_AVAILABLE = False
+        
+        # Provide stub functions for testing
+        def scan_all(): return []
+        def auto_loader_if_needed(args, dev): pass
+        def qslcl_dispatch(dev, cmd, payload=b"", timeout=2.0): return None
+        def decode_runtime_result(resp): return {"severity": "UNKNOWN", "code": 0xFFFF, "name": "UNKNOWN"}
+        def encode_qslcl_structure(magic, body, flags=0): return b""
+        def parse_standard_header(data): return None
+        def open_transport(dev): return None, False
+        _DEBUG = False
+        class QSLCLDevice: pass
+
+# =============================================================================
+# FIXED: Global debug variable
+# =============================================================================
+_DEBUG_SLOWM8 = False
+
+def debug_print(msg: str):
+    """Print debug message if debugging is enabled"""
+    if _DEBUG_SLOWM8 or (QSLCL_AVAILABLE and _DEBUG):
+        print(msg)
 
 # =============================================================================
 # CONFIGURATION
@@ -192,7 +226,7 @@ class USBFuzzer:
         return result
 
 # =============================================================================
-# MAIN PACKET SENDER
+# MAIN PACKET SENDER - FIXED VERSION
 # =============================================================================
 
 class SlowPacketSender:
@@ -208,54 +242,84 @@ class SlowPacketSender:
         self.timing_data = []
         self.running = False
         self._bug_counter = 0
+        self._handle = None
+        self._serial_mode = False
+        
+        # FIXED: Open transport if not already open
+        self._ensure_handle()
+    
+    def _ensure_handle(self):
+        """FIXED: Ensure device handle is open"""
+        if self.dev.handle is None:
+            self._handle, self._serial_mode = open_transport(self.dev)
+            if self._handle:
+                self.dev.handle = self._handle
+                self.dev.serial_mode = self._serial_mode
+                debug_print("[*] Device handle opened")
+        else:
+            self._handle = self.dev.handle
+            self._serial_mode = getattr(self.dev, 'serial_mode', False)
     
     # =========================================================================
-    # AUTO-DETECTION
+    # AUTO-DETECTION - FIXED with proper exception handling
     # =========================================================================
     
     def _auto_detect_device_mode(self) -> str:
         """Auto-detect device mode without hardcoded PIDs"""
-        if self.dev.handle is None:
+        self._ensure_handle()
+        
+        if self._handle is None:
+            debug_print("[!] No device handle for auto-detection")
             return "unknown"
         
         try:
             # Method 1: USB Class Detection
-            cfg = self.dev.handle.get_active_configuration()
+            cfg = self._handle.get_active_configuration()
             for intf in cfg:
                 if intf.bInterfaceClass == 0xFE and intf.bInterfaceSubClass == 0x01:
-                    if _DEBUG: print("[*] Mode: DFU (0xFE/0x01)")
+                    debug_print("[*] Mode: DFU (0xFE/0x01)")
                     return "dfu"
                 if intf.bInterfaceClass == 0x0A:
-                    if _DEBUG: print("[*] Mode: CDC (EDL/BROM)")
+                    debug_print("[*] Mode: CDC (EDL/BROM)")
                     return "cdc"
                 if intf.bInterfaceClass == 0xFF:
-                    if _DEBUG: print("[*] Mode: Vendor-specific")
+                    debug_print("[*] Mode: Vendor-specific")
                     return "vendor"
+        except usb.core.USBError as e:
+            debug_print(f"[!] USB class detection error: {e}")
         except Exception as e:
-            if _DEBUG: print(f"[!] Class detection: {e}")
+            debug_print(f"[!] Class detection: {e}")
         
         try:
             # Method 2: Response time analysis
             test_packet = b"\x80\x06\x01\x00\x00\x00\x12\x00"
             start = time.time()
-            self.dev.handle.ctrl_transfer(0x80, 0x06, 0x0100, 0x0000, 18, timeout=50)
+            self._handle.ctrl_transfer(0x80, 0x06, 0x0100, 0x0000, 18, timeout=50)
             elapsed = (time.time() - start) * 1000
             
             if elapsed > 30:
-                if _DEBUG: print(f"[*] Mode: Encrypted DFU (A19+) - {elapsed:.1f}ms")
+                debug_print(f"[*] Mode: Encrypted DFU (A19+) - {elapsed:.1f}ms")
                 return "dfu_encrypted"
             else:
-                if _DEBUG: print(f"[*] Mode: Standard USB - {elapsed:.1f}ms")
+                debug_print(f"[*] Mode: Standard USB - {elapsed:.1f}ms")
                 return "usb_standard"
+        except usb.core.USBError as e:
+            debug_print(f"[!] USB response error: {e}")
         except:
             pass
         
-        if _DEBUG: print("[*] Mode: Unknown")
+        debug_print("[*] Mode: Unknown")
         return "unknown"
     
     def _auto_detect_device_timing(self):
         """Auto-detect device capabilities without hardcoded PIDs"""
+        self._ensure_handle()
+        
         print("[*] Auto-detecting device timing capabilities...")
+        
+        if self._handle is None:
+            print("[!] No device handle for timing detection")
+            return
         
         test_packets = [
             b"\x80\x06\x01\x00\x00\x00\x12\x00",  # GET_DESCRIPTOR
@@ -268,7 +332,7 @@ class SlowPacketSender:
         for packet in test_packets:
             try:
                 start = time.time()
-                response = self.dev.handle.ctrl_transfer(
+                response = self._handle.ctrl_transfer(
                     bmRequestType=packet[0],
                     bRequest=packet[1],
                     wValue=int.from_bytes(packet[2:4], 'little'),
@@ -278,7 +342,13 @@ class SlowPacketSender:
                 )
                 elapsed = (time.time() - start) * 1000
                 response_times.append(elapsed)
-            except:
+            except usb.core.USBError as e:
+                if "timeout" in str(e).lower():
+                    debug_print(f"[!] Timeout on test packet: {packet[:8].hex()}")
+                else:
+                    debug_print(f"[!] USB error: {e}")
+            except Exception as e:
+                debug_print(f"[!] Test packet error: {e}")
                 continue
         
         if response_times:
@@ -363,19 +433,25 @@ class SlowPacketSender:
         return delay
     
     # =========================================================================
-    # SENDING PACKETS
+    # SENDING PACKETS - FIXED with proper exception handling
     # =========================================================================
     
     def send_setup_packet(self, packet: bytes, packet_name: str = "unknown") -> Optional[bytes]:
-        """Send a single setup packet"""
+        """Send a single setup packet with proper exception handling"""
+        self._ensure_handle()
+        
         if len(packet) != 8:
+            self.stats["failed"] += 1
+            return None
+        
+        if self._handle is None:
             self.stats["failed"] += 1
             return None
         
         try:
             bmRequestType, bRequest, wValue, wIndex, wLength = struct.unpack("<BBHHH", packet)
             
-            response = self.dev.handle.ctrl_transfer(
+            response = self._handle.ctrl_transfer(
                 bmRequestType=bmRequestType,
                 bRequest=bRequest,
                 wValue=wValue,
@@ -389,36 +465,69 @@ class SlowPacketSender:
             return response
             
         except usb.core.USBError as e:
-            if "timeout" in str(e).lower():
+            error_str = str(e).lower()
+            if "timeout" in error_str:
                 self.stats["timeouts"] += 1
+            elif "pipe" in error_str or "stall" in error_str:
+                self.stats["failed"] += 1
+                # FIXED: Clear stall if possible
+                try:
+                    if self._handle:
+                        self._handle.clear_halt(0x00)  # Clear endpoint 0 halt
+                except:
+                    pass
             else:
                 self.stats["failed"] += 1
+            debug_print(f"[!] USB error: {e}")
             return None
-        except:
+        except Exception as e:
             self.stats["failed"] += 1
+            debug_print(f"[!] Unexpected error: {e}")
             return None
     
     def _read_usb_bulk(self, size: int = 64) -> bytes:
-        """Read from USB bulk IN endpoint"""
+        """Read from USB bulk IN endpoint with proper exception handling"""
+        self._ensure_handle()
+        
+        if self._handle is None:
+            return b""
+        
         try:
-            cfg = self.dev.handle.get_active_configuration()
+            cfg = self._handle.get_active_configuration()
             intf = cfg[(0, 0)]
             for ep in intf.endpoints():
                 if (usb.util.endpoint_direction(ep.bEndpointAddress) == usb.util.ENDPOINT_IN and
                     usb.util.endpoint_type(ep.bmAttributes) == usb.util.ENDPOINT_TYPE_BULK):
-                    return self.dev.handle.read(ep.bEndpointAddress, size, timeout=100)
-        except:
-            pass
+                    return self._handle.read(ep.bEndpointAddress, size, timeout=100)
+        except usb.core.USBError as e:
+            if "timeout" not in str(e).lower():
+                debug_print(f"[!] Bulk read error: {e}")
+        except Exception as e:
+            debug_print(f"[!] Bulk read exception: {e}")
         return b""
     
     # =========================================================================
-    # BUG DETECTION
+    # BUG DETECTION - FIXED with better error handling
     # =========================================================================
     
     def _detect_device_reset(self) -> bool:
         """Detect if device has reset"""
+        self._ensure_handle()
+        
+        if self._handle is None:
+            return True
+        
         try:
-            self.dev.handle.ctrl_transfer(0x80, 0x06, 0x0100, 0x0000, 18, timeout=100)
+            self._handle.ctrl_transfer(0x80, 0x06, 0x0100, 0x0000, 18, timeout=100)
+            return False
+        except usb.core.USBError as e:
+            if "pipe" in str(e).lower() or "stall" in str(e).lower():
+                return True
+            # Try to recover
+            try:
+                self._handle.clear_halt(0x00)
+            except:
+                pass
             return False
         except:
             return True
@@ -474,9 +583,8 @@ class SlowPacketSender:
             bug_report["payload"] = anomaly.get('response', b'')
             self.config.found_bugs.append(bug_report)
             
-            if _DEBUG:
-                print(f"[!] Bug: {bug_report['type']} (conf: {bug_report['confidence']:.1%})")
-                print(f"    {bug_report['description']}")
+            debug_print(f"[!] Bug: {bug_report['type']} (conf: {bug_report['confidence']:.1%})")
+            debug_print(f"    {bug_report['description']}")
         
         return bug_report
     
@@ -533,9 +641,8 @@ class SlowPacketSender:
                 self._bug_counter += 1
                 
                 if self._bug_counter >= self.config.bug_threshold:
-                    if _DEBUG:
-                        print(f"[*] Bug threshold reached ({self._bug_counter})")
-                        print("[*] Attempting custom code injection...")
+                    debug_print(f"[*] Bug threshold reached ({self._bug_counter})")
+                    debug_print("[*] Attempting custom code injection...")
                     
                     injection_result = self._inject_test_code(bug_report)
                     
@@ -553,7 +660,7 @@ class SlowPacketSender:
         return None
     
     # =========================================================================
-    # CODE INJECTION
+    # CODE INJECTION - FIXED
     # =========================================================================
     
     def _build_injection_payload(self, bug_report: dict) -> bytes:
@@ -598,20 +705,26 @@ class SlowPacketSender:
             payload.extend(b"TEST")
             payload.extend(os.urandom(32))
         
+        # FIXED: zlib is now imported
         payload.extend(b"INJECT")
         payload.extend(struct.pack("<I", zlib.crc32(payload) & 0xFFFFFFFF))
         
         return bytes(payload[:self.config.max_injection_size])
     
     def _read_injection_response(self, timeout: float = 5.0) -> Optional[bytes]:
-        """Read response from injection"""
+        """Read response from injection with proper timeout"""
+        self._ensure_handle()
+        
+        if self._handle is None:
+            return None
+        
         deadline = time.time() + timeout
         response = bytearray()
         
         while time.time() < deadline:
             try:
-                if self.dev.serial_mode:
-                    chunk = self.dev.handle.read(256)
+                if self._serial_mode:
+                    chunk = self._handle.read(256)
                 else:
                     chunk = self._read_usb_bulk(64)
                 
@@ -619,15 +732,20 @@ class SlowPacketSender:
                     response.extend(chunk)
                     if len(response) >= 20:
                         header = parse_standard_header(response)
-                        if header and header['crc_valid']:
-                            return header['body']
+                        if header and header.get('crc_valid', False):
+                            return header.get('body', bytes(response))
                     if b"INJECT_OK" in response:
                         return bytes(response)
                     if len(response) > 4096:
                         break
-            except:
-                time.sleep(0.1)
-                continue
+            except usb.core.USBError as e:
+                if "timeout" in str(e).lower():
+                    continue
+                debug_print(f"[!] Read error: {e}")
+                break
+            except Exception as e:
+                debug_print(f"[!] Read exception: {e}")
+                break
         
         return bytes(response) if response else None
     
@@ -654,26 +772,32 @@ class SlowPacketSender:
         if not injection_payload:
             return result
         
+        self._ensure_handle()
+        
+        if self._handle is None:
+            return result
+        
         try:
             start_time = time.time()
             
-            if self.dev.handle:
-                if hasattr(self.dev, 'write') and callable(self.dev.write):
-                    frame = encode_qslcl_structure(
-                        b"QSLCLDAT",
-                        injection_payload,
-                        flags=0x01
-                    )
-                    self.dev.write(frame)
-                else:
-                    self.dev.handle.ctrl_transfer(
-                        bmRequestType=0x40,
-                        bRequest=0xF0,
-                        wValue=0x0001,
-                        wIndex=0x0000,
-                        data_or_wLength=injection_payload[:64],
-                        timeout=2000
-                    )
+            # Try QSLCL data frame first
+            if hasattr(self.dev, 'write') and callable(self.dev.write):
+                frame = encode_qslcl_structure(
+                    b"QSLCLDAT",
+                    injection_payload,
+                    flags=0x01
+                )
+                self.dev.write(frame)
+            else:
+                # Fallback to control transfer
+                self._handle.ctrl_transfer(
+                    bmRequestType=0x40,
+                    bRequest=0xF0,
+                    wValue=0x0001,
+                    wIndex=0x0000,
+                    data_or_wLength=injection_payload[:64],
+                    timeout=2000
+                )
             
             response = self._read_injection_response(timeout=self.config.injection_timeout)
             
@@ -691,9 +815,11 @@ class SlowPacketSender:
                     result["success"] = True
                     result["confirmed"] = False
                     
+        except usb.core.USBError as e:
+            debug_print(f"[!] USB injection error: {e}")
+            result["success"] = False
         except Exception as e:
-            if _DEBUG:
-                print(f"[!] Injection failed: {e}")
+            debug_print(f"[!] Injection failed: {e}")
             result["success"] = False
         
         return result
@@ -752,7 +878,7 @@ class SlowPacketSender:
                 }
                 self.timing_data.append(timing_entry)
                 
-                # Check for anomalies (if response or timeout)
+                # Check for anomalies
                 if response is not None or packet_index > 0:
                     self._check_for_anomalies(packet, response, response_time, packet_index)
                 
@@ -771,6 +897,10 @@ class SlowPacketSender:
                 
         except KeyboardInterrupt:
             print("\n[*] Stress test interrupted by user")
+        except Exception as e:
+            print(f"[!] Stress test error: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             self.running = False
         
@@ -795,10 +925,11 @@ class SlowPacketSender:
         
         print(f"\n[TIMING]")
         if timing_data:
-            delays = [d['delay_ms'] for d in timing_data]
-            print(f"  Avg delay:         {sum(delays)/len(delays):.2f}ms")
-            print(f"  Min delay:         {min(delays):.2f}ms")
-            print(f"  Max delay:         {max(delays):.2f}ms")
+            delays = [d['delay_ms'] for d in timing_data if d.get('delay_ms')]
+            if delays:
+                print(f"  Avg delay:         {sum(delays)/len(delays):.2f}ms")
+                print(f"  Min delay:         {min(delays):.2f}ms")
+                print(f"  Max delay:         {max(delays):.2f}ms")
         
         print(f"\n[BUGS]")
         print(f"  Bugs detected:     {len(self.config.found_bugs)}")
@@ -815,7 +946,7 @@ class SlowPacketSender:
                 print(f"  ... and {len(self.config.confirmed_bugs) - 5} more")
         
         if self.config.injection_attempts > 0:
-            success_rate = (self.config.injection_successes / self.config.injection_attempts) * 100
+            success_rate = (self.config.injection_successes / self.config.injection_attempts) * 100 if self.config.injection_attempts > 0 else 0
             print(f"\n[INJECTION]")
             print(f"  Success rate:      {success_rate:.1f}%")
             print(f"  Payload size:      up to {self.config.max_injection_size} bytes")
@@ -836,7 +967,21 @@ def cmd_slowm8(args):
     print("Experimental - Use at your own risk")
     print("=" * 60 + "\n")
     
+    # FIXED: Set debug flag
+    global _DEBUG_SLOWM8
+    if hasattr(args, 'debug') and args.debug:
+        _DEBUG_SLOWM8 = True
+        if QSLCL_AVAILABLE:
+            try:
+                set_debug(True)
+            except:
+                pass
+    
     # Scan for device
+    if not QSLCL_AVAILABLE:
+        print("[!] QSLCL module not available. Cannot scan for devices.")
+        return 1
+    
     devs = scan_all()
     if not devs:
         print("[!] No device detected")
@@ -847,7 +992,7 @@ def cmd_slowm8(args):
     print(f"[+] Device found: {dev.product} (VID:PID={dev.vid:04X}:{dev.pid:04X})")
     
     # Load QSLCL binary if specified
-    if args.loader:
+    if hasattr(args, 'loader') and args.loader:
         print(f"[*] Loading QSLCL binary: {args.loader}")
         auto_loader_if_needed(args, dev)
         time.sleep(1)
@@ -856,13 +1001,13 @@ def cmd_slowm8(args):
     config = SlowM8Config()
     
     # Parse arguments
-    if hasattr(args, 'min_delay') and args.min_delay:
+    if hasattr(args, 'min_delay') and args.min_delay is not None:
         config.min_delay_ms = args.min_delay
-    if hasattr(args, 'max_delay') and args.max_delay:
+    if hasattr(args, 'max_delay') and args.max_delay is not None:
         config.max_delay_ms = args.max_delay
     if hasattr(args, 'packets') and args.packets:
         config.packet_count = args.packets
-    if hasattr(args, 'burst_size') and args.burst_size:
+    if hasattr(args, 'burst_size') and args.burst_size is not None:
         config.burst_size = args.burst_size
     if hasattr(args, 'fuzz') and args.fuzz:
         config.fuzz_mutations = args.fuzz
@@ -888,7 +1033,8 @@ def cmd_slowm8(args):
     sender = SlowPacketSender(dev, config)
     
     # Run stress test
-    print(f"[*] Target: {args.target_mode.upper() if hasattr(args, 'target_mode') else 'AUTO'}")
+    target_mode = getattr(args, 'target_mode', 'auto')
+    print(f"[*] Target: {target_mode.upper()}")
     print(f"[*] Fuzz mutations: {config.fuzz_mutations}")
     print(f"[*] Bug injection: {'Enabled' if config.code_injection_enabled else 'Disabled'}")
     print()
@@ -905,12 +1051,19 @@ def cmd_slowm8(args):
         output_data = {
             "timestamp": time.time(),
             "stats": stats,
-            "timing_data": timing_data,
+            "timing_data": timing_data[:1000],  # Limit size
             "bugs": {
                 "detected": len(sender.config.found_bugs),
                 "confirmed": len(sender.config.confirmed_bugs),
                 "injection_attempts": sender.config.injection_attempts,
                 "injection_successes": sender.config.injection_successes
+            },
+            "config": {
+                "min_delay_ms": config.min_delay_ms,
+                "max_delay_ms": config.max_delay_ms,
+                "fuzz_mutations": config.fuzz_mutations,
+                "bug_threshold": config.bug_threshold,
+                "injection_enabled": config.code_injection_enabled
             }
         }
         try:
@@ -1002,10 +1155,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    if args.debug:
-        _DEBUG = True
-    
-    # Create dummy args
+    # Create dummy args for standalone mode
     class DummyArgs:
         pass
     
