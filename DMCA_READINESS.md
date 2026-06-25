@@ -83,7 +83,6 @@ QSLCL includes numerous built-in protections demonstrating responsible disclosur
 Full Legal Name: Sharif Muhaymin
 GitHub Username: Sharif-bot-cmd
 Project: Quantum Silicon Core Loader (QSLCL)
-Official Email for Legal: Ciphermesh45@protonmail.com
 Country: Philippines
 
 Statement under penalty of perjury:
