@@ -1,22 +1,4 @@
 ; ============================================================================
-; QSLCL Micro-VM Assembly Language (Architecture-Neutral)
-; Version: 1.0
-; For: qslcl.bin v0.7.4
-; ============================================================================
-;
-; The QSLCL Micro-VM is a simple, architecture-neutral virtual machine
-; that executes bytecode on any SoC (ARM, x86, RISC-V, MIPS, PowerPC).
-;
-; Instruction Format: 4 bytes
-; [OPCODE (1 byte)] [REGISTER (1 byte)] [ARGUMENT (2 bytes)]
-;
-; Registers: 16 general-purpose (R0-R15)
-; Memory: 64KB address space (16-bit addressing)
-; Stack: 256 bytes
-;
-; ============================================================================
-
-; ============================================================================
 ; SECTION 1: DATA TYPES & REGISTERS
 ; ============================================================================
 
