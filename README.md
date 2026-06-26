@@ -1,6 +1,6 @@
 # **Quantum Silicon Core Loader**
 
-Primary Core: **qslcl.elf** (deprecated)
+Primary Core: **qslcl.asm** 
 
 Assistant Module: **qslcl.bin (v0.7.4)**
 
