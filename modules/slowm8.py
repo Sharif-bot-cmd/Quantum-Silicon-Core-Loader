@@ -21,8 +21,8 @@ try:
     from qslcl import (
         scan_all,
         auto_loader_if_needed,
-        qslcl_dispatch,
-        decode_runtime_result,
+        qslcl_dispatch,        
+        decode_runtime_result,  
         encode_qslcl_structure,
         QSLCLCMD_DB,
         QSLCLSPT_DB,
@@ -639,24 +639,25 @@ class SlowPacketSender:
             "response": None,
             "code_size": 0,
             "execution_time": 0.0,
-            "confirmed": False
+            "confirmed": False,
+            "device_info": None  # NEW: Add this field
         }
-        
+    
         self.config.injection_attempts += 1
-        
+    
         if not self.config.code_injection_enabled:
             return result
-        
+    
         if not bug_report.get("is_bug", False):
             return result
-        
+    
         injection_payload = self._build_injection_payload(bug_report)
         if not injection_payload:
             return result
-        
+    
         try:
             start_time = time.time()
-            
+        
             if self.dev.handle:
                 if hasattr(self.dev, 'write') and callable(self.dev.write):
                     frame = encode_qslcl_structure(
@@ -674,34 +675,62 @@ class SlowPacketSender:
                         data_or_wLength=injection_payload[:64],
                         timeout=2000
                     )
-            
+        
             response = self._read_injection_response(timeout=self.config.injection_timeout)
-            
+        
             result["execution_time"] = time.time() - start_time
             result["response"] = response
             result["code_size"] = len(injection_payload)
-            
+        
             if response:
                 if b"INJECT_OK" in response or b"\x00\x00\x00\x00" in response[:4]:
                     result["success"] = True
                     result["confirmed"] = True
                     self.config.injection_successes += 1
                     self.config.confirmed_bugs.append(bug_report)
+                
+
+                    if _DEBUG:
+                        print("[*] Injection confirmed! Fetching device info...")
+                
+                    # Call GETINFO to verify device state
+                    getinfo_response = qslcl_dispatch(self.dev, "GETINFO", b"", timeout=2.0)
+                
+                    if getinfo_response:
+                        # Parse the response
+                        status = decode_runtime_result(getinfo_response)
+                        result["device_info"] = {
+                            "status": status.get("severity", "UNKNOWN"),
+                            "code": status.get("code", 0),
+                            "name": status.get("name", "Unknown"),
+                            "extra": status.get("extra", b"").hex() if status.get("extra") else None
+                        }
+                    
+                        if _DEBUG:
+                            print(f"[*] GETINFO response: {result['device_info']['status']} - {result['device_info']['name']}")
+                        
+                        # Check for any unusual state after injection
+                        if result["device_info"].get("code") != 0:
+                            print(f"[!] Device reported abnormal state after injection: {result['device_info']['name']}")
+                    else:
+                        if _DEBUG:
+                            print("[!] No GETINFO response (device may be in unexpected state)")
+                        result["device_info"] = {"status": "NO_RESPONSE", "error": True}
+                
                 else:
                     result["success"] = True
                     result["confirmed"] = False
-                    
+                
         except Exception as e:
             if _DEBUG:
                 print(f"[!] Injection failed: {e}")
             result["success"] = False
-        
+    
         return result
     
     # =========================================================================
     # STRESS TEST
     # =========================================================================
-    
     def run_stress_test(self, duration_seconds: int = 30):
         """Run continuous stress test with bug detection and injection"""
         self.running = True
@@ -785,41 +814,48 @@ class SlowPacketSender:
         print("\n" + "=" * 60)
         print("SLOWM8 STRESS TEST RESULTS")
         print("=" * 60)
-        
+    
         print(f"\n[STATISTICS]")
         print(f"  Packets sent:      {stats['sent']}")
         print(f"  Successful:        {stats['responses']}")
         print(f"  Failed:            {stats['failed']}")
         print(f"  Timeouts:          {stats['timeouts']}")
         print(f"  Success rate:      {(stats['responses']/stats['sent']*100) if stats['sent']>0 else 0:.1f}%")
-        
+    
         print(f"\n[TIMING]")
         if timing_data:
             delays = [d['delay_ms'] for d in timing_data]
             print(f"  Avg delay:         {sum(delays)/len(delays):.2f}ms")
             print(f"  Min delay:         {min(delays):.2f}ms")
             print(f"  Max delay:         {max(delays):.2f}ms")
-        
+    
         print(f"\n[BUGS]")
         print(f"  Bugs detected:     {len(self.config.found_bugs)}")
         print(f"  Bugs confirmed:    {len(self.config.confirmed_bugs)}")
         print(f"  Injection attempts:{self.config.injection_attempts}")
         print(f"  Injection success: {self.config.injection_successes}")
-        
+    
         if self.config.confirmed_bugs:
             print(f"\n[CONFIRMED BUGS]")
             for i, bug in enumerate(self.config.confirmed_bugs[:5]):
                 print(f"  {i+1}. {bug.get('type', 'unknown')} (conf: {bug.get('confidence', 0):.1%})")
                 print(f"      {bug.get('description', 'No description')}")
+            
+                # Check if we have device info from GETINFO
+                if bug.get("device_info"):
+                    info = bug["device_info"]
+                    print(f"      Device state after injection: {info.get('status', 'Unknown')}")
+                    if info.get("code") != 0:
+                        print(f"      ⚠️  Abnormal state detected: {info.get('name', 'Unknown')}")
             if len(self.config.confirmed_bugs) > 5:
                 print(f"  ... and {len(self.config.confirmed_bugs) - 5} more")
-        
+    
         if self.config.injection_attempts > 0:
             success_rate = (self.config.injection_successes / self.config.injection_attempts) * 100
             print(f"\n[INJECTION]")
             print(f"  Success rate:      {success_rate:.1f}%")
             print(f"  Payload size:      up to {self.config.max_injection_size} bytes")
-        
+    
         print(f"\n[DURATION]")
         print(f"  Total time:        {duration:.2f} seconds")
         print(f"  Packets/sec:       {stats['sent'] / duration:.1f}")

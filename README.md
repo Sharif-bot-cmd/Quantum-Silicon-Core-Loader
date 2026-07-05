@@ -205,62 +205,18 @@ python qslcl.py hello --loader=qslcl.bin --usb4
 python qslcl.py ping --loader=qslcl.bin
 ```
 
-## Slowm8 - USB Stress Tester (v2.2.1)
+## Slowm8 - USB Stress Tester (v2.2.2)
 
-**New and improved!** Slowm8 now auto-detects devices and adapts timing automatically:
+**Enhanced with GETINFO verification!** After confirming a bug, Slowm8 automatically fetches device state to verify injection success.
 
 ```bash
-# Basic stress test - auto-detects everything
+# Basic stress test with device verification
 python qslcl.py slowm8 --loader=qslcl.bin
 
-# With fuzzing (3 mutations per packet)
-python qslcl.py slowm8 --loader=qslcl.bin --fuzz 3 --duration 60
-
-# Corrupt specific packet fields
-python qslcl.py slowm8 --loader=qslcl.bin --corrupt magic size flags
-
-# Progressive slowdown (starts fast, gets slower)
-python qslcl.py slowm8 --loader=qslcl.bin --progressive --duration 120
-
-# Disable auto-injection (just detect bugs, don't inject)
-python qslcl.py slowm8 --loader=qslcl.bin --no-injection
-
-# Custom bug threshold (inject after 5 anomalies)
-python qslcl.py slowm8 --loader=qslcl.bin --bug-threshold 5
-
-# Save results to JSON
-python qslcl.py slowm8 --loader=qslcl.bin --output slowm8_results.json
-
-# Maximum stress (aggressive fuzzing + injection)
-python qslcl.py slowm8 --loader=qslcl.bin --fuzz 10 --duration 300 --corrupt magic crc size flags
-
-# Expected output:
-# ============================================================
-# SLOWM8 STRESS TEST RESULTS
-# ============================================================
-# 
-# [STATISTICS]
-#   Packets sent:      1250
-#   Successful:        1180
-#   Failed:            70
-#   Timeouts:          45
-#   Success rate:      94.4%
-# 
-# [BUGS]
-#   Bugs detected:     3
-#   Bugs confirmed:    2
-#   Injection attempts:1
-#   Injection success: 1
-# 
-# [CONFIRMED BUGS]
-#   1. memory_corruption (conf: 80%)
-#       Unexpected large response: 2048 bytes
-#   2. memory_corruption (conf: 75%)
-#       Unexpected large response: 4096 bytes
-# 
-# [INJECTION]
-#   Success rate:      100.0%
-#   Payload size:      up to 512 bytes
+# Expected output with GETINFO:
+# [*] Injection confirmed! Fetching device info...
+# [*] GETINFO response: SUCCESS - OK
+# [+] Bug confirmed! Device state: healthy
 ```
 
 ### Slowm8 Auto-Detection Features
@@ -338,6 +294,7 @@ python qslcl.py hello --loader=qslcl.bin --jitter 0.001-0.05
 
 | Version | Date | Key Changes |
 |---------|------|-------------|
+| **v2.2.2** | 2026 | **Slowm8 GETINFO integration** - Auto-verifies device state after injection, detects abnormal behavior, richer bug reports |
 | **v0.7.4 / v2.2.1** | 2026 | **QSLCLRESP improvements** - Better error handling, faster responses, extended status codes. **Slowm8 auto-detection** - No PIDs, adaptive timing, A19+ support, bug confirmation with code injection, JSON output |
 | **v0.7.3 / v2.2.0** | 2026 | **`slowm8` command** - USB stress tester with fuzzing, **`--jitter` flag** - timing randomization |
 | **v0.7.2 / v2.1.9** | 2026 | **TEST & FUZZ commands** - Diagnostic self-test and fuzzing engine, **Enhanced getinfo** |
