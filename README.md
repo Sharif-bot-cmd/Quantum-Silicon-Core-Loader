@@ -1,6 +1,6 @@
 # **Quantum Silicon Core Loader**
 
-Primary Core: **qslcl.elf** (deprecated)
+Primary Core: **qslcl.asm** (under development)
 
 Assistant Module: **qslcl.bin (v0.7.4)**
 
@@ -28,21 +28,40 @@ QSLCL runs in:
 
 ---
 
-## What's New in **v0.7.4 / v2.2.1**
+## What's New in **v2.2.2**
 
-### QSLCLRESP Improvements (v0.7.4)
-- Enhanced response frame parsing with better error handling
-- Improved CRC validation for response frames
-- Added support for extended status codes
-- Faster response times in high-load scenarios
+### Slowm8 GETINFO Integration
+- After successful code injection, Slowm8 automatically calls **GETINFO** to verify device state
+- Confirms injection didn't crash the device
+- Detects and reports abnormal device behavior
+- Adds `device_info` field to bug reports with status, code, and error details
 
-### Slowm8 Improvements (v2.2.1)
-- **Auto-detection:** No more hardcoded PIDs - works on ANY device
-- **Adaptive timing:** Automatically adjusts delays based on device response
-- **A19+ support:** Detects encryption and adapts timing accordingly
-- **Bug confirmation:** Automatically injects test code when bugs are found
-- **Custom injection payloads:** Different payloads for different bug types
-- **JSON output:** Save detailed results for analysis
+### Enhanced Bug Confirmation
+- **Device state verification** after every successful injection
+- **Abnormal state detection** - flags if device shows errors post-injection
+- **Rich output** in final results showing device status for each confirmed bug
+
+### Improved Error Handling
+- Better handling of unresponsive devices after injection
+- Clearer error messages when GETINFO fails
+- Graceful fallback when device doesn't respond to verification
+
+**Example output:**
+```
+[*] Injection confirmed! Fetching device info...
+[*] GETINFO response: SUCCESS - OK
+
+[CONFIRMED BUGS]
+  1. memory_corruption (conf: 80%)
+      Unexpected large response: 2048 bytes
+      Device state after injection: SUCCESS - OK
+  2. memory_corruption (conf: 75%)
+      Unexpected large response: 4096 bytes
+      Device state after injection: SUCCESS - OK
+```
+
+---
+
 
 ```
 QSLCL Binary Layout (v0.7.4):
@@ -268,6 +287,20 @@ python qslcl.py hello --loader=qslcl.bin --jitter burst
 python qslcl.py hello --loader=qslcl.bin --jitter 0.001-0.05
 ```
 
+## Slowm8 - USB Stress Tester (v2.2.2)
+
+**Enhanced with GETINFO verification!** After confirming a bug, Slowm8 automatically fetches device state to verify injection success.
+
+```bash
+# Basic stress test with device verification
+python qslcl.py slowm8 --loader=qslcl.bin
+
+# Expected output with GETINFO:
+# [*] Injection confirmed! Fetching device info...
+# [*] GETINFO response: SUCCESS - OK
+# [+] Bug confirmed! Device state: healthy
+```
+
 ---
 
 # Device Compatibility
@@ -313,7 +346,7 @@ python qslcl.py hello --loader=qslcl.bin --jitter 0.001-0.05
 
 ---
 
-## Slowm8 Technical Details (v2.2.1)
+## Slowm8 Technical Details 
 
 ### Auto-Detection Flow
 
