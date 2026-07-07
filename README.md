@@ -4,7 +4,7 @@ Primary Core: **qslcl.asm** (under development)
 
 Assistant Module: **qslcl.bin (v0.7.4)**
 
-Universal Controller: **qslcl.py (v2.2.1)**
+Universal Controller: **qslcl.py (v2.2.2)**
 
 > **Legally Protected Research** - This project operates under established legal frameworks for security research, right to repair, and academic freedom. [Learn more](./PROTECTION_MATRIX.md)
 
