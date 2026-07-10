@@ -481,3 +481,4 @@ python qslcl.py hello --loader=qslcl.bin --debug
 
 - GitHub: https://github.com/Sharif-bot-cmd/Quantum-Silicon-Core-Loader
 - Codeberg: https://codeberg.org/Sharif_Muhaymin/Quantum-Silicon-Core-Loader
+- SourceForge: https://sourceforge.net/p/quantum-silicon-core-loader/code/ci/main/tree/
